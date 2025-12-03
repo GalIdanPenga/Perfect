@@ -1,0 +1,131 @@
+import express from 'express';
+import cors from 'cors';
+import clientRoutes from './routes/clientRoutes';
+import engineRoutes from './routes/engineRoutes';
+import { flowEngine } from './engine/FlowEngine';
+
+const app = express();
+const PORT = 3001;
+
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/client', clientRoutes);
+app.use('/api/engine', engineRoutes);
+
+// Queue for pending execution requests
+interface ExecutionRequest {
+  run_id: string;
+  flow_name: string;
+  configuration: string;
+}
+
+const executionQueue: ExecutionRequest[] = [];
+const pendingResponses: express.Response[] = [];
+
+// Subscribe to flow trigger events from the engine
+flowEngine.subscribeToFlowTriggers((runId: string, flowName: string, configuration: string) => {
+  console.log(`[Server] Flow triggered: ${flowName} (run: ${runId})`);
+
+  const executionRequest: ExecutionRequest = {
+    run_id: runId,
+    flow_name: flowName,
+    configuration: configuration
+  };
+
+  // If there's a client waiting, respond immediately
+  if (pendingResponses.length > 0) {
+    const res = pendingResponses.shift();
+    res?.json(executionRequest);
+    console.log(`[Server] Sent execution request to waiting Python client`);
+  } else {
+    // Otherwise queue it for later
+    executionQueue.push(executionRequest);
+    console.log(`[Server] Queued execution request (queue size: ${executionQueue.length})`);
+  }
+});
+
+// Legacy endpoints for Python client compatibility
+app.post('/api/flows', (req, res) => {
+  try {
+    const flow = flowEngine.registerFlow(req.body);
+    res.json({ success: true, flow });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+app.post('/api/flows/:runId/logs', (req, res) => {
+  try {
+    const { runId } = req.params;
+    const { log } = req.body;
+    flowEngine.addFlowLog(runId, log);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// Task state update endpoint
+app.post('/api/runs/:runId/tasks/:taskIndex/state', (req, res) => {
+  try {
+    const { runId, taskIndex } = req.params;
+    const { state, progress, durationMs } = req.body;
+
+    const success = flowEngine.updateTaskState(runId, parseInt(taskIndex), state, progress, durationMs);
+
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ success: false, error: 'Run or task not found' });
+    }
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// Heartbeat endpoint for Python client to signal it's alive
+app.post('/api/heartbeat', (req, res) => {
+  flowEngine.updateHeartbeat();
+  res.json({ success: true });
+});
+
+// Long-poll endpoint for Python client to receive execution requests
+app.get('/api/execution-requests', (req, res) => {
+  // Update heartbeat when client polls
+  flowEngine.updateHeartbeat();
+
+  // If there's a queued request, return it immediately
+  if (executionQueue.length > 0) {
+    const executionRequest = executionQueue.shift()!;
+    res.json(executionRequest);
+    console.log(`[Server] Sent queued execution request to Python client`);
+  } else {
+    // Otherwise, hold the connection for long-polling (30 seconds timeout)
+    pendingResponses.push(res);
+
+    const timeout = setTimeout(() => {
+      const index = pendingResponses.indexOf(res);
+      if (index > -1) {
+        pendingResponses.splice(index, 1);
+        res.json(null); // Return null to signal no work available
+      }
+    }, 30000); // 30 second long-poll timeout
+
+    // Clean up timeout if client disconnects
+    req.on('close', () => {
+      clearTimeout(timeout);
+      const index = pendingResponses.indexOf(res);
+      if (index > -1) {
+        pendingResponses.splice(index, 1);
+      }
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log('Perfect Backend Server running on http://localhost:' + PORT);
+});
+
+process.on('SIGINT', () => process.exit(0));
+process.on('SIGTERM', () => process.exit(0));

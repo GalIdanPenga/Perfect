@@ -1,0 +1,588 @@
+
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Activity,
+  Play,
+  Terminal,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Box,
+  RotateCw,
+  Zap,
+  Hash,
+  DownloadCloud,
+  ChevronDown
+} from 'lucide-react';
+import { FlowDefinition, FlowRun, TaskState, TaskRun } from './types';
+
+// --- Icons & Badges ---
+
+const PerfectLogo = () => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-cyber-primary">
+    {/* Outer circle */}
+    <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2" opacity="0.3"/>
+    <circle cx="16" cy="16" r="11" stroke="currentColor" strokeWidth="2.5"/>
+    {/* Inner geometric pattern - hexagon */}
+    <path d="M16 8L21 11.5V18.5L16 22L11 18.5V11.5L16 8Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
+    {/* Checkmark */}
+    <path d="M13 16L15.5 18.5L20 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+    {/* Center dot */}
+    <circle cx="16" cy="16" r="1.5" fill="currentColor"/>
+  </svg>
+);
+
+const StatusIcon = ({ state, size = 16 }: { state: TaskState, size?: number }) => {
+  switch (state) {
+    case TaskState.COMPLETED:
+      return <CheckCircle size={size} className="text-cyber-success" />;
+    case TaskState.FAILED:
+      return <XCircle size={size} className="text-cyber-danger" />;
+    case TaskState.RUNNING:
+      return <RotateCw size={size} className="text-cyber-primary animate-spin" />;
+    case TaskState.RETRYING:
+      return <RotateCw size={size} className="text-cyber-warning animate-spin" />;
+    case TaskState.PENDING:
+      return <div className={`rounded-full border border-slate-600 bg-slate-800`} style={{ width: size, height: size }} />;
+    default:
+      return <div className="w-4 h-4 rounded-full bg-slate-600" />;
+  }
+};
+
+const StatusBadge = ({ state }: { state: TaskState }) => {
+  const styles = {
+    [TaskState.COMPLETED]: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    [TaskState.FAILED]: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+    [TaskState.RUNNING]: "bg-sky-500/10 text-sky-400 border-sky-500/20",
+    [TaskState.PENDING]: "bg-slate-700/30 text-slate-400 border-slate-700/50",
+    [TaskState.RETRYING]: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+  };
+
+  return (
+    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${styles[state] || styles[TaskState.PENDING]} flex items-center gap-1.5 shadow-sm`}>
+      {state === TaskState.RUNNING && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"/>}
+      {state}
+    </span>
+  );
+};
+
+// --- Components ---
+
+const TaskRow = ({ task }: { task: TaskRun }) => {
+  const isRunning = task.state === TaskState.RUNNING || task.state === TaskState.RETRYING;
+  const logsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isRunning && logsRef.current) {
+      logsRef.current.scrollTop = logsRef.current.scrollHeight;
+    }
+  }, [task.logs.length, isRunning]);
+
+  return (
+    <div className={`border-b border-slate-700/50 last:border-0 transition-colors duration-300 ${isRunning ? 'bg-sky-500/5' : ''}`}>
+      <div className="flex items-center justify-between p-3.5">
+        <div className="flex items-center gap-3">
+          <StatusIcon state={task.state} size={18} />
+          <div>
+            <div className={`text-sm font-medium flex items-center gap-2 ${task.state === TaskState.PENDING ? 'text-slate-400' : 'text-slate-200'}`}>
+              {task.taskName}
+              {isRunning && (
+                <span className="text-[10px] bg-sky-500/20 text-sky-300 px-1.5 rounded-md border border-sky-500/30 font-mono">
+                  {Math.floor(task.progress)}%
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono mt-0.5">
+              <span>W: {(task.weight * 100).toFixed(1)}%</span>
+              <span className="text-slate-700">•</span>
+              <span>EST: {task.estimatedTime}ms</span>
+              {task.durationMs && (
+                <>
+                  <span className="text-slate-700">•</span>
+                  <span className="text-slate-400">TOOK: {task.durationMs}ms</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        {task.state !== TaskState.PENDING && (
+          <div className="text-xs text-slate-600 font-mono">
+            {task.id.split('-')[1]}
+          </div>
+        )}
+      </div>
+      
+      {/* Live Logs */}
+      {(isRunning || task.state === TaskState.FAILED) && task.logs.length > 0 && (
+        <div ref={logsRef} className="mx-4 mb-3 p-2.5 bg-slate-950/50 border border-slate-800 rounded-lg text-[10px] font-mono text-slate-300 max-h-24 overflow-y-auto custom-scrollbar shadow-inner">
+          {task.logs.slice(-5).map((log, i) => (
+            <div key={i} className="truncate mb-0.5 opacity-90">{log}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ActiveRunCard = ({ run }: { run: FlowRun }) => {
+  const flowLogsRef = useRef<HTMLDivElement>(null);
+  const isRunning = run.state === TaskState.RUNNING || run.state === TaskState.PENDING || run.state === TaskState.RETRYING;
+
+  useEffect(() => {
+    if (isRunning && flowLogsRef.current) {
+      flowLogsRef.current.scrollTop = flowLogsRef.current.scrollHeight;
+    }
+  }, [run.logs.length, isRunning]);
+
+  return (
+    <div className="bg-slate-800/40 backdrop-blur-md rounded-xl border border-slate-700/60 shadow-lg overflow-hidden flex flex-col transition-all hover:border-slate-600/80 group">
+      {/* Header */}
+      <div className="p-4 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/30">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-slate-100">{run.flowName}</h3>
+            <StatusBadge state={run.state} />
+          </div>
+          <p className="text-[10px] text-slate-400 font-mono mt-1 flex items-center gap-2">
+            ID: {run.id}
+            {run.configuration && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-slate-600"></span>
+                <span className="text-sky-400 uppercase tracking-wider">{run.configuration}</span>
+              </>
+            )}
+            <span className="w-1 h-1 rounded-full bg-slate-600"></span>
+            {new Date(run.startTime).toLocaleTimeString()}
+          </p>
+        </div>
+        <div className="text-right">
+           <span className={`text-2xl font-bold font-mono tracking-tight ${run.state === TaskState.FAILED ? 'text-rose-400' : 'text-sky-400'}`}>
+             {run.progress}%
+           </span>
+        </div>
+      </div>
+
+      {/* Smooth Progress Bar */}
+      <div className="h-1 bg-slate-800 w-full relative">
+        <div
+          className={`h-full transition-all duration-300 ease-out relative ${run.state === TaskState.FAILED ? 'bg-rose-500' : 'bg-gradient-to-r from-sky-500 to-indigo-500'}`}
+          style={{ width: `${run.progress}%` }}
+        >
+          {run.state === TaskState.RUNNING && (
+            <div className="absolute top-0 right-0 bottom-0 w-20 bg-gradient-to-r from-transparent to-white/30 blur-sm"></div>
+          )}
+        </div>
+      </div>
+
+      {/* Flow Logs */}
+      {run.logs && run.logs.length > 0 && (
+        <div ref={flowLogsRef} className="mx-4 mt-3 p-2.5 bg-slate-950/70 border border-slate-800 rounded-lg text-[10px] font-mono max-h-24 overflow-y-auto custom-scrollbar shadow-inner">
+          {run.logs.map((log, i) => (
+            <div key={i} className="text-slate-300 mb-0.5 opacity-90 leading-relaxed">
+              {log}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Tasks List */}
+      <div className="flex-1 overflow-y-auto max-h-[320px] custom-scrollbar bg-slate-900/20">
+        {run.tasks.map(task => (
+          <TaskRow key={task.id} task={task} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const FlowCard = ({ flow, onRun }: { flow: FlowDefinition, onRun: (id: string, config: string) => void }) => {
+  const [config, setConfig] = useState('development');
+
+  const handleRunClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRun(flow.id, config);
+  };
+  
+  const handleConfigChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    e.stopPropagation();
+    setConfig(e.target.value);
+  }
+  
+  const handleDropdownClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+  }
+
+  return (
+    <div className="group relative bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-sky-500/30 hover:shadow-neon hover:bg-slate-800/60 transition-all duration-200">
+      <div className="flex justify-between items-start mb-3">
+        <div className="bg-slate-800 text-sky-400 p-2 rounded-lg border border-slate-700 group-hover:text-sky-300 group-hover:border-sky-500/30 transition-colors">
+          <Hash size={18} />
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {/* Config Picker */}
+          <div className="relative group/picker" onClick={handleDropdownClick}>
+             <select 
+               value={config}
+               onChange={handleConfigChange}
+               className="bg-slate-900 border border-slate-700 text-[10px] text-slate-300 rounded-md py-1 pl-2 pr-6 appearance-none focus:outline-none focus:border-sky-500 cursor-pointer hover:border-slate-600 transition-colors uppercase font-bold tracking-wider"
+             >
+               <option value="development">DEV</option>
+               <option value="debug">DEBUG</option>
+               <option value="release">RELEASE</option>
+             </select>
+             <ChevronDown size={10} className="absolute right-1.5 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" />
+          </div>
+
+          <button 
+            onClick={handleRunClick}
+            className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:bg-sky-500 hover:text-white hover:border-sky-500 transition-all shadow-md active:scale-95 z-10"
+            title="Run Flow"
+          >
+            <Play size={14} className="ml-0.5 fill-current" />
+          </button>
+        </div>
+      </div>
+      
+      <h3 className="font-bold text-slate-200 mb-1 group-hover:text-white transition-colors">{flow.name}</h3>
+      <p className="text-xs text-slate-400 line-clamp-2 mb-3 h-8 leading-relaxed">{flow.description}</p>
+      
+      <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">
+        <span className="text-[10px] text-slate-500 font-medium bg-slate-800/50 px-2 py-1 rounded-md">
+          {flow.tasks.length} tasks
+        </span>
+        
+        {flow.schedule && (
+           <span className="text-[10px] text-slate-500 flex items-center gap-1.5">
+             <Clock size={10} /> {flow.schedule}
+           </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+// --- Main Layout ---
+
+export default function App() {
+  const [flows, setFlows] = useState<FlowDefinition[]>([]);
+  const [runs, setRuns] = useState<FlowRun[]>([]);
+  const [selectedHistoryRunId, setSelectedHistoryRunId] = useState<string | null>(null);
+  const [clientStatus, setClientStatus] = useState<'stopped' | 'starting' | 'running' | 'error'>('stopped');
+  const [isStartingClient, setIsStartingClient] = useState(false);
+
+  // Fetch data from backend API
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [flowsRes, runsRes] = await Promise.all([
+          fetch('http://localhost:3001/api/engine/flows'),
+          fetch('http://localhost:3001/api/engine/runs')
+        ]);
+
+        if (flowsRes.ok && runsRes.ok) {
+          const flowsData = await flowsRes.json();
+          const runsData = await runsRes.json();
+          setFlows(flowsData);
+          setRuns(runsData);
+        }
+      } catch (error) {
+        console.error('Failed to fetch data from backend:', error);
+      }
+    };
+
+    fetchData();
+    const interval = setInterval(fetchData, 100); // Poll every 100ms for smooth updates
+    return () => clearInterval(interval);
+  }, []);
+
+  // Poll client status
+  useEffect(() => {
+    const checkClientStatus = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/client/status');
+        const data = await response.json();
+        setClientStatus(data.status);
+      } catch (error) {
+        // Backend not running yet
+      }
+    };
+
+    checkClientStatus();
+    const interval = setInterval(checkClientStatus, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleStartClient = async () => {
+    setIsStartingClient(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/client/start', {
+        method: 'POST'
+      });
+      const data = await response.json();
+      if (data.success) {
+        setClientStatus('starting');
+      }
+    } catch (error) {
+      console.error('Failed to start client:', error);
+      setClientStatus('error');
+    } finally {
+      setIsStartingClient(false);
+    }
+  };
+
+  const handleStopClient = async () => {
+    try {
+      await fetch('http://localhost:3001/api/client/stop', {
+        method: 'POST'
+      });
+      setClientStatus('stopped');
+    } catch (error) {
+      console.error('Failed to stop client:', error);
+    }
+  };
+
+  const handleRunFlow = async (flowId: string, config: string) => {
+    try {
+      await fetch(`http://localhost:3001/api/engine/trigger/${flowId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ configuration: config })
+      });
+    } catch (error) {
+      console.error('Failed to trigger flow:', error);
+    }
+  };
+
+  const handleRunAll = async () => {
+    try {
+      await Promise.all(
+        flows.map(flow =>
+          fetch(`http://localhost:3001/api/engine/trigger/${flow.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ configuration: 'development' })
+          })
+        )
+      );
+    } catch (error) {
+      console.error('Failed to trigger flows:', error);
+    }
+  };
+
+  const activeRuns = runs.filter(r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING || r.state === TaskState.RETRYING);
+  const historyRuns = runs.filter(r => r.state !== TaskState.RUNNING && r.state !== TaskState.PENDING && r.state !== TaskState.RETRYING);
+
+  const selectedHistoryRun = selectedHistoryRunId ? runs.find(r => r.id === selectedHistoryRunId) : null;
+
+  const handleHistoryClick = (runId: string) => {
+    setSelectedHistoryRunId(runId === selectedHistoryRunId ? null : runId);
+  };
+
+  return (
+    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden text-slate-200 font-sans selection:bg-sky-500/30">
+      
+      {/* Top Navigation Bar */}
+      <header className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 h-16 flex-none px-6 flex items-center justify-between shadow-sm z-20 relative">
+        <div className="flex items-center gap-3">
+          <PerfectLogo />
+          <h1 className="text-xl font-bold text-slate-100 tracking-tight">Perfect</h1>
+          <span className="bg-sky-500/10 text-sky-400 text-[10px] px-2 py-0.5 rounded-full border border-sky-500/20 font-mono tracking-wide">v2.0</span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 font-mono">
+            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+            System Online
+          </div>
+          <button className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white">
+            <Activity size={18} />
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 flex overflow-hidden">
+        
+        {/* Left Panel: Flow Library */}
+        <div className="w-[360px] flex-none border-r border-slate-800 bg-slate-900/50 flex flex-col shadow-2xl z-10 backdrop-blur-sm">
+          <div className="p-5 border-b border-slate-800 bg-slate-900/50">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Box size={14} className="text-sky-500" />
+                Library
+              </h2>
+              {flows.length > 0 && (
+                <button 
+                  onClick={handleRunAll}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-[10px] font-bold text-slate-300 hover:text-amber-400 hover:border-amber-500/50 hover:bg-amber-500/10 transition-all shadow-sm group"
+                >
+                  <Zap size={12} className="text-amber-500 group-hover:fill-amber-500" />
+                  Run All
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">Registered pipeline definitions</p>
+          </div>
+          
+          <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-3">
+            {flows.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-64 text-center px-4">
+                <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-4 text-slate-500">
+                  <Terminal size={24} />
+                </div>
+                <h3 className="text-sm font-medium text-slate-300 mb-2">No Flows Registered</h3>
+                <p className="text-xs text-slate-500 mb-4 leading-relaxed max-w-sm">
+                  Start the Python client to register flows and execute workflows.
+                </p>
+
+                {/* Client Control */}
+                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 text-center max-w-md w-full">
+                  {/* Status Display */}
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <div className={`w-2 h-2 rounded-full ${
+                      clientStatus === 'running' ? 'bg-emerald-500 animate-pulse' :
+                      clientStatus === 'starting' ? 'bg-amber-500 animate-pulse' :
+                      clientStatus === 'error' ? 'bg-rose-500' :
+                      'bg-slate-600'
+                    }`}></div>
+                    <span className="text-xs text-slate-400 font-mono">
+                      Client: <span className={`uppercase font-bold ${
+                        clientStatus === 'running' ? 'text-emerald-400' :
+                        clientStatus === 'starting' ? 'text-amber-400' :
+                        clientStatus === 'error' ? 'text-rose-400' :
+                        'text-slate-500'
+                      }`}>{clientStatus}</span>
+                    </span>
+                  </div>
+
+                  {/* Action Buttons */}
+                  {clientStatus === 'stopped' || clientStatus === 'error' ? (
+                    <button
+                      onClick={handleStartClient}
+                      disabled={isStartingClient}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-700 text-white rounded-lg font-medium text-sm transition-all shadow-lg hover:shadow-sky-500/20 disabled:text-slate-500 disabled:cursor-not-allowed active:scale-95"
+                    >
+                      <Play size={16} className="fill-current" />
+                      {isStartingClient ? 'Starting...' : 'Start Python Client'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleStopClient}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-rose-500 text-slate-300 hover:text-white rounded-lg font-medium text-sm transition-all shadow-lg active:scale-95"
+                    >
+                      <XCircle size={16} />
+                      Stop Client
+                    </button>
+                  )}
+
+                  <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+                    {clientStatus === 'running'
+                      ? 'Client is connected and listening for execution requests.'
+                      : 'The Python client will register flows with Perfect.'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              flows.map(flow => (
+                <FlowCard key={flow.id} flow={flow} onRun={handleRunFlow} />
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Right Panel: Live Monitoring Dashboard */}
+        <div className="flex-1 flex flex-col bg-slate-900/30 relative">
+          {/* Dashboard Header */}
+           <div className="p-5 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center shadow-sm backdrop-blur-sm">
+            <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <Activity size={14} className={activeRuns.length > 0 ? "text-sky-500 animate-pulse" : "text-slate-500"} /> 
+              Live Monitor
+              {activeRuns.length > 0 && (
+                <span className="bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded-full text-[10px] font-bold border border-sky-500/20 shadow-[0_0_10px_rgba(56,189,248,0.2)]">
+                  {activeRuns.length} ACTIVE
+                </span>
+              )}
+            </h2>
+            <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
+              <span className="w-1.5 h-1.5 bg-slate-700 rounded-full animate-pulse"></span>
+              Real-time feed
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+            {activeRuns.length === 0 ? (
+              <div className="h-[60vh] flex flex-col items-center justify-center text-slate-600 space-y-6 opacity-80">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-sky-500/20 blur-xl rounded-full"></div>
+                  <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 relative shadow-xl">
+                    <Terminal size={48} className="text-sky-500/50" />
+                  </div>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-medium text-slate-400">System Idle</p>
+                  <p className="text-sm text-slate-600 mt-1 max-w-xs mx-auto">Waiting for execution triggers from the library.</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 pb-12">
+                {activeRuns.map(run => (
+                  <ActiveRunCard key={run.id} run={run} />
+                ))}
+              </div>
+            )}
+            
+            {/* History Section */}
+            {historyRuns.length > 0 && (
+              <div className="mt-12 border-t border-slate-800 pt-8 mb-8">
+                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                   <Clock size={14} /> Execution History
+                 </h3>
+                 <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
+                   {historyRuns.slice(0, 12).map(run => (
+                     <div
+                       key={run.id}
+                       onClick={() => handleHistoryClick(run.id)}
+                       className={`bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 hover:border-slate-600 transition-all cursor-pointer group ${
+                         selectedHistoryRunId === run.id
+                           ? 'border-sky-500 bg-sky-500/10 shadow-neon'
+                           : 'border-slate-700/50'
+                       }`}
+                     >
+                       <div className="flex justify-between items-center">
+                         <span className="font-medium text-xs truncate text-slate-300 group-hover:text-sky-400 transition-colors" title={run.flowName}>{run.flowName}</span>
+                         <StatusIcon state={run.state} size={14} />
+                       </div>
+                       <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+                         <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{run.id.split('-')[1]}</span>
+                         <span>{new Date(run.startTime).toLocaleTimeString()}</span>
+                       </div>
+                     </div>
+                   ))}
+                 </div>
+
+                 {/* Selected History Detail */}
+                 {selectedHistoryRun && (
+                   <div className="mt-6">
+                     <div className="flex items-center justify-between mb-4">
+                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                         <Terminal size={14} /> Flow Details
+                       </h4>
+                       <button
+                         onClick={() => setSelectedHistoryRunId(null)}
+                         className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                       >
+                         Close
+                       </button>
+                     </div>
+                     <ActiveRunCard run={selectedHistoryRun} />
+                   </div>
+                 )}
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

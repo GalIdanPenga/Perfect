@@ -1,0 +1,5 @@
+{
+  "name": "Perfect",
+  "description": "A modern workflow orchestration platform for Python flows. Monitor, trigger, and analyze your data pipelines with ease.",
+  "requestFramePermissions": []
+}
