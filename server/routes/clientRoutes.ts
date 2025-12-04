@@ -2,6 +2,7 @@ import express from 'express';
 import { ChildProcess, spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +13,50 @@ const router = express.Router();
 let pythonProcess: ChildProcess | null = null;
 let clientStatus: 'stopped' | 'starting' | 'running' | 'error' = 'stopped';
 let clientLogs: string[] = [];
+
+// Load client configurations
+interface ClientConfig {
+  id: string;
+  name: string;
+  description: string;
+  workingDir: string;
+  command: string;
+  args: string[];
+}
+
+interface ClientsConfig {
+  clients: ClientConfig[];
+}
+
+let clientsConfig: ClientsConfig;
+try {
+  const configPath = path.join(__dirname, '../clients.json');
+  const configData = fs.readFileSync(configPath, 'utf-8');
+  clientsConfig = JSON.parse(configData);
+  console.log(`[Server] Loaded ${clientsConfig.clients.length} client configurations`);
+} catch (error) {
+  console.error('[Server] Failed to load clients.json, using default config');
+  clientsConfig = {
+    clients: [
+      {
+        id: 'perfect_example',
+        name: 'Perfect Example Flows',
+        description: 'Default example workflows',
+        workingDir: 'examples/workflows',
+        command: 'python3',
+        args: ['example_flows.py']
+      }
+    ]
+  };
+}
+
+/**
+ * GET /api/client/configs
+ * Get available client configurations
+ */
+router.get('/configs', (req, res) => {
+  res.json(clientsConfig);
+});
 
 /**
  * GET /api/client/status
@@ -38,15 +83,26 @@ router.post('/start', (req, res) => {
   }
 
   try {
+    // Get client ID from request body, default to first client
+    const { clientId } = req.body;
+    const selectedClient = clientsConfig.clients.find(c => c.id === clientId) || clientsConfig.clients[0];
+
     clientStatus = 'starting';
     clientLogs = [];
-    clientLogs.push('[Server] Starting Python client...');
+    clientLogs.push(`[Server] Starting Python client: ${selectedClient.name}...`);
+    clientLogs.push(`[Server] Working directory: ${selectedClient.workingDir}`);
+    clientLogs.push(`[Server] Command: ${selectedClient.command} ${selectedClient.args.join(' ')}`);
 
-    const pythonPath = 'python3';
-    const scriptPath = path.join(__dirname, '../../examples/workflows/example_flows.py');
+    // Resolve working directory relative to project root
+    const workingDir = path.join(__dirname, '../..', selectedClient.workingDir);
 
-    pythonProcess = spawn(pythonPath, ['-u', scriptPath], {
-      cwd: path.join(__dirname, '../..'),
+    // Add -u flag for Python to ensure unbuffered output
+    const commandArgs = selectedClient.command.includes('python')
+      ? ['-u', ...selectedClient.args]
+      : selectedClient.args;
+
+    pythonProcess = spawn(selectedClient.command, commandArgs, {
+      cwd: workingDir,
       env: { ...process.env, PYTHONUNBUFFERED: '1' }
     });
 

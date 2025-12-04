@@ -49,6 +49,7 @@ class PerfectAPIClient:
         self._execution_callback: Optional[Callable[[ExecutionRequest], None]] = None
         self._heartbeat_running = False
         self._heartbeat_thread = None
+        self._listening = False
 
     def register_flow(self, flow_definition: Dict, auto_trigger: bool = False, configuration: str = "development") -> bool:
         """
@@ -201,6 +202,7 @@ class PerfectAPIClient:
         print("[Perfect Client] Press Ctrl+C to stop")
 
         # Start heartbeat thread
+        self._listening = True
         self._heartbeat_running = True
         self._heartbeat_thread = threading.Thread(
             target=self._heartbeat_loop,
@@ -210,12 +212,12 @@ class PerfectAPIClient:
         self._heartbeat_thread.start()
 
         try:
-            while True:
+            while self._listening:
                 try:
-                    # Long-poll for execution requests
+                    # Very short timeout to allow quick shutdown
                     response = self.session.get(
                         f"{self.base_url}/api/execution-requests",
-                        timeout=30  # Long-poll timeout
+                        timeout=0.5  # 500ms timeout for near-instant shutdown
                     )
 
                     if response.status_code == 200:
@@ -229,16 +231,28 @@ class PerfectAPIClient:
                             self._execution_callback(request)
 
                 except requests.exceptions.Timeout:
-                    # Expected - long-poll timeout, continue polling
+                    # Expected - poll timeout, continue polling
                     pass
                 except requests.exceptions.RequestException as e:
-                    print(f"[Perfect Client] Connection error: {e}")
-                    print(f"[Perfect Client] Retrying in {poll_interval}s...")
-                    time.sleep(poll_interval)
+                    if self._listening:  # Only log if still listening
+                        print(f"[Perfect Client] Connection error: {e}")
+                        print(f"[Perfect Client] Retrying in {poll_interval}s...")
+                        time.sleep(poll_interval)
 
         except KeyboardInterrupt:
             print("\n[Perfect Client] Shutting down...")
+        finally:
+            self._listening = False
             self._heartbeat_running = False
+
+    def stop_listening(self):
+        """Stop listening for execution requests"""
+        self._listening = False
+        self._heartbeat_running = False
+        # Close session to immediately abort any ongoing requests
+        self.session.close()
+        # Create a new session for cleanup operations
+        self.session = requests.Session()
 
     def close(self):
         """Close the API client and cleanup resources"""

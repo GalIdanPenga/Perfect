@@ -1,0 +1,28 @@
+{
+  "clients": [
+    {
+      "id": "perfect_example",
+      "name": "Perfect Example Flows",
+      "description": "Default example workflows with 4 flows",
+      "workingDir": "examples/workflows",
+      "command": "python3",
+      "args": ["example_flows.py"]
+    },
+    {
+      "id": "custom_python",
+      "name": "Custom Python Client",
+      "description": "Custom Python client with development config",
+      "workingDir": "examples/workflows",
+      "command": "python3",
+      "args": ["example_flows.py", "--config", "dev"]
+    },
+    {
+      "id": "python_venv",
+      "name": "Python Virtual Environment",
+      "description": "Execute client from virtual environment",
+      "workingDir": "examples/workflows",
+      "command": ".venv/bin/python",
+      "args": ["example_flows.py"]
+    }
+  ]
+}

@@ -349,11 +349,28 @@ def main():
         registry = get_registry()
         registry.set_client(client)
 
+        # Track completed executions
+        total_flows = len(registry.get_flows())
+        completed_executions = {'count': 0}
+        execution_lock = threading.Lock()
+
         # Set up execution handler to run in separate threads for concurrency
         def threaded_execution_handler(req):
+            def wrapped_handler():
+                handle_execution_request(client, req)
+
+                # Track completion and check if all flows are done
+                with execution_lock:
+                    completed_executions['count'] += 1
+                    print(f"\n[Perfect Client] Completed {completed_executions['count']}/{total_flows} flows")
+
+                    if completed_executions['count'] >= total_flows:
+                        print("[Perfect Client] All flows completed. Shutting down...")
+                        # Stop listening immediately - logs already sent
+                        client.stop_listening()
+
             thread = threading.Thread(
-                target=handle_execution_request,
-                args=(client, req),
+                target=wrapped_handler,
                 daemon=True
             )
             thread.start()

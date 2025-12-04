@@ -7,17 +7,25 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  Box,
   RotateCw,
-  Zap,
-  Hash,
-  DownloadCloud,
   ChevronDown,
   Filter,
   X,
-  Search
+  Search,
+  Hash
 } from 'lucide-react';
-import { FlowDefinition, FlowRun, TaskState, TaskRun } from './types';
+import { FlowRun, TaskState, TaskRun } from './types';
+
+// --- Types ---
+
+interface ClientConfig {
+  id: string;
+  name: string;
+  description: string;
+  workingDir: string;
+  command: string;
+  args: string[];
+}
 
 // --- Icons & Badges ---
 
@@ -198,82 +206,17 @@ const ActiveRunCard = ({ run }: { run: FlowRun }) => {
   );
 };
 
-const FlowCard = ({ flow, onRun }: { flow: FlowDefinition, onRun: (id: string, config: string) => void }) => {
-  const [config, setConfig] = useState('development');
-
-  const handleRunClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onRun(flow.id, config);
-  };
-  
-  const handleConfigChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    e.stopPropagation();
-    setConfig(e.target.value);
-  }
-  
-  const handleDropdownClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  }
-
-  return (
-    <div className="group relative bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 hover:border-sky-500/30 hover:shadow-neon hover:bg-slate-800/60 transition-all duration-200">
-      <div className="flex justify-between items-start mb-3">
-        <div className="bg-slate-800 text-sky-400 p-2 rounded-lg border border-slate-700 group-hover:text-sky-300 group-hover:border-sky-500/30 transition-colors">
-          <Hash size={18} />
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {/* Config Picker */}
-          <div className="relative group/picker" onClick={handleDropdownClick}>
-             <select 
-               value={config}
-               onChange={handleConfigChange}
-               className="bg-slate-900 border border-slate-700 text-[10px] text-slate-300 rounded-md py-1 pl-2 pr-6 appearance-none focus:outline-none focus:border-sky-500 cursor-pointer hover:border-slate-600 transition-colors uppercase font-bold tracking-wider"
-             >
-               <option value="development">DEV</option>
-               <option value="debug">DEBUG</option>
-               <option value="release">RELEASE</option>
-             </select>
-             <ChevronDown size={10} className="absolute right-1.5 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" />
-          </div>
-
-          <button 
-            onClick={handleRunClick}
-            className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:bg-sky-500 hover:text-white hover:border-sky-500 transition-all shadow-md active:scale-95 z-10"
-            title="Run Flow"
-          >
-            <Play size={14} className="ml-0.5 fill-current" />
-          </button>
-        </div>
-      </div>
-      
-      <h3 className="font-bold text-slate-200 mb-1 group-hover:text-white transition-colors">{flow.name}</h3>
-      <p className="text-xs text-slate-400 line-clamp-2 mb-3 h-8 leading-relaxed">{flow.description}</p>
-      
-      <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">
-        <span className="text-[10px] text-slate-500 font-medium bg-slate-800/50 px-2 py-1 rounded-md">
-          {flow.tasks.length} tasks
-        </span>
-        
-        {flow.schedule && (
-           <span className="text-[10px] text-slate-500 flex items-center gap-1.5">
-             <Clock size={10} /> {flow.schedule}
-           </span>
-        )}
-      </div>
-    </div>
-  );
-};
-
-
 // --- Main Layout ---
 
 export default function App() {
-  const [flows, setFlows] = useState<FlowDefinition[]>([]);
   const [runs, setRuns] = useState<FlowRun[]>([]);
   const [selectedHistoryRunId, setSelectedHistoryRunId] = useState<string | null>(null);
   const [clientStatus, setClientStatus] = useState<'stopped' | 'starting' | 'running' | 'error'>('stopped');
   const [isStartingClient, setIsStartingClient] = useState(false);
+
+  // Client configuration states
+  const [availableClients, setAvailableClients] = useState<ClientConfig[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
@@ -284,15 +227,10 @@ export default function App() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [flowsRes, runsRes] = await Promise.all([
-          fetch('http://localhost:3001/api/engine/flows'),
-          fetch('http://localhost:3001/api/engine/runs')
-        ]);
+        const runsRes = await fetch('http://localhost:3001/api/engine/runs');
 
-        if (flowsRes.ok && runsRes.ok) {
-          const flowsData = await flowsRes.json();
+        if (runsRes.ok) {
           const runsData = await runsRes.json();
-          setFlows(flowsData);
           setRuns(runsData);
         }
       } catch (error) {
@@ -318,15 +256,38 @@ export default function App() {
     };
 
     checkClientStatus();
-    const interval = setInterval(checkClientStatus, 2000);
+    const interval = setInterval(checkClientStatus, 200); // Poll every 200ms for faster updates
     return () => clearInterval(interval);
+  }, []);
+
+  // Fetch available client configurations
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/client/configs');
+        if (response.ok) {
+          const data = await response.json();
+          setAvailableClients(data.clients);
+          // Set default to first client
+          if (data.clients.length > 0) {
+            setSelectedClientId(data.clients[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch client configurations:', error);
+      }
+    };
+
+    fetchClients();
   }, []);
 
   const handleStartClient = async () => {
     setIsStartingClient(true);
     try {
       const response = await fetch('http://localhost:3001/api/client/start', {
-        method: 'POST'
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clientId: selectedClientId })
       });
       const data = await response.json();
       if (data.success) {
@@ -348,34 +309,6 @@ export default function App() {
       setClientStatus('stopped');
     } catch (error) {
       console.error('Failed to stop client:', error);
-    }
-  };
-
-  const handleRunFlow = async (flowId: string, config: string) => {
-    try {
-      await fetch(`http://localhost:3001/api/engine/trigger/${flowId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ configuration: config })
-      });
-    } catch (error) {
-      console.error('Failed to trigger flow:', error);
-    }
-  };
-
-  const handleRunAll = async () => {
-    try {
-      await Promise.all(
-        flows.map(flow =>
-          fetch(`http://localhost:3001/api/engine/trigger/${flow.id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ configuration: 'development' })
-          })
-        )
-      );
-    } catch (error) {
-      console.error('Failed to trigger flows:', error);
     }
   };
 
@@ -448,95 +381,8 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex overflow-hidden">
-        
-        {/* Left Panel: Flow Library */}
-        <div className="w-[360px] flex-none border-r border-slate-800 bg-slate-900/50 flex flex-col shadow-2xl z-10 backdrop-blur-sm">
-          <div className="p-5 border-b border-slate-800 bg-slate-900/50">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Box size={14} className="text-sky-500" />
-                Library
-              </h2>
-              {flows.length > 0 && (
-                <button 
-                  onClick={handleRunAll}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-[10px] font-bold text-slate-300 hover:text-amber-400 hover:border-amber-500/50 hover:bg-amber-500/10 transition-all shadow-sm group"
-                >
-                  <Zap size={12} className="text-amber-500 group-hover:fill-amber-500" />
-                  Run All
-                </button>
-              )}
-            </div>
-            <p className="text-xs text-slate-500">Registered pipeline definitions</p>
-          </div>
-          
-          <div className="p-4 overflow-y-auto custom-scrollbar flex-1 space-y-3">
-            {flows.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-center px-4">
-                <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-4 text-slate-500">
-                  <Terminal size={24} />
-                </div>
-                <h3 className="text-sm font-medium text-slate-300 mb-2">No Flows Registered</h3>
-                <p className="text-xs text-slate-500 mb-4 leading-relaxed max-w-sm">
-                  Start the Python client to register flows and execute workflows.
-                </p>
 
-                {/* Client Control */}
-                <div className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 text-center max-w-md w-full">
-                  {/* Status Display */}
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      clientStatus === 'running' ? 'bg-emerald-500 animate-pulse' :
-                      clientStatus === 'starting' ? 'bg-amber-500 animate-pulse' :
-                      clientStatus === 'error' ? 'bg-rose-500' :
-                      'bg-slate-600'
-                    }`}></div>
-                    <span className="text-xs text-slate-400 font-mono">
-                      Client: <span className={`uppercase font-bold ${
-                        clientStatus === 'running' ? 'text-emerald-400' :
-                        clientStatus === 'starting' ? 'text-amber-400' :
-                        clientStatus === 'error' ? 'text-rose-400' :
-                        'text-slate-500'
-                      }`}>{clientStatus}</span>
-                    </span>
-                  </div>
-
-                  {/* Action Buttons */}
-                  {clientStatus === 'stopped' || clientStatus === 'error' ? (
-                    <button
-                      onClick={handleStartClient}
-                      disabled={isStartingClient}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-700 text-white rounded-lg font-medium text-sm transition-all shadow-lg hover:shadow-sky-500/20 disabled:text-slate-500 disabled:cursor-not-allowed active:scale-95"
-                    >
-                      <Play size={16} className="fill-current" />
-                      {isStartingClient ? 'Starting...' : 'Start Python Client'}
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleStopClient}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-rose-500 text-slate-300 hover:text-white rounded-lg font-medium text-sm transition-all shadow-lg active:scale-95"
-                    >
-                      <XCircle size={16} />
-                      Stop Client
-                    </button>
-                  )}
-
-                  <p className="text-xs text-slate-500 mt-3 leading-relaxed">
-                    {clientStatus === 'running'
-                      ? 'Client is connected and listening for execution requests.'
-                      : 'The Python client will register flows with Perfect.'}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              flows.map(flow => (
-                <FlowCard key={flow.id} flow={flow} onRun={handleRunFlow} />
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Right Panel: Live Monitoring Dashboard */}
+        {/* Live Monitoring Dashboard */}
         <div className="flex-1 flex flex-col bg-slate-900/30 relative">
           {/* Dashboard Header */}
            <div className="p-5 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center shadow-sm backdrop-blur-sm">
@@ -557,16 +403,109 @@ export default function App() {
           
           <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
             {activeRuns.length === 0 ? (
-              <div className="h-[60vh] flex flex-col items-center justify-center text-slate-600 space-y-6 opacity-80">
+              <div className="h-[70vh] flex flex-col items-center justify-center text-slate-600 space-y-8">
                 <div className="relative">
                   <div className="absolute inset-0 bg-sky-500/20 blur-xl rounded-full"></div>
-                  <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 relative shadow-xl">
-                    <Terminal size={48} className="text-sky-500/50" />
+                  <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 relative shadow-xl">
+                    <Terminal size={64} className="text-sky-500/50" />
                   </div>
                 </div>
-                <div className="text-center">
-                  <p className="text-xl font-medium text-slate-400">System Idle</p>
-                  <p className="text-sm text-slate-600 mt-1 max-w-xs mx-auto">Waiting for execution triggers from the library.</p>
+
+                {/* Client Control - Centered */}
+                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center max-w-md w-full shadow-2xl">
+                  <h3 className="text-lg font-bold text-slate-300 mb-2">Python Client</h3>
+                  <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+                    Start the Python client to register and automatically execute workflows.
+                  </p>
+
+                  {/* Client Selector */}
+                  {availableClients.length > 0 && (
+                    <div className="mb-6 text-left">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                        Select Client Configuration
+                      </label>
+                      <div className="space-y-2">
+                        {availableClients.map(client => (
+                          <button
+                            key={client.id}
+                            onClick={() => setSelectedClientId(client.id)}
+                            disabled={clientStatus === 'running' || clientStatus === 'starting'}
+                            className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
+                              selectedClientId === client.id
+                                ? 'border-sky-500 bg-sky-500/10 shadow-[0_0_15px_rgba(56,189,248,0.3)]'
+                                : 'border-slate-700 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-900'
+                            } disabled:opacity-50 disabled:cursor-not-allowed group`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                                selectedClientId === client.id
+                                  ? 'border-sky-500 bg-sky-500'
+                                  : 'border-slate-600 bg-slate-900'
+                              }`}>
+                                {selectedClientId === client.id && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                                )}
+                              </div>
+                              <div className="flex-1">
+                                <div className={`text-sm font-semibold mb-0.5 transition-colors ${
+                                  selectedClientId === client.id ? 'text-sky-400' : 'text-slate-300 group-hover:text-slate-200'
+                                }`}>
+                                  {client.name}
+                                </div>
+                                <div className="text-xs text-slate-500 leading-relaxed">
+                                  {client.description}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Status Display */}
+                  <div className="flex items-center justify-center gap-2 mb-4">
+                    <div className={`w-2.5 h-2.5 rounded-full ${
+                      clientStatus === 'running' ? 'bg-emerald-500 animate-pulse' :
+                      clientStatus === 'starting' ? 'bg-amber-500 animate-pulse' :
+                      clientStatus === 'error' ? 'bg-rose-500' :
+                      'bg-slate-600'
+                    }`}></div>
+                    <span className="text-sm text-slate-400 font-mono">
+                      Status: <span className={`uppercase font-bold ${
+                        clientStatus === 'running' ? 'text-emerald-400' :
+                        clientStatus === 'starting' ? 'text-amber-400' :
+                        clientStatus === 'error' ? 'text-rose-400' :
+                        'text-slate-500'
+                      }`}>{clientStatus}</span>
+                    </span>
+                  </div>
+
+                  {/* Action Buttons */}
+                  {clientStatus === 'stopped' || clientStatus === 'error' ? (
+                    <button
+                      onClick={handleStartClient}
+                      disabled={isStartingClient}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-700 text-white rounded-lg font-medium text-base transition-all shadow-lg hover:shadow-sky-500/30 disabled:text-slate-500 disabled:cursor-not-allowed active:scale-95"
+                    >
+                      <Play size={20} className="fill-current" />
+                      {isStartingClient ? 'Starting...' : 'Start Python Client'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleStopClient}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-rose-500 text-slate-300 hover:text-white rounded-lg font-medium text-base transition-all shadow-lg active:scale-95"
+                    >
+                      <XCircle size={20} />
+                      Stop Client
+                    </button>
+                  )}
+
+                  <p className="text-xs text-slate-500 mt-4 leading-relaxed">
+                    {clientStatus === 'running'
+                      ? 'Client is connected. Flows will auto-execute upon registration.'
+                      : 'Once started, all registered flows will execute automatically.'}
+                  </p>
                 </div>
               </div>
             ) : (
