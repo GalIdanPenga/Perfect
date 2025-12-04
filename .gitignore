@@ -25,3 +25,8 @@ dist-ssr
 
 # Python
 *.pyc
+
+# Database
+server/database/flows.db
+server/database/flows.db-shm
+server/database/flows.db-wal

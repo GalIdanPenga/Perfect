@@ -5,6 +5,7 @@ import {
   TaskState,
   FlowRegistrationPayload
 } from '../types';
+import { flowDb, runDb } from '../database/db';
 
 /**
  * FlowEngine - Core workflow orchestration engine
@@ -26,6 +27,13 @@ export class FlowEngine {
 
   constructor(enableSimulation: boolean = false) {
     this.simulationEnabled = enableSimulation;
+
+    // Load existing flows and runs from database
+    console.log('[FlowEngine] Loading flows and runs from database...');
+    this.flows = flowDb.getAllFlows();
+    this.runs = runDb.getAllRuns();
+    console.log(`[FlowEngine] Loaded ${this.flows.length} flows and ${this.runs.length} runs from database`);
+
     // Start the simulation loop for progress updates
     this.tickInterval = setInterval(() => this.tick(), this.TICK_INTERVAL_MS);
     // Start heartbeat check loop
@@ -105,6 +113,7 @@ export class FlowEngine {
     const run = this.runs.find(r => r.id === runId);
     if (run) {
       run.logs.push(log);
+      runDb.saveRun(run);
       this.notifyStateChange();
     }
   }
@@ -154,6 +163,7 @@ export class FlowEngine {
       this.updateRunProgress(run);
     }
 
+    runDb.saveRun(run);
     this.notifyStateChange();
     return true;
   }
@@ -193,6 +203,7 @@ export class FlowEngine {
     };
 
     this.flows.push(newFlow);
+    flowDb.saveFlow(newFlow);
     this.notifyStateChange();
     return newFlow;
   }
@@ -202,6 +213,7 @@ export class FlowEngine {
    */
   private removeFlow(flowId: string): void {
     this.flows = this.flows.filter(f => f.id !== flowId);
+    flowDb.deleteFlow(flowId);
   }
 
   /**
@@ -238,6 +250,9 @@ export class FlowEngine {
 
     // Remove the flow from the library immediately after triggering
     this.removeFlow(flowId);
+
+    // Save the new run to the database
+    runDb.saveRun(newRun);
 
     this.notifyStateChange();
 
@@ -317,11 +332,12 @@ export class FlowEngine {
       const isAnyFailed = run.tasks.some(t => t.state === TaskState.FAILED);
       const areAllCompleted = run.tasks.every(t => t.state === TaskState.COMPLETED);
 
-      if (isAnyFailed && run.state !== TaskState.FAILED) {
+      // Note: We've already filtered out COMPLETED and FAILED runs at the start of forEach
+      if (isAnyFailed) {
         run.state = TaskState.FAILED;
         run.endTime = new Date().toISOString();
         changed = true;
-      } else if (areAllCompleted && run.state !== TaskState.COMPLETED) {
+      } else if (areAllCompleted) {
         run.state = TaskState.COMPLETED;
         run.progress = 100;
         run.endTime = new Date().toISOString();
@@ -330,6 +346,12 @@ export class FlowEngine {
     });
 
     if (changed) {
+      // Save all modified runs to database
+      this.runs.forEach(run => {
+        if (run.state === TaskState.RUNNING || run.state === TaskState.COMPLETED || run.state === TaskState.FAILED) {
+          runDb.saveRun(run);
+        }
+      });
       this.notifyStateChange();
     }
   }
@@ -400,6 +422,9 @@ export class FlowEngine {
               task.logs.push('[System] Task failed: Lost connection to Python client');
             }
           });
+
+          // Save the failed run to database
+          runDb.saveRun(run);
         });
 
         this.notifyStateChange();

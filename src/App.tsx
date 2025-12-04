@@ -12,7 +12,10 @@ import {
   Zap,
   Hash,
   DownloadCloud,
-  ChevronDown
+  ChevronDown,
+  Filter,
+  X,
+  Search
 } from 'lucide-react';
 import { FlowDefinition, FlowRun, TaskState, TaskRun } from './types';
 
@@ -272,6 +275,11 @@ export default function App() {
   const [clientStatus, setClientStatus] = useState<'stopped' | 'starting' | 'running' | 'error'>('stopped');
   const [isStartingClient, setIsStartingClient] = useState(false);
 
+  // Filter states
+  const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
+  const [flowNameFilter, setFlowNameFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
   // Fetch data from backend API
   useEffect(() => {
     const fetchData = async () => {
@@ -372,9 +380,46 @@ export default function App() {
   };
 
   const activeRuns = runs.filter(r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING || r.state === TaskState.RETRYING);
-  const historyRuns = runs.filter(r => r.state !== TaskState.RUNNING && r.state !== TaskState.PENDING && r.state !== TaskState.RETRYING);
+
+  // Get all history runs (before filtering)
+  const allHistoryRuns = runs.filter(r => r.state !== TaskState.RUNNING && r.state !== TaskState.PENDING && r.state !== TaskState.RETRYING);
+
+  // Apply filters to history runs
+  let historyRuns = [...allHistoryRuns];
+
+  // Filter by status
+  if (statusFilter !== 'all') {
+    historyRuns = historyRuns.filter(r => r.state === statusFilter);
+  }
+
+  // Filter by flow name
+  if (flowNameFilter !== 'all') {
+    historyRuns = historyRuns.filter(r => r.flowName === flowNameFilter);
+  }
+
+  // Filter by search query (searches in flow name and run ID)
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase();
+    historyRuns = historyRuns.filter(r =>
+      r.flowName.toLowerCase().includes(query) ||
+      r.id.toLowerCase().includes(query)
+    );
+  }
+
+  // Get unique flow names for the flow name filter dropdown
+  const uniqueFlowNames = Array.from(new Set(runs.map(r => r.flowName))).sort();
 
   const selectedHistoryRun = selectedHistoryRunId ? runs.find(r => r.id === selectedHistoryRunId) : null;
+
+  // Helper to clear all filters
+  const clearFilters = () => {
+    setStatusFilter('all');
+    setFlowNameFilter('all');
+    setSearchQuery('');
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = statusFilter !== 'all' || flowNameFilter !== 'all' || searchQuery.trim() !== '';
 
   const handleHistoryClick = (runId: string) => {
     setSelectedHistoryRunId(runId === selectedHistoryRunId ? null : runId);
@@ -533,33 +578,104 @@ export default function App() {
             )}
             
             {/* History Section */}
-            {historyRuns.length > 0 && (
+            {allHistoryRuns.length > 0 && (
               <div className="mt-12 border-t border-slate-800 pt-8 mb-8">
-                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                   <Clock size={14} /> Execution History
-                 </h3>
-                 <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
-                   {historyRuns.slice(0, 12).map(run => (
-                     <div
-                       key={run.id}
-                       onClick={() => handleHistoryClick(run.id)}
-                       className={`bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 hover:border-slate-600 transition-all cursor-pointer group ${
-                         selectedHistoryRunId === run.id
-                           ? 'border-sky-500 bg-sky-500/10 shadow-neon'
-                           : 'border-slate-700/50'
-                       }`}
+                 <div className="flex items-center justify-between mb-4">
+                   <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                     <Clock size={14} /> Execution History
+                     <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-mono">
+                       {historyRuns.length}
+                     </span>
+                   </h3>
+                   {hasActiveFilters && (
+                     <button
+                       onClick={clearFilters}
+                       className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-[10px] font-bold text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all shadow-sm group"
                      >
-                       <div className="flex justify-between items-center">
-                         <span className="font-medium text-xs truncate text-slate-300 group-hover:text-sky-400 transition-colors" title={run.flowName}>{run.flowName}</span>
-                         <StatusIcon state={run.state} size={14} />
-                       </div>
-                       <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
-                         <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{run.id.split('-')[1]}</span>
-                         <span>{new Date(run.startTime).toLocaleTimeString()}</span>
-                       </div>
-                     </div>
-                   ))}
+                       <X size={12} className="group-hover:text-rose-400" />
+                       Clear Filters
+                     </button>
+                   )}
                  </div>
+
+                 {/* Filter Controls */}
+                 <div className="flex flex-wrap gap-3 mb-4 p-4 bg-slate-800/30 border border-slate-700/50 rounded-lg">
+                   {/* Search Input */}
+                   <div className="relative flex-1 min-w-[200px]">
+                     <Search size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500" />
+                     <input
+                       type="text"
+                       placeholder="Search by flow name or ID..."
+                       value={searchQuery}
+                       onChange={(e) => setSearchQuery(e.target.value)}
+                       className="w-full bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-md py-2 pl-9 pr-3 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 transition-colors placeholder:text-slate-600"
+                     />
+                   </div>
+
+                   {/* Status Filter */}
+                   <div className="relative">
+                     <Filter size={12} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" />
+                     <select
+                       value={statusFilter}
+                       onChange={(e) => setStatusFilter(e.target.value as any)}
+                       className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-md py-2 pl-9 pr-8 appearance-none focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 cursor-pointer hover:border-slate-600 transition-colors"
+                     >
+                       <option value="all">All Status</option>
+                       <option value={TaskState.COMPLETED}>Completed</option>
+                       <option value={TaskState.FAILED}>Failed</option>
+                     </select>
+                     <ChevronDown size={12} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" />
+                   </div>
+
+                   {/* Flow Name Filter */}
+                   {uniqueFlowNames.length > 0 && (
+                     <div className="relative">
+                       <Hash size={12} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" />
+                       <select
+                         value={flowNameFilter}
+                         onChange={(e) => setFlowNameFilter(e.target.value)}
+                         className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-md py-2 pl-9 pr-8 appearance-none focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 cursor-pointer hover:border-slate-600 transition-colors"
+                       >
+                         <option value="all">All Flows</option>
+                         {uniqueFlowNames.map(name => (
+                           <option key={name} value={name}>{name}</option>
+                         ))}
+                       </select>
+                       <ChevronDown size={12} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" />
+                     </div>
+                   )}
+                 </div>
+
+                 {historyRuns.length === 0 ? (
+                   <div className="flex flex-col items-center justify-center py-12 text-slate-600">
+                     <Filter size={32} className="mb-3 text-slate-700" />
+                     <p className="text-sm font-medium text-slate-400">No matching runs found</p>
+                     <p className="text-xs text-slate-600 mt-1">Try adjusting your filters</p>
+                   </div>
+                 ) : (
+                   <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
+                     {historyRuns.slice(0, 12).map(run => (
+                       <div
+                         key={run.id}
+                         onClick={() => handleHistoryClick(run.id)}
+                         className={`bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 hover:border-slate-600 transition-all cursor-pointer group ${
+                           selectedHistoryRunId === run.id
+                             ? 'border-sky-500 bg-sky-500/10 shadow-neon'
+                             : 'border-slate-700/50'
+                         }`}
+                       >
+                         <div className="flex justify-between items-center">
+                           <span className="font-medium text-xs truncate text-slate-300 group-hover:text-sky-400 transition-colors" title={run.flowName}>{run.flowName}</span>
+                           <StatusIcon state={run.state} size={14} />
+                         </div>
+                         <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+                           <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{run.id.split('-')[1]}</span>
+                           <span>{new Date(run.startTime).toLocaleTimeString()}</span>
+                         </div>
+                       </div>
+                     ))}
+                   </div>
+                 )}
 
                  {/* Selected History Detail */}
                  {selectedHistoryRun && (
