@@ -2,8 +2,6 @@
 
 A modern workflow orchestration platform for Python flows. Monitor, trigger, and analyze your data pipelines with ease.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1A2Sy8R_XLyH62O0HBsFmX4hU_S0x7uLI
-
 ## Features
 
 - 🎯 **Python-First Design** - Define workflows using simple decorators
