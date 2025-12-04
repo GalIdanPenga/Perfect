@@ -6,13 +6,14 @@ This file contains the workflow definitions using Perfect's Python SDK.
 It defines all flows and tasks, registers them with Perfect, and handles execution.
 
 To run:
-    python examples/client_app.py
+    python examples/workflows/example_flows.py
 
 The client will:
 1. Register all defined flows with Perfect
-2. Listen for execution requests from Perfect
-3. Execute flows when triggered
-4. Send logs back to Perfect in real-time
+2. Flows are automatically triggered upon registration
+3. Listen for execution requests from Perfect
+4. Execute flows when triggered
+5. Send logs back to Perfect in real-time
 """
 
 import sys

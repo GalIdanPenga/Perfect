@@ -39,6 +39,8 @@ class FlowDefinition:
     description: str = ""
     schedule: Optional[str] = None
     tasks: List[TaskDefinition] = field(default_factory=list)
+    auto_trigger: bool = False
+    auto_trigger_config: str = "development"
 
 
 class Schedule:
@@ -107,8 +109,12 @@ class WorkflowRegistry:
             # Convert to API format
             payload = self.to_dict(analyzed_flow)
 
-            # Register with Perfect backend
-            self._client.register_flow(payload)
+            # Register with Perfect backend, passing auto_trigger settings
+            self._client.register_flow(
+                payload,
+                auto_trigger=flow_def.auto_trigger,
+                configuration=flow_def.auto_trigger_config
+            )
         except Exception as e:
             print(f"[WorkflowRegistry] Warning: Failed to auto-register flow '{flow_def.name}': {e}")
 
@@ -153,7 +159,9 @@ class WorkflowRegistry:
         self,
         name: str,
         description: str = "",
-        schedule: Optional[Schedule] = None
+        schedule: Optional[Schedule] = None,
+        auto_trigger: bool = False,
+        auto_trigger_config: str = "development"
     ) -> Callable:
         """
         Decorator to register a function as a flow.
@@ -162,12 +170,15 @@ class WorkflowRegistry:
             name: Human-readable name for the flow
             description: Description of what the flow does
             schedule: Optional scheduling configuration
+            auto_trigger: If True, automatically trigger the flow after registration
+            auto_trigger_config: Configuration to use when auto-triggering (default: "development")
 
         Example:
             @flow(
                 name="Daily ETL",
                 description="Extract, transform, and load daily data",
-                schedule=CronSchedule("0 0 * * *")
+                schedule=CronSchedule("0 0 * * *"),
+                auto_trigger=True
             )
             def daily_etl():
                 # Flow implementation
@@ -180,7 +191,9 @@ class WorkflowRegistry:
                 name=name,
                 func=func,
                 description=description,
-                schedule=schedule_str
+                schedule=schedule_str,
+                auto_trigger=auto_trigger,
+                auto_trigger_config=auto_trigger_config
             )
 
             self._flows[func.__name__] = flow_def

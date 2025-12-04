@@ -21,7 +21,7 @@ class ExecutionRequest:
     """Represents an execution request from Perfect"""
     run_id: str
     flow_name: str
-    configuration: str  # 'development', 'debug', or 'release'
+    configuration: str
 
 
 class PerfectAPIClient:
@@ -50,7 +50,7 @@ class PerfectAPIClient:
         self._heartbeat_running = False
         self._heartbeat_thread = None
 
-    def register_flow(self, flow_definition: Dict) -> bool:
+    def register_flow(self, flow_definition: Dict, auto_trigger: bool = False, configuration: str = "development") -> bool:
         """
         Register a flow with Perfect.
 
@@ -60,18 +60,29 @@ class PerfectAPIClient:
                 - description: Flow description
                 - schedule: Optional cron schedule
                 - tasks: List of task definitions
+            auto_trigger: If True, automatically trigger the flow after registration
+            configuration: Configuration to use when auto-triggering (default: "development")
 
         Returns:
             True if registration successful, False otherwise
         """
         try:
+            # Add auto_trigger flag to the payload
+            payload = {
+                **flow_definition,
+                "autoTrigger": auto_trigger,
+                "autoTriggerConfig": configuration
+            }
+
             response = self.session.post(
                 f"{self.base_url}/api/flows",
-                json=flow_definition,
+                json=payload,
                 timeout=5
             )
             response.raise_for_status()
-            print(f"✓ Registered flow: {flow_definition['name']}")
+
+            trigger_msg = f" (auto-triggering with config: {configuration})" if auto_trigger else ""
+            print(f"✓ Registered flow: {flow_definition['name']}{trigger_msg}")
             return True
         except requests.exceptions.RequestException as e:
             print(f"✗ Failed to register flow {flow_definition['name']}: {e}")
@@ -248,10 +259,11 @@ class MockPerfectClient(PerfectAPIClient):
         self._registered_flows = []
         self._logs = {}
 
-    def register_flow(self, flow_definition: Dict) -> bool:
+    def register_flow(self, flow_definition: Dict, auto_trigger: bool = False, configuration: str = "development") -> bool:
         """Mock flow registration - stores locally"""
         self._registered_flows.append(flow_definition)
-        print(f"[Mock] ✓ Registered flow: {flow_definition['name']}")
+        trigger_msg = f" (auto-triggering with config: {configuration})" if auto_trigger else ""
+        print(f"[Mock] ✓ Registered flow: {flow_definition['name']}{trigger_msg}")
         return True
 
     def send_log(self, run_id: str, log_message: str) -> bool:

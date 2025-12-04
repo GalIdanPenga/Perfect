@@ -48,7 +48,14 @@ flowEngine.subscribeToFlowTriggers((runId: string, flowName: string, configurati
 // Legacy endpoints for Python client compatibility
 app.post('/api/flows', (req, res) => {
   try {
-    const flow = flowEngine.registerFlow(req.body);
+    const { autoTrigger, autoTriggerConfig, ...flowData } = req.body;
+    const flow = flowEngine.registerFlow(flowData);
+
+    // Automatically trigger all flows immediately after registration
+    const config = autoTriggerConfig || 'development';
+    console.log(`[Server] Auto-triggering flow '${flow.name}' with config: ${config}`);
+    flowEngine.triggerFlow(flow.id, config);
+
     res.json({ success: true, flow });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
