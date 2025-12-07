@@ -54,3 +54,13 @@ export interface FlowRun {
 }
 
 export type ViewMode = 'dashboard' | 'flows' | 'runs' | 'docs';
+
+export interface ClientConfig {
+  id: string;
+  name: string;
+  description: string;
+  workingDir: string;
+  command: string;
+  args: string[];
+  color?: string;
+}
