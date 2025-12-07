@@ -32,11 +32,11 @@ from perfect_client.api import create_client, ExecutionRequest
 # Flow 1: Daily Sales ETL
 # ==========================================
 
-@task(estimated_time=1000)
+@task(estimated_time=3000)
 def fetch_db_connection():
     """Connect to postgres_prod"""
     print("Connecting to database...")
-    time.sleep(0.1)
+    time.sleep(3)
     return TaskResult(
         passed=True,
         note="Successfully connected to postgres_prod",
@@ -44,11 +44,11 @@ def fetch_db_connection():
     )
 
 
-@task(estimated_time=5000)
+@task(estimated_time=8000)
 def extract_sales_data(conn=None):
     """Query raw logs"""
     print("Extracting sales data...")
-    time.sleep(0.5)
+    time.sleep(8)
     return TaskResult(
         passed=True,
         note="Extracted 1000 rows from sales_raw table",
@@ -60,11 +60,11 @@ def extract_sales_data(conn=None):
     )
 
 
-@task(estimated_time=3000)
+@task(estimated_time=6000)
 def clean_dataframe(df=None):
     """Remove nulls"""
     print("Cleaning dataframe...")
-    time.sleep(0.3)
+    time.sleep(6)
     return TaskResult(
         passed=True,
         note="Removed 50 rows with null values",
@@ -76,11 +76,11 @@ def clean_dataframe(df=None):
     )
 
 
-@task(estimated_time=2000)
+@task(estimated_time=5000)
 def load_to_warehouse(df=None):
     """Insert into sales_daily"""
     print("Loading to warehouse...")
-    time.sleep(0.2)
+    time.sleep(5)
     return TaskResult(
         passed=True,
         note="Successfully loaded 950 rows to BigQuery",
@@ -108,11 +108,11 @@ def daily_sales_etl():
 # Flow 2: Churn Model Retraining
 # ==========================================
 
-@task(estimated_time=2000)
+@task(estimated_time=5000)
 def fetch_training_set():
     """Load user behavior logs"""
     print("Fetching training data...")
-    time.sleep(0.2)
+    time.sleep(5)
     return TaskResult(
         passed=True,
         note="Loaded 50,000 training samples",
@@ -123,11 +123,11 @@ def fetch_training_set():
     )
 
 
-@task(estimated_time=15000)
+@task(estimated_time=20000)
 def train_xgboost(data=None):
     """Train classifier on GPU"""
     print("Training model...")
-    time.sleep(1.5)
+    time.sleep(20)
     auc_score = 0.87
     return TaskResult(
         passed=auc_score > 0.85,
@@ -140,11 +140,11 @@ def train_xgboost(data=None):
     )
 
 
-@task(estimated_time=1000)
+@task(estimated_time=7000)
 def evaluate_model(model=None):
     """Check AUC metric"""
     print("Evaluating model...")
-    time.sleep(0.1)
+    time.sleep(7)
     # Extract passed status from model TaskResult
     passed = model.passed if (model and hasattr(model, 'passed')) else True
     return TaskResult(
@@ -157,13 +157,13 @@ def evaluate_model(model=None):
     )
 
 
-@task(estimated_time=3000)
+@task(estimated_time=10000)
 def deploy_if_better(passed=None):
     """Push to Sagemaker"""
     should_deploy = passed.passed if (passed and hasattr(passed, 'passed')) else True
     if should_deploy:
         print("Deploying model to production...")
-        time.sleep(0.3)
+        time.sleep(10)
         return TaskResult(
             passed=True,
             note="Model deployed to production successfully",
@@ -199,11 +199,11 @@ def churn_model_retraining():
 # Flow 3: Infrastructure Health Check
 # ==========================================
 
-@task(estimated_time=500)
+@task(estimated_time=3000)
 def check_api_latency():
     """Ping /health endpoint"""
     print("Checking API latency...")
-    time.sleep(0.05)
+    time.sleep(2)
     return TaskResult(
         passed=True,
         note="API health check passed - latency within normal range",
@@ -213,11 +213,11 @@ def check_api_latency():
     )
 
 
-@task(estimated_time=500)
+@task(estimated_time=3000)
 def check_db_pool():
     """Query connection pool"""
     print("Checking DB connection pool...")
-    time.sleep(0.05)
+    time.sleep(2)
     return TaskResult(
         passed=True,
         note="Database connection pool healthy",
@@ -227,11 +227,11 @@ def check_db_pool():
     )
 
 
-@task(estimated_time=500)
+@task(estimated_time=3000)
 def check_redis_memory():
     """Check memory usage"""
     print("Checking Redis memory...")
-    time.sleep(0.05)
+    time.sleep(2)
     return TaskResult(
         passed=True,
         note="Redis memory usage within acceptable limits",
@@ -241,11 +241,11 @@ def check_redis_memory():
     )
 
 
-@task(estimated_time=500)
+@task(estimated_time=3000)
 def alert_pagerduty_if_critical():
     """Trigger alerts if needed"""
     print("Evaluating alert thresholds...")
-    time.sleep(0.05)
+    time.sleep(2)
     return TaskResult(
         passed=True,
         note="No critical alerts detected",
@@ -277,7 +277,7 @@ def infra_health_check():
 def compute_kpis():
     """Aggregate revenue metrics"""
     print("Computing KPIs...")
-    time.sleep(0.3)
+    time.sleep(8)
     return TaskResult(
         passed=True,
         note="KPIs computed successfully for current period",
@@ -289,11 +289,11 @@ def compute_kpis():
     )
 
 
-@task(estimated_time=2000)
+@task(estimated_time=7000)
 def generate_charts(metrics=None):
     """Plot matplotlib figures"""
     print("Generating charts...")
-    time.sleep(0.2)
+    time.sleep(5)
     return TaskResult(
         passed=True,
         note="Generated 3 visualization charts",
@@ -305,11 +305,11 @@ def generate_charts(metrics=None):
     )
 
 
-@task(estimated_time=4000)
+@task(estimated_time=12000)
 def render_pdf(charts=None):
     """Jinja2 to WeasyPrint"""
     print("Rendering PDF report...")
-    time.sleep(0.4)
+    time.sleep(10)
     return TaskResult(
         passed=True,
         note="PDF report rendered successfully",
@@ -319,11 +319,11 @@ def render_pdf(charts=None):
     )
 
 
-@task(estimated_time=1000)
+@task(estimated_time=4000)
 def email_report(pdf=None):
     """Send via SendGrid"""
     print("Emailing report to executives...")
-    time.sleep(0.1)
+    time.sleep(3)
     return TaskResult(
         passed=True,
         note="Report emailed to 5 executives",

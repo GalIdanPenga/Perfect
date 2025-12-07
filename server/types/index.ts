@@ -57,6 +57,7 @@ export interface FlowRun {
   logs: string[];
   tasks: TaskRun[];
   progress: number;
+  clientColor?: string;
 }
 
 export interface FlowRegistrationPayload {

@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import clientRoutes from './routes/clientRoutes';
+import clientRoutes, { getActiveClient } from './routes/clientRoutes';
 import engineRoutes from './routes/engineRoutes';
 import { flowEngine } from './engine/FlowEngine';
 
@@ -53,8 +53,10 @@ app.post('/api/flows', (req, res) => {
 
     // Automatically trigger all flows immediately after registration
     const config = autoTriggerConfig || 'development';
-    console.log(`[Server] Auto-triggering flow '${flow.name}' with config: ${config}`);
-    flowEngine.triggerFlow(flow.id, config);
+    const activeClient = getActiveClient();
+    const clientColor = activeClient?.color;
+    console.log(`[Server] Auto-triggering flow '${flow.name}' with config: ${config}${clientColor ? ` and client color: ${clientColor}` : ''}`);
+    flowEngine.triggerFlow(flow.id, config, clientColor);
 
     res.json({ success: true, flow });
   } catch (error: any) {

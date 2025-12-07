@@ -51,9 +51,21 @@ function initializeDatabase() {
       end_time TEXT,
       configuration TEXT NOT NULL,
       tags TEXT,
-      progress REAL NOT NULL DEFAULT 0
+      progress REAL NOT NULL DEFAULT 0,
+      client_color TEXT
     )
   `);
+
+  // Migration: Add client_color column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE flow_runs ADD COLUMN client_color TEXT`);
+    console.log('[Database] Added client_color column to flow_runs table');
+  } catch (e: any) {
+    // Column already exists, ignore error
+    if (!e.message.includes('duplicate column name')) {
+      throw e;
+    }
+  }
 
   // Create task_runs table
   db.exec(`
@@ -69,9 +81,20 @@ function initializeDatabase() {
       weight REAL NOT NULL,
       estimated_time INTEGER NOT NULL,
       progress REAL NOT NULL DEFAULT 0,
+      result TEXT,
       FOREIGN KEY (run_id) REFERENCES flow_runs(id) ON DELETE CASCADE
     )
   `);
+
+  // Migration: Add result column to task_runs if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE task_runs ADD COLUMN result TEXT`);
+    console.log('[Database] Added result column to task_runs table');
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) {
+      throw e;
+    }
+  }
 
   // Create logs table
   db.exec(`
@@ -214,8 +237,8 @@ export const runDb = {
   saveRun(run: FlowRun) {
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO flow_runs
-      (id, flow_id, flow_name, state, start_time, end_time, configuration, tags, progress)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, flow_id, flow_name, state, start_time, end_time, configuration, tags, progress, client_color)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -227,7 +250,8 @@ export const runDb = {
       run.endTime || null,
       run.configuration,
       JSON.stringify(run.tags || {}),
-      run.progress
+      run.progress,
+      run.clientColor || null
     );
 
     // Delete existing task runs and logs for this run
@@ -238,8 +262,8 @@ export const runDb = {
     // Insert task runs
     const taskStmt = db.prepare(`
       INSERT INTO task_runs
-      (id, run_id, task_id, task_name, state, start_time, end_time, duration_ms, weight, estimated_time, progress)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, run_id, task_id, task_name, state, start_time, end_time, duration_ms, weight, estimated_time, progress, result)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const task of run.tasks) {
@@ -254,7 +278,8 @@ export const runDb = {
         task.durationMs || null,
         task.weight,
         task.estimatedTime,
-        task.progress
+        task.progress,
+        task.result ? JSON.stringify(task.result) : null
       );
 
       // Insert task logs
@@ -301,6 +326,7 @@ export const runDb = {
         configuration: run.configuration,
         tags: run.tags ? JSON.parse(run.tags) : {},
         progress: run.progress,
+        clientColor: run.client_color,
         logs: logs.map(l => l.log_entry),
         tasks: tasks.map(task => {
           const taskLogs = db.prepare(
@@ -318,6 +344,7 @@ export const runDb = {
             weight: task.weight,
             estimatedTime: task.estimated_time,
             progress: task.progress,
+            result: task.result ? JSON.parse(task.result) : undefined,
             logs: taskLogs.map(l => l.log_entry)
           };
         })
@@ -344,6 +371,7 @@ export const runDb = {
       configuration: run.configuration,
       tags: run.tags ? JSON.parse(run.tags) : {},
       progress: run.progress,
+      clientColor: run.client_color,
       logs: logs.map(l => l.log_entry),
       tasks: tasks.map(task => {
         const taskLogs = db.prepare(
@@ -361,6 +389,7 @@ export const runDb = {
           weight: task.weight,
           estimatedTime: task.estimated_time,
           progress: task.progress,
+          result: task.result ? JSON.parse(task.result) : undefined,
           logs: taskLogs.map(l => l.log_entry)
         };
       })

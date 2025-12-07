@@ -58,6 +58,7 @@ export interface FlowRun {
   configuration?: string; // 'development' | 'debug' | 'release'
   tags?: Record<string, string>;
   logs: string[]; // Flow-level logs (configuration, startup, etc.)
+  clientColor?: string;
 }
 
 export type ViewMode = 'dashboard' | 'flows' | 'runs' | 'docs';

@@ -224,7 +224,7 @@ export class FlowEngine {
   /**
    * Trigger a flow execution
    */
-  triggerFlow(flowId: string, configuration: string = 'development'): void {
+  triggerFlow(flowId: string, configuration: string = 'development', clientColor?: string): void {
     const flow = this.flows.find(f => f.id === flowId);
     if (!flow) return;
 
@@ -249,7 +249,8 @@ export class FlowEngine {
         estimatedTime: t.estimatedTime,
         progress: 0
       })),
-      progress: 0
+      progress: 0,
+      clientColor: clientColor
     };
 
     this.runs.unshift(newRun);

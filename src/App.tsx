@@ -488,43 +488,46 @@ export default function App() {
                  ) : (
                    <>
                      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                       {historyRuns.slice(0, showAllHistory ? historyRuns.length : 12).map(run => (
-                         <div
-                           key={run.id}
-                           onClick={() => handleHistoryClick(run.id)}
-                           className="bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 transition-all cursor-pointer group"
-                           style={{
-                             borderColor: selectedHistoryRunId === run.id ? themeColor : '#475569',
-                             backgroundColor: selectedHistoryRunId === run.id ? `${themeColor}15` : 'rgba(30, 41, 59, 0.4)',
-                             boxShadow: selectedHistoryRunId === run.id ? `0 0 20px ${themeColor}30` : 'none'
-                           }}
-                           onMouseEnter={(e) => {
-                             if (selectedHistoryRunId !== run.id) {
-                               e.currentTarget.style.borderColor = '#64748b';
-                             }
-                           }}
-                           onMouseLeave={(e) => {
-                             if (selectedHistoryRunId !== run.id) {
-                               e.currentTarget.style.borderColor = '#475569';
-                             }
-                           }}
-                         >
-                           <div className="flex justify-between items-center">
-                             <span
-                               className="font-medium text-xs truncate text-slate-300 transition-colors"
-                               title={run.flowName}
-                               style={{
-                                 color: selectedHistoryRunId === run.id ? themeColor : undefined
-                               }}
-                             >{run.flowName}</span>
-                             <StatusIcon state={run.state} size={14} />
+                       {historyRuns.slice(0, showAllHistory ? historyRuns.length : 12).map(run => {
+                         const runColor = run.clientColor || themeColor;
+                         return (
+                           <div
+                             key={run.id}
+                             onClick={() => handleHistoryClick(run.id)}
+                             className="bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 transition-all cursor-pointer group"
+                             style={{
+                               borderColor: selectedHistoryRunId === run.id ? runColor : '#475569',
+                               backgroundColor: selectedHistoryRunId === run.id ? `${runColor}15` : 'rgba(30, 41, 59, 0.4)',
+                               boxShadow: selectedHistoryRunId === run.id ? `0 0 20px ${runColor}30` : 'none'
+                             }}
+                             onMouseEnter={(e) => {
+                               if (selectedHistoryRunId !== run.id) {
+                                 e.currentTarget.style.borderColor = '#64748b';
+                               }
+                             }}
+                             onMouseLeave={(e) => {
+                               if (selectedHistoryRunId !== run.id) {
+                                 e.currentTarget.style.borderColor = '#475569';
+                               }
+                             }}
+                           >
+                             <div className="flex justify-between items-center">
+                               <span
+                                 className="font-medium text-xs truncate text-slate-300 transition-colors"
+                                 title={run.flowName}
+                                 style={{
+                                   color: selectedHistoryRunId === run.id ? runColor : undefined
+                                 }}
+                               >{run.flowName}</span>
+                               <StatusIcon state={run.state} size={14} />
+                             </div>
+                             <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+                               <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{run.id.split('-')[1]}</span>
+                               <span>{new Date(run.startTime).toLocaleTimeString()}</span>
+                             </div>
                            </div>
-                           <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
-                             <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{run.id.split('-')[1]}</span>
-                             <span>{new Date(run.startTime).toLocaleTimeString()}</span>
-                           </div>
-                         </div>
-                       ))}
+                         );
+                       })}
                      </div>
 
                      {/* Show All / Show Less Button */}
@@ -572,13 +575,13 @@ export default function App() {
                          onClick={() => setSelectedHistoryRunId(null)}
                          className="text-xs transition-colors"
                          style={{ color: '#64748b' }}
-                         onMouseEnter={(e) => e.currentTarget.style.color = themeColor}
+                         onMouseEnter={(e) => e.currentTarget.style.color = selectedHistoryRun.clientColor || themeColor}
                          onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
                        >
                          Close
                        </button>
                      </div>
-                     <ActiveRunCard run={selectedHistoryRun} clientColor={activeClient?.color} />
+                     <ActiveRunCard run={selectedHistoryRun} clientColor={selectedHistoryRun.clientColor} />
                    </div>
                  )}
               </div>
