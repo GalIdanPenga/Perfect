@@ -22,6 +22,7 @@ function initializeDatabase() {
       description TEXT,
       schedule TEXT,
       code_snippet TEXT,
+      tags TEXT,
       created_at TEXT NOT NULL
     )
   `);
@@ -50,6 +51,7 @@ function initializeDatabase() {
       start_time TEXT NOT NULL,
       end_time TEXT,
       configuration TEXT NOT NULL,
+      tags TEXT,
       progress REAL NOT NULL DEFAULT 0
     )
   `);
@@ -117,8 +119,8 @@ export const flowDb = {
   // Save a flow definition
   saveFlow(flow: FlowDefinition) {
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO flows (id, name, description, schedule, code_snippet, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO flows (id, name, description, schedule, code_snippet, tags, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -127,6 +129,7 @@ export const flowDb = {
       flow.description,
       flow.schedule,
       flow.codeSnippet,
+      JSON.stringify(flow.tags || {}),
       flow.createdAt
     );
 
@@ -164,6 +167,7 @@ export const flowDb = {
         description: flow.description,
         schedule: flow.schedule,
         codeSnippet: flow.code_snippet,
+        tags: flow.tags ? JSON.parse(flow.tags) : {},
         createdAt: flow.created_at,
         tasks: tasks.map(task => ({
           id: task.id,
@@ -190,6 +194,7 @@ export const flowDb = {
       description: flow.description,
       schedule: flow.schedule,
       codeSnippet: flow.code_snippet,
+      tags: flow.tags ? JSON.parse(flow.tags) : {},
       createdAt: flow.created_at,
       tasks: tasks.map(task => ({
         id: task.id,
@@ -213,8 +218,8 @@ export const runDb = {
   saveRun(run: FlowRun) {
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO flow_runs
-      (id, flow_id, flow_name, state, start_time, end_time, configuration, progress)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      (id, flow_id, flow_name, state, start_time, end_time, configuration, tags, progress)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -225,6 +230,7 @@ export const runDb = {
       run.startTime,
       run.endTime || null,
       run.configuration,
+      JSON.stringify(run.tags || {}),
       run.progress
     );
 
@@ -297,6 +303,7 @@ export const runDb = {
         startTime: run.start_time,
         endTime: run.end_time,
         configuration: run.configuration,
+        tags: run.tags ? JSON.parse(run.tags) : {},
         progress: run.progress,
         logs: logs.map(l => l.log_entry),
         tasks: tasks.map(task => {
@@ -339,6 +346,7 @@ export const runDb = {
       startTime: run.start_time,
       endTime: run.end_time,
       configuration: run.configuration,
+      tags: run.tags ? JSON.parse(run.tags) : {},
       progress: run.progress,
       logs: logs.map(l => l.log_entry),
       tasks: tasks.map(task => {

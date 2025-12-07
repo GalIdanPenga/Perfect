@@ -186,6 +186,7 @@ export class FlowEngine {
       description: payload.description,
       schedule: payload.schedule,
       codeSnippet: '',
+      tags: payload.tags,
       tasks: payload.tasks.map(t => {
         const estimatedTime = t.estimatedTime || 1000;
         // Calculate weight as: estimatedTime / totalEstimatedTime
@@ -232,6 +233,7 @@ export class FlowEngine {
       state: TaskState.RUNNING,
       startTime: timestamp,
       configuration: configuration,
+      tags: flow.tags,
       logs: [],
       tasks: flow.tasks.map(t => ({
         id: `tr-${this.generateId()}`,

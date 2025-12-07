@@ -20,6 +20,7 @@ export interface FlowDefinition {
   description: string;
   schedule: string | null;
   codeSnippet: string;
+  tags?: Record<string, string>;
   tasks: TaskDefinition[];
   createdAt: string;
 }
@@ -46,6 +47,7 @@ export interface FlowRun {
   startTime: string;
   endTime?: string;
   configuration: string;
+  tags?: Record<string, string>;
   logs: string[];
   tasks: TaskRun[];
   progress: number;
@@ -55,6 +57,7 @@ export interface FlowRegistrationPayload {
   name: string;
   description: string;
   schedule: string | null;
+  tags?: Record<string, string>;
   tasks: {
     name: string;
     description?: string;

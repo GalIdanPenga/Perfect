@@ -41,6 +41,7 @@ class FlowDefinition:
     tasks: List[TaskDefinition] = field(default_factory=list)
     auto_trigger: bool = False
     auto_trigger_config: str = "development"
+    tags: Dict[str, str] = field(default_factory=dict)
 
 
 class Schedule:
@@ -161,7 +162,8 @@ class WorkflowRegistry:
         description: str = "",
         schedule: Optional[Schedule] = None,
         auto_trigger: bool = False,
-        auto_trigger_config: str = "development"
+        auto_trigger_config: str = "development",
+        tags: Optional[Dict[str, str]] = None
     ) -> Callable:
         """
         Decorator to register a function as a flow.
@@ -172,13 +174,15 @@ class WorkflowRegistry:
             schedule: Optional scheduling configuration
             auto_trigger: If True, automatically trigger the flow after registration
             auto_trigger_config: Configuration to use when auto-triggering (default: "development")
+            tags: Optional dictionary of metadata tags (e.g., {"version": "v0.1", "id": "452"})
 
         Example:
             @flow(
                 name="Daily ETL",
                 description="Extract, transform, and load daily data",
                 schedule=CronSchedule("0 0 * * *"),
-                auto_trigger=True
+                auto_trigger=True,
+                tags={"version": "v0.1", "id": "452"}
             )
             def daily_etl():
                 # Flow implementation
@@ -193,7 +197,8 @@ class WorkflowRegistry:
                 description=description,
                 schedule=schedule_str,
                 auto_trigger=auto_trigger,
-                auto_trigger_config=auto_trigger_config
+                auto_trigger_config=auto_trigger_config,
+                tags=tags or {}
             )
 
             self._flows[func.__name__] = flow_def
@@ -254,6 +259,7 @@ class WorkflowRegistry:
             "name": flow_def.name,
             "description": flow_def.description,
             "schedule": flow_def.schedule,
+            "tags": flow_def.tags,
             "tasks": [
                 {
                     "name": task.name,

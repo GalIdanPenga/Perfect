@@ -14,7 +14,8 @@ import {
   Search,
   Hash,
   Calendar,
-  ChevronRight
+  ChevronRight,
+  Tag
 } from 'lucide-react';
 import { FlowRun, TaskState, TaskRun } from './types';
 
@@ -86,6 +87,25 @@ const StatusBadge = ({ state }: { state: TaskState }) => {
 };
 
 // --- Components ---
+
+const TagBadges = ({ tags }: { tags?: Record<string, string> }) => {
+  if (!tags || Object.keys(tags).length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {Object.entries(tags).map(([key, value]) => (
+        <span
+          key={key}
+          className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-700/40 border border-slate-600/50 rounded text-[10px] font-mono text-slate-400"
+        >
+          <Tag size={10} className="text-slate-500" />
+          <span className="text-slate-500">{key}:</span>
+          <span className="text-slate-300">{value}</span>
+        </span>
+      ))}
+    </div>
+  );
+};
 
 const TaskRow = ({ task }: { task: TaskRun }) => {
   const isRunning = task.state === TaskState.RUNNING || task.state === TaskState.RETRYING;
@@ -190,7 +210,7 @@ const ActiveRunCard = ({ run }: { run: FlowRun }) => {
     <div className="bg-slate-800/40 backdrop-blur-md rounded-xl border border-slate-700/60 shadow-lg overflow-hidden flex flex-col transition-all hover:border-slate-600/80 group">
       {/* Header */}
       <div className="p-4 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/30">
-        <div>
+        <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-slate-100">{run.flowName}</h3>
             <StatusBadge state={run.state} />
@@ -206,6 +226,7 @@ const ActiveRunCard = ({ run }: { run: FlowRun }) => {
             <span className="w-1 h-1 rounded-full bg-slate-600"></span>
             {new Date(run.startTime).toLocaleTimeString()}
           </p>
+          <TagBadges tags={run.tags} />
         </div>
         <div className="text-right">
            <div className="flex flex-col items-end gap-1">

@@ -67,7 +67,8 @@ def load_to_warehouse(df):
 @flow(
     name="Daily Sales ETL",
     description="Extracts sales data from SQL, transforms via Pandas, and loads to BigQuery.",
-    schedule=CronSchedule("0 0 * * *")
+    schedule=CronSchedule("0 0 * * *"),
+    tags={"version": "v2.1", "team": "data-eng", "priority": "high"}
 )
 def daily_sales_etl():
     """Daily ETL pipeline for sales data"""
@@ -120,7 +121,8 @@ def deploy_if_better(passed):
 @flow(
     name="Churn Model Retraining",
     description="Retrains the churn prediction model on new user data.",
-    schedule=CronSchedule("0 0 * * 0")
+    schedule=CronSchedule("0 0 * * 0"),
+    tags={"version": "v1.0", "team": "ml-ops", "model": "xgboost"}
 )
 def churn_model_retraining():
     """Weekly ML model retraining pipeline"""
@@ -359,15 +361,15 @@ def main():
             def wrapped_handler():
                 handle_execution_request(client, req)
 
-                # Track completion and check if all flows are done
+                # Track completion
                 with execution_lock:
                     completed_executions['count'] += 1
                     print(f"\n[Perfect Client] Completed {completed_executions['count']}/{total_flows} flows")
 
-                    if completed_executions['count'] >= total_flows:
-                        print("[Perfect Client] All flows completed. Shutting down...")
-                        # Stop listening immediately - logs already sent
-                        client.stop_listening()
+                    # Don't auto-shutdown - let client keep running for manual triggers
+                    # if completed_executions['count'] >= total_flows:
+                    #     print("[Perfect Client] All flows completed. Shutting down...")
+                    #     client.stop_listening()
 
             thread = threading.Thread(
                 target=wrapped_handler,

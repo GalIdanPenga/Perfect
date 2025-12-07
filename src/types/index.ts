@@ -21,6 +21,7 @@ export interface FlowDefinition {
   description: string;
   schedule: string | null;
   codeSnippet: string;
+  tags?: Record<string, string>;
   tasks: TaskDefinition[];
   createdAt: string;
 }
@@ -49,6 +50,7 @@ export interface FlowRun {
   tasks: TaskRun[];
   progress: number; // 0 to 100 (Weighted average)
   configuration?: string; // 'development' | 'debug' | 'release'
+  tags?: Record<string, string>;
   logs: string[]; // Flow-level logs (configuration, startup, etc.)
 }
 
