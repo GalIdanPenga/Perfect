@@ -24,7 +24,7 @@ import threading
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from perfect_client.sdk import task, flow, get_registry, CronSchedule, IntervalSchedule
+from perfect_client.sdk import task, flow, get_registry
 from perfect_client.api import create_client, ExecutionRequest
 
 
@@ -67,7 +67,6 @@ def load_to_warehouse(df):
 @flow(
     name="Daily Sales ETL",
     description="Extracts sales data from SQL, transforms via Pandas, and loads to BigQuery.",
-    schedule=CronSchedule("0 0 * * *"),
     tags={"version": "v2.1", "team": "data-eng", "priority": "high"}
 )
 def daily_sales_etl():
@@ -121,7 +120,6 @@ def deploy_if_better(passed):
 @flow(
     name="Churn Model Retraining",
     description="Retrains the churn prediction model on new user data.",
-    schedule=CronSchedule("0 0 * * 0"),
     tags={"version": "v1.0", "team": "ml-ops", "model": "xgboost"}
 )
 def churn_model_retraining():
@@ -170,8 +168,7 @@ def alert_pagerduty_if_critical():
 
 @flow(
     name="Infrastructure Health Check",
-    description="Checks API latency and database connection pool status.",
-    schedule=IntervalSchedule("*/5 * * * *")
+    description="Checks API latency and database connection pool status."
 )
 def infra_health_check():
     """Monitor infrastructure health metrics"""
@@ -219,8 +216,7 @@ def email_report(pdf):
 
 @flow(
     name="Weekly Executive Report",
-    description="Generates PDF report and emails it to the C-suite.",
-    schedule=CronSchedule("0 9 * * MON")
+    description="Generates PDF report and emails it to the C-suite."
 )
 def weekly_report():
     """Weekly executive reporting pipeline"""
@@ -366,10 +362,10 @@ def main():
                     completed_executions['count'] += 1
                     print(f"\n[Perfect Client] Completed {completed_executions['count']}/{total_flows} flows")
 
-                    # Don't auto-shutdown - let client keep running for manual triggers
-                    # if completed_executions['count'] >= total_flows:
-                    #     print("[Perfect Client] All flows completed. Shutting down...")
-                    #     client.stop_listening()
+                    # Auto-shutdown after all flows complete (safe since no auto-trigger is used)
+                    if completed_executions['count'] >= total_flows:
+                        print("[Perfect Client] All flows completed. Shutting down...")
+                        client.stop_listening()
 
             thread = threading.Thread(
                 target=wrapped_handler,

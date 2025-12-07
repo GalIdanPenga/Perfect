@@ -20,7 +20,6 @@ function initializeDatabase() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT,
-      schedule TEXT,
       code_snippet TEXT,
       tags TEXT,
       created_at TEXT NOT NULL
@@ -119,15 +118,14 @@ export const flowDb = {
   // Save a flow definition
   saveFlow(flow: FlowDefinition) {
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO flows (id, name, description, schedule, code_snippet, tags, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO flows (id, name, description, code_snippet, tags, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       flow.id,
       flow.name,
       flow.description,
-      flow.schedule,
       flow.codeSnippet,
       JSON.stringify(flow.tags || {}),
       flow.createdAt
@@ -165,7 +163,6 @@ export const flowDb = {
         id: flow.id,
         name: flow.name,
         description: flow.description,
-        schedule: flow.schedule,
         codeSnippet: flow.code_snippet,
         tags: flow.tags ? JSON.parse(flow.tags) : {},
         createdAt: flow.created_at,
@@ -192,7 +189,6 @@ export const flowDb = {
       id: flow.id,
       name: flow.name,
       description: flow.description,
-      schedule: flow.schedule,
       codeSnippet: flow.code_snippet,
       tags: flow.tags ? JSON.parse(flow.tags) : {},
       createdAt: flow.created_at,

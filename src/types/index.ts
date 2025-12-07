@@ -19,7 +19,6 @@ export interface FlowDefinition {
   id: string;
   name: string;
   description: string;
-  schedule: string | null;
   codeSnippet: string;
   tags?: Record<string, string>;
   tasks: TaskDefinition[];

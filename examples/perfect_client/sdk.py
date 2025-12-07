@@ -37,30 +37,10 @@ class FlowDefinition:
     name: str
     func: Callable
     description: str = ""
-    schedule: Optional[str] = None
     tasks: List[TaskDefinition] = field(default_factory=list)
     auto_trigger: bool = False
     auto_trigger_config: str = "development"
     tags: Dict[str, str] = field(default_factory=dict)
-
-
-class Schedule:
-    """Base class for scheduling definitions"""
-    def __init__(self, expression: str):
-        self.expression = expression
-
-    def __str__(self):
-        return self.expression
-
-
-class CronSchedule(Schedule):
-    """Cron-based scheduling"""
-    pass
-
-
-class IntervalSchedule(Schedule):
-    """Interval-based scheduling"""
-    pass
 
 
 class WorkflowRegistry:
@@ -160,7 +140,6 @@ class WorkflowRegistry:
         self,
         name: str,
         description: str = "",
-        schedule: Optional[Schedule] = None,
         auto_trigger: bool = False,
         auto_trigger_config: str = "development",
         tags: Optional[Dict[str, str]] = None
@@ -171,7 +150,6 @@ class WorkflowRegistry:
         Args:
             name: Human-readable name for the flow
             description: Description of what the flow does
-            schedule: Optional scheduling configuration
             auto_trigger: If True, automatically trigger the flow after registration
             auto_trigger_config: Configuration to use when auto-triggering (default: "development")
             tags: Optional dictionary of metadata tags (e.g., {"version": "v0.1", "id": "452"})
@@ -180,7 +158,6 @@ class WorkflowRegistry:
             @flow(
                 name="Daily ETL",
                 description="Extract, transform, and load daily data",
-                schedule=CronSchedule("0 0 * * *"),
                 auto_trigger=True,
                 tags={"version": "v0.1", "id": "452"}
             )
@@ -189,13 +166,10 @@ class WorkflowRegistry:
                 pass
         """
         def decorator(func: Callable) -> Callable:
-            schedule_str = str(schedule) if schedule else None
-
             flow_def = FlowDefinition(
                 name=name,
                 func=func,
                 description=description,
-                schedule=schedule_str,
                 auto_trigger=auto_trigger,
                 auto_trigger_config=auto_trigger_config,
                 tags=tags or {}
@@ -258,7 +232,6 @@ class WorkflowRegistry:
         return {
             "name": flow_def.name,
             "description": flow_def.description,
-            "schedule": flow_def.schedule,
             "tags": flow_def.tags,
             "tasks": [
                 {

@@ -184,7 +184,6 @@ export class FlowEngine {
       id: `flow-${this.generateId()}`,
       name: payload.name,
       description: payload.description,
-      schedule: payload.schedule,
       codeSnippet: '',
       tags: payload.tags,
       tasks: payload.tasks.map(t => {
