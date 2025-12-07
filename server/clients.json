@@ -6,7 +6,8 @@
       "description": "Default example workflows with 4 flows",
       "workingDir": "examples/workflows",
       "command": "python3",
-      "args": ["example_flows.py"]
+      "args": ["example_flows.py"],
+      "color": "#00D9FF"
     },
     {
       "id": "custom_python",
@@ -14,7 +15,8 @@
       "description": "Custom Python client with development config",
       "workingDir": "examples/workflows",
       "command": "python3",
-      "args": ["example_flows.py", "--config", "dev"]
+      "args": ["example_flows.py", "--config", "dev"],
+      "color": "#FF0000"
     },
     {
       "id": "python_venv",
@@ -22,7 +24,8 @@
       "description": "Execute client from virtual environment",
       "workingDir": "examples/workflows",
       "command": ".venv/bin/python",
-      "args": ["example_flows.py"]
+      "args": ["example_flows.py"],
+      "color": "#00FF94"
     }
   ]
 }

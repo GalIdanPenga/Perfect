@@ -13,6 +13,7 @@ const router = express.Router();
 let pythonProcess: ChildProcess | null = null;
 let clientStatus: 'stopped' | 'starting' | 'running' | 'error' = 'stopped';
 let clientLogs: string[] = [];
+let activeClient: ClientConfig | null = null;
 
 // Load client configurations
 interface ClientConfig {
@@ -22,6 +23,7 @@ interface ClientConfig {
   workingDir: string;
   command: string;
   args: string[];
+  color?: string;
 }
 
 interface ClientsConfig {
@@ -65,7 +67,8 @@ router.get('/configs', (req, res) => {
 router.get('/status', (req, res) => {
   res.json({
     status: clientStatus,
-    logs: clientLogs.slice(-50)
+    logs: clientLogs.slice(-50),
+    activeClient: activeClient
   });
 });
 
@@ -87,6 +90,7 @@ router.post('/start', (req, res) => {
     const { clientId } = req.body;
     const selectedClient = clientsConfig.clients.find(c => c.id === clientId) || clientsConfig.clients[0];
 
+    activeClient = selectedClient;
     clientStatus = 'starting';
     clientLogs = [];
     clientLogs.push(`[Server] Starting Python client: ${selectedClient.name}...`);
@@ -141,6 +145,7 @@ router.post('/start', (req, res) => {
 
       clientStatus = 'stopped';
       pythonProcess = null;
+      activeClient = null;
     });
 
     res.json({
@@ -197,5 +202,10 @@ router.post('/stop', (req, res) => {
     });
   }
 });
+
+// Export function to get active client info
+export function getActiveClient(): ClientConfig | null {
+  return activeClient;
+}
 
 export default router;

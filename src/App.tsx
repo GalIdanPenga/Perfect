@@ -28,6 +28,7 @@ interface ClientConfig {
   workingDir: string;
   command: string;
   args: string[];
+  color?: string;
 }
 
 // --- Icons & Badges ---
@@ -163,7 +164,7 @@ const TaskRow = ({ task }: { task: TaskRun }) => {
   );
 };
 
-const ActiveRunCard = ({ run }: { run: FlowRun }) => {
+const ActiveRunCard = ({ run, clientColor }: { run: FlowRun; clientColor?: string }) => {
   const flowLogsRef = useRef<HTMLDivElement>(null);
   const isRunning = run.state === TaskState.RUNNING || run.state === TaskState.PENDING || run.state === TaskState.RETRYING;
 
@@ -206,10 +207,31 @@ const ActiveRunCard = ({ run }: { run: FlowRun }) => {
     }
   }, [run.logs.length, isRunning]);
 
+  // Create dynamic styles based on client color (more subtle)
+  const borderColor = clientColor || '#475569'; // default slate-600
+  const glowColor = clientColor ? `${clientColor}20` : 'rgba(71, 85, 105, 0.15)'; // Reduced opacity
+  const bgGradient = clientColor
+    ? `linear-gradient(135deg, ${clientColor}05 0%, transparent 50%)`
+    : 'rgba(30, 41, 59, 0.4)';
+
   return (
-    <div className="bg-slate-800/40 backdrop-blur-md rounded-xl border border-slate-700/60 shadow-lg overflow-hidden flex flex-col transition-all hover:border-slate-600/80 group">
+    <div
+      className="backdrop-blur-md rounded-xl shadow-lg overflow-hidden flex flex-col transition-all group"
+      style={{
+        border: `1px solid ${clientColor ? `${clientColor}60` : '#475569'}`, // Thinner border, more transparent
+        boxShadow: clientColor ? `0 0 20px ${glowColor}, 0 4px 20px rgba(0,0,0,0.3)` : '0 4px 20px rgba(0,0,0,0.3)',
+        background: bgGradient,
+        backgroundColor: 'rgba(30, 41, 59, 0.4)'
+      }}
+    >
       {/* Header */}
-      <div className="p-4 border-b border-slate-700/50 flex justify-between items-center bg-slate-800/30">
+      <div
+        className="p-4 border-b flex justify-between items-center"
+        style={{
+          borderBottomColor: clientColor ? `${clientColor}30` : '#475569',
+          background: clientColor ? `${clientColor}08` : 'rgba(30, 41, 59, 0.3)'
+        }}
+      >
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="font-bold text-slate-100">{run.flowName}</h3>
@@ -246,8 +268,15 @@ const ActiveRunCard = ({ run }: { run: FlowRun }) => {
       {/* Smooth Progress Bar */}
       <div className="h-1 bg-slate-800 w-full relative">
         <div
-          className={`h-full transition-all duration-300 ease-out relative ${run.state === TaskState.FAILED ? 'bg-rose-500' : 'bg-gradient-to-r from-sky-500 to-indigo-500'}`}
-          style={{ width: `${run.progress}%` }}
+          className="h-full transition-all duration-300 ease-out relative"
+          style={{
+            width: `${run.progress}%`,
+            background: run.state === TaskState.FAILED
+              ? '#ef4444' // rose-500
+              : clientColor
+                ? `linear-gradient(90deg, ${clientColor} 0%, ${clientColor}cc 100%)`
+                : 'linear-gradient(90deg, #0ea5e9 0%, #6366f1 100%)' // sky-500 to indigo-500
+          }}
         >
           {run.state === TaskState.RUNNING && (
             <div className="absolute top-0 right-0 bottom-0 w-20 bg-gradient-to-r from-transparent to-white/30 blur-sm"></div>
@@ -287,6 +316,7 @@ export default function App() {
   // Client configuration states
   const [availableClients, setAvailableClients] = useState<ClientConfig[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [activeClient, setActiveClient] = useState<ClientConfig | null>(null);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
@@ -294,6 +324,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
   const [showAllHistory, setShowAllHistory] = useState(false);
+
+  // Theme color based on selected client (even before starting)
+  const selectedClient = availableClients.find(c => c.id === selectedClientId);
+  const themeColor = selectedClient?.color || activeClient?.color || '#0ea5e9'; // Default to sky-500
 
   // Fetch data from backend API
   useEffect(() => {
@@ -322,6 +356,7 @@ export default function App() {
         const response = await fetch('http://localhost:3001/api/client/status');
         const data = await response.json();
         setClientStatus(data.status);
+        setActiveClient(data.activeClient || null);
       } catch (error) {
         // Backend not running yet
       }
@@ -453,21 +488,57 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen bg-slate-900 flex flex-col overflow-hidden text-slate-200 font-sans selection:bg-sky-500/30">
-      
+    <div
+      className="h-screen flex flex-col overflow-hidden text-slate-200 font-sans transition-all duration-700"
+      style={{
+        background: `radial-gradient(ellipse at top, ${themeColor}12 0%, #0f172a 50%, #0f172a 100%)`,
+        backgroundColor: '#0f172a'
+      }}
+    >
+
       {/* Top Navigation Bar */}
-      <header className="bg-slate-900/80 backdrop-blur-md border-b border-slate-800 h-16 flex-none px-6 flex items-center justify-between shadow-sm z-20 relative">
+      <header
+        className="backdrop-blur-md border-b h-16 flex-none px-6 flex items-center justify-between shadow-sm z-20 relative transition-all duration-700"
+        style={{
+          backgroundColor: `${themeColor}12`,
+          borderBottomColor: `${themeColor}50`,
+          boxShadow: `0 4px 20px ${themeColor}25`
+        }}
+      >
         <div className="flex items-center gap-3">
           <PerfectLogo />
           <h1 className="text-xl font-bold text-slate-100 tracking-tight">Perfect</h1>
-          <span className="bg-sky-500/10 text-sky-400 text-[10px] px-2 py-0.5 rounded-full border border-sky-500/20 font-mono tracking-wide">v2.0</span>
+          <span
+            className="text-[10px] px-2 py-0.5 rounded-full border font-mono tracking-wide transition-all duration-700"
+            style={{
+              backgroundColor: `${themeColor}18`,
+              color: themeColor,
+              borderColor: `${themeColor}50`
+            }}
+          >v2.0</span>
         </div>
         <div className="flex items-center gap-4">
           <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 font-mono">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            System Online
+            <span
+              className="w-2 h-2 rounded-full animate-pulse transition-colors duration-700"
+              style={{ backgroundColor: themeColor }}
+            ></span>
+            <span
+              className="transition-colors duration-700"
+              style={{ color: activeClient ? themeColor : '#64748b' }}
+            >
+              {activeClient ? 'Client Active' : 'System Online'}
+            </span>
           </div>
-          <button className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-white">
+          <button
+            className="p-2 rounded-lg transition-all text-slate-400 hover:text-white duration-300"
+            style={{
+              background: 'transparent',
+              ['--hover-bg' as any]: `${themeColor}20`
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = `${themeColor}20`}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+          >
             <Activity size={18} />
           </button>
         </div>
@@ -477,20 +548,60 @@ export default function App() {
       <main className="flex-1 flex overflow-hidden">
 
         {/* Live Monitoring Dashboard */}
-        <div className="flex-1 flex flex-col bg-slate-900/30 relative">
+        <div className="flex-1 flex flex-col relative">
           {/* Dashboard Header */}
-           <div className="p-5 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center shadow-sm backdrop-blur-sm">
+           <div
+             className="p-5 border-b flex justify-between items-center shadow-sm backdrop-blur-sm transition-all duration-700"
+             style={{
+               borderBottomColor: `${themeColor}30`,
+               backgroundColor: `${themeColor}10`,
+               boxShadow: `0 4px 15px ${themeColor}15`
+             }}
+           >
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-              <Activity size={14} className={activeRuns.length > 0 ? "text-sky-500 animate-pulse" : "text-slate-500"} /> 
+              <Activity
+                size={14}
+                className={`animate-pulse transition-colors duration-700`}
+                style={{ color: activeRuns.length > 0 ? themeColor : '#64748b' }}
+              />
               Live Monitor
               {activeRuns.length > 0 && (
-                <span className="bg-sky-500/10 text-sky-400 px-2 py-0.5 rounded-full text-[10px] font-bold border border-sky-500/20 shadow-[0_0_10px_rgba(56,189,248,0.2)]">
+                <span
+                  className="px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all duration-700"
+                  style={{
+                    backgroundColor: `${themeColor}15`,
+                    color: themeColor,
+                    borderColor: `${themeColor}40`,
+                    boxShadow: `0 0 15px ${themeColor}25`
+                  }}
+                >
                   {activeRuns.length} ACTIVE
+                </span>
+              )}
+              {/* Active Client Indicator */}
+              {activeClient && activeClient.color && (
+                <span
+                  className="px-2.5 py-1 rounded-md text-[10px] font-bold border-2 flex items-center gap-1.5 transition-all duration-700"
+                  style={{
+                    backgroundColor: `${activeClient.color}18`,
+                    borderColor: activeClient.color,
+                    color: activeClient.color,
+                    boxShadow: `0 0 20px ${activeClient.color}40`
+                  }}
+                >
+                  <div
+                    className="w-1.5 h-1.5 rounded-full animate-pulse"
+                    style={{ backgroundColor: activeClient.color }}
+                  ></div>
+                  {activeClient.name}
                 </span>
               )}
             </h2>
             <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
-              <span className="w-1.5 h-1.5 bg-slate-700 rounded-full animate-pulse"></span>
+              <span
+                className="w-1.5 h-1.5 rounded-full animate-pulse transition-colors duration-700"
+                style={{ backgroundColor: themeColor }}
+              ></span>
               Real-time feed
             </div>
           </div>
@@ -499,8 +610,17 @@ export default function App() {
             {activeRuns.length === 0 ? (
               <div className="h-[70vh] flex flex-col items-center justify-center text-slate-600 space-y-8">
                 <div className="relative">
-                  <div className="absolute inset-0 bg-sky-500/20 blur-xl rounded-full"></div>
-                  <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 relative shadow-xl">
+                  <div
+                    className="absolute inset-0 blur-xl rounded-full transition-colors duration-700"
+                    style={{ backgroundColor: `${themeColor}30` }}
+                  ></div>
+                  <div
+                    className="bg-slate-800 p-8 rounded-2xl border relative shadow-xl transition-all duration-700"
+                    style={{
+                      borderColor: `${themeColor}40`,
+                      boxShadow: `0 10px 40px ${themeColor}20`
+                    }}
+                  >
                     <PerfectLogo size={64} />
                   </div>
                 </div>
@@ -519,59 +639,107 @@ export default function App() {
                         Select Client Configuration
                       </label>
                       <div className="space-y-2">
-                        {availableClients.map(client => (
-                          <button
-                            key={client.id}
-                            onClick={() => setSelectedClientId(client.id)}
-                            disabled={clientStatus === 'running' || clientStatus === 'starting'}
-                            className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
-                              selectedClientId === client.id
-                                ? 'border-sky-500 bg-sky-500/10 shadow-[0_0_15px_rgba(56,189,248,0.3)]'
-                                : 'border-slate-700 bg-slate-900/50 hover:border-slate-600 hover:bg-slate-900'
-                            } disabled:opacity-50 disabled:cursor-not-allowed group`}
-                          >
-                            <div className="flex items-start gap-2">
-                              <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
-                                selectedClientId === client.id
-                                  ? 'border-sky-500 bg-sky-500'
-                                  : 'border-slate-600 bg-slate-900'
-                              }`}>
-                                {selectedClientId === client.id && (
-                                  <div className="w-1.5 h-1.5 rounded-full bg-white"></div>
+                        {availableClients.map(client => {
+                          const isSelected = selectedClientId === client.id;
+                          const clientColor = client.color || '#0ea5e9'; // default sky-500
+
+                          return (
+                            <button
+                              key={client.id}
+                              onClick={() => setSelectedClientId(client.id)}
+                              disabled={clientStatus === 'running' || clientStatus === 'starting'}
+                              className="w-full text-left p-4 rounded-lg border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
+                              style={{
+                                borderColor: isSelected ? clientColor : '#334155',
+                                background: isSelected
+                                  ? `linear-gradient(135deg, ${clientColor}18 0%, ${clientColor}08 100%)`
+                                  : 'rgba(15, 23, 42, 0.5)',
+                                boxShadow: isSelected
+                                  ? `0 0 25px ${clientColor}40, inset 0 1px 0 ${clientColor}20`
+                                  : 'none'
+                              }}
+                            >
+                              {/* Animated border glow for selected */}
+                              {isSelected && client.color && (
+                                <div
+                                  className="absolute inset-0 rounded-lg opacity-50 blur-md -z-10"
+                                  style={{ background: clientColor }}
+                                ></div>
+                              )}
+
+                              <div className="flex items-start gap-3">
+                                {/* Large color indicator */}
+                                {client.color && (
+                                  <div
+                                    className="mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shadow-lg relative"
+                                    style={{
+                                      background: `linear-gradient(135deg, ${client.color} 0%, ${client.color}cc 100%)`,
+                                      boxShadow: `0 4px 12px ${client.color}60, inset 0 1px 0 rgba(255,255,255,0.2)`
+                                    }}
+                                  >
+                                    <div className="w-3 h-3 bg-white/90 rounded-full"></div>
+                                  </div>
                                 )}
-                              </div>
-                              <div className="flex-1">
-                                <div className={`text-sm font-semibold mb-0.5 transition-colors ${
-                                  selectedClientId === client.id ? 'text-sky-400' : 'text-slate-300 group-hover:text-slate-200'
-                                }`}>
-                                  {client.name}
+                                <div className="flex-1">
+                                  <div
+                                    className="text-sm font-bold mb-0.5 transition-colors"
+                                    style={{ color: isSelected ? clientColor : '#cbd5e1' }}
+                                  >
+                                    {client.name}
+                                  </div>
+                                  <div className="text-xs text-slate-500 leading-relaxed">
+                                    {client.description}
+                                  </div>
                                 </div>
-                                <div className="text-xs text-slate-500 leading-relaxed">
-                                  {client.description}
+                                <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                                  isSelected
+                                    ? 'border-white/50'
+                                    : 'border-slate-600 bg-slate-900'
+                                }`}
+                                style={{
+                                  backgroundColor: isSelected ? clientColor : undefined
+                                }}
+                                >
+                                  {isSelected && (
+                                    <div className="w-2 h-2 rounded-full bg-white"></div>
+                                  )}
                                 </div>
                               </div>
-                            </div>
-                          </button>
-                        ))}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
                   {/* Status Display */}
                   <div className="flex items-center justify-center gap-2 mb-4">
-                    <div className={`w-2.5 h-2.5 rounded-full ${
-                      clientStatus === 'running' ? 'bg-emerald-500 animate-pulse' :
-                      clientStatus === 'starting' ? 'bg-amber-500 animate-pulse' :
-                      clientStatus === 'error' ? 'bg-rose-500' :
-                      'bg-slate-600'
-                    }`}></div>
+                    <div
+                      className={`w-2.5 h-2.5 rounded-full ${
+                        clientStatus === 'starting' ? 'animate-pulse' :
+                        clientStatus === 'running' ? 'animate-pulse' : ''
+                      }`}
+                      style={{
+                        backgroundColor:
+                          clientStatus === 'running' && activeClient?.color ? activeClient.color :
+                          clientStatus === 'running' ? '#10b981' :
+                          clientStatus === 'starting' ? '#f59e0b' :
+                          clientStatus === 'error' ? '#ef4444' :
+                          '#475569'
+                      }}
+                    ></div>
                     <span className="text-sm text-slate-400 font-mono">
-                      Status: <span className={`uppercase font-bold ${
-                        clientStatus === 'running' ? 'text-emerald-400' :
-                        clientStatus === 'starting' ? 'text-amber-400' :
-                        clientStatus === 'error' ? 'text-rose-400' :
-                        'text-slate-500'
-                      }`}>{clientStatus}</span>
+                      Status: <span
+                        className="uppercase font-bold"
+                        style={{
+                          color:
+                            clientStatus === 'running' && activeClient?.color ? activeClient.color :
+                            clientStatus === 'running' ? '#34d399' :
+                            clientStatus === 'starting' ? '#fbbf24' :
+                            clientStatus === 'error' ? '#f87171' :
+                            '#64748b'
+                        }}
+                      >{clientStatus}</span>
                     </span>
                   </div>
 
@@ -580,7 +748,24 @@ export default function App() {
                     <button
                       onClick={handleStartClient}
                       disabled={isStartingClient}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-700 text-white rounded-lg font-medium text-base transition-all shadow-lg hover:shadow-sky-500/30 disabled:text-slate-500 disabled:cursor-not-allowed active:scale-95"
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 text-white rounded-lg font-medium text-base transition-all shadow-lg disabled:text-slate-500 disabled:cursor-not-allowed active:scale-95 disabled:bg-slate-700"
+                      style={{
+                        backgroundColor: isStartingClient ? '#334155' : themeColor,
+                        boxShadow: isStartingClient ? 'none' : `0 10px 30px ${themeColor}40, 0 0 20px ${themeColor}30`
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isStartingClient) {
+                          const r = parseInt(themeColor.slice(1, 3), 16);
+                          const g = parseInt(themeColor.slice(3, 5), 16);
+                          const b = parseInt(themeColor.slice(5, 7), 16);
+                          e.currentTarget.style.backgroundColor = `rgb(${Math.max(0, r-20)}, ${Math.max(0, g-20)}, ${Math.max(0, b-20)})`;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isStartingClient) {
+                          e.currentTarget.style.backgroundColor = themeColor;
+                        }
+                      }}
                     >
                       <Play size={20} className="fill-current" />
                       {isStartingClient ? 'Starting...' : 'Start Python Client'}
@@ -605,7 +790,7 @@ export default function App() {
             ) : (
               <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 pb-12">
                 {activeRuns.map(run => (
-                  <ActiveRunCard key={run.id} run={run} />
+                  <ActiveRunCard key={run.id} run={run} clientColor={activeClient?.color} />
                 ))}
               </div>
             )}
@@ -708,14 +893,31 @@ export default function App() {
                          <div
                            key={run.id}
                            onClick={() => handleHistoryClick(run.id)}
-                           className={`bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 hover:border-slate-600 transition-all cursor-pointer group ${
-                             selectedHistoryRunId === run.id
-                               ? 'border-sky-500 bg-sky-500/10 shadow-neon'
-                               : 'border-slate-700/50'
-                           }`}
+                           className="bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 transition-all cursor-pointer group"
+                           style={{
+                             borderColor: selectedHistoryRunId === run.id ? themeColor : '#475569',
+                             backgroundColor: selectedHistoryRunId === run.id ? `${themeColor}15` : 'rgba(30, 41, 59, 0.4)',
+                             boxShadow: selectedHistoryRunId === run.id ? `0 0 20px ${themeColor}30` : 'none'
+                           }}
+                           onMouseEnter={(e) => {
+                             if (selectedHistoryRunId !== run.id) {
+                               e.currentTarget.style.borderColor = '#64748b';
+                             }
+                           }}
+                           onMouseLeave={(e) => {
+                             if (selectedHistoryRunId !== run.id) {
+                               e.currentTarget.style.borderColor = '#475569';
+                             }
+                           }}
                          >
                            <div className="flex justify-between items-center">
-                             <span className="font-medium text-xs truncate text-slate-300 group-hover:text-sky-400 transition-colors" title={run.flowName}>{run.flowName}</span>
+                             <span
+                               className="font-medium text-xs truncate text-slate-300 transition-colors"
+                               title={run.flowName}
+                               style={{
+                                 color: selectedHistoryRunId === run.id ? themeColor : undefined
+                               }}
+                             >{run.flowName}</span>
                              <StatusIcon state={run.state} size={14} />
                            </div>
                            <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
@@ -731,7 +933,21 @@ export default function App() {
                        <div className="flex justify-center mt-4">
                          <button
                            onClick={() => setShowAllHistory(!showAllHistory)}
-                           className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-xs font-medium text-slate-400 hover:text-sky-400 hover:border-sky-500/50 hover:bg-sky-500/5 transition-all shadow-sm group"
+                           className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border rounded-lg text-xs font-medium transition-all shadow-sm group"
+                           style={{
+                             borderColor: '#475569',
+                             color: '#94a3b8'
+                           }}
+                           onMouseEnter={(e) => {
+                             e.currentTarget.style.color = themeColor;
+                             e.currentTarget.style.borderColor = `${themeColor}80`;
+                             e.currentTarget.style.backgroundColor = `${themeColor}10`;
+                           }}
+                           onMouseLeave={(e) => {
+                             e.currentTarget.style.color = '#94a3b8';
+                             e.currentTarget.style.borderColor = '#475569';
+                             e.currentTarget.style.backgroundColor = 'rgba(30, 41, 59, 0.5)';
+                           }}
                          >
                            <span>
                              {showAllHistory ? `Show Less` : `Show All (${historyRuns.length} total)`}
@@ -755,12 +971,15 @@ export default function App() {
                        </h4>
                        <button
                          onClick={() => setSelectedHistoryRunId(null)}
-                         className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                         className="text-xs transition-colors"
+                         style={{ color: '#64748b' }}
+                         onMouseEnter={(e) => e.currentTarget.style.color = themeColor}
+                         onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
                        >
                          Close
                        </button>
                      </div>
-                     <ActiveRunCard run={selectedHistoryRun} />
+                     <ActiveRunCard run={selectedHistoryRun} clientColor={activeClient?.color} />
                    </div>
                  )}
               </div>
