@@ -7,10 +7,11 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
 - 🎯 **Python-First Design** - Define workflows using simple decorators
 - 📊 **Real-Time Monitoring** - Track execution progress with live updates
 - ⚡ **Weight-Based Progress** - Accurate progress tracking based on task complexity
-- 🔄 **Flexible Scheduling** - Cron and interval-based scheduling support
+- 🏷️ **Flow Tagging** - Organize flows with custom tags (version, team, priority, etc.)
 - 🎨 **Modern UI** - Beautiful cyberpunk-themed dashboard
 - 💾 **Persistent Storage** - SQLite database for flows and execution history
 - 🔍 **Advanced Filtering** - Search and filter execution history by status, flow name, or ID
+- 💓 **Client Heartbeat** - Automatic failure detection when Python client disconnects
 
 ## Run Locally
 
@@ -47,12 +48,14 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
    - Register flows with the Perfect backend
    - Listen for execution requests from the UI
    - Execute tasks and report progress in real-time
+   - Automatically shut down after all flows complete
 
 4. In the Perfect UI, you can:
-   - View registered flows in the Library panel
-   - Trigger individual flows or run all flows
+   - Trigger flows directly from the execution panel
    - Monitor execution progress with live updates
+   - View task-level logs and progress tracking
    - Filter and search through execution history
+   - See flow metadata including tags and descriptions
 
 ## Project Structure
 
@@ -86,23 +89,34 @@ perfect/
 Define workflows using the Perfect Python SDK:
 
 ```python
-from perfect_client import task, flow, CronSchedule
+from perfect_client import task, flow
 
-@task(weight=5, estimated_time=3000)
+@task(estimated_time=3000)
 def extract_data():
     """Extract data from database"""
     # Your task logic here
     return data
 
+@task(estimated_time=2000)
+def transform_data(data):
+    """Clean and transform data"""
+    # Your transformation logic
+    return cleaned_data
+
+@task(estimated_time=1000)
+def load_data(data):
+    """Load data to warehouse"""
+    # Your loading logic
+    pass
+
 @flow(
     name="Daily ETL Pipeline",
     description="Extract, transform, and load daily data",
-    schedule=CronSchedule("0 0 * * *")
+    tags={"version": "v1.0", "team": "data-eng", "priority": "high"}
 )
 def daily_etl():
     """Main ETL workflow"""
-    conn = connect_to_db()
-    data = extract_data(conn)
+    data = extract_data()
     cleaned = transform_data(data)
     load_data(cleaned)
 ```
@@ -112,21 +126,23 @@ See [PYTHON_CLIENT.md](./examples/perfect_client/PYTHON_CLIENT.md) for detailed 
 ## How It Works
 
 1. **Define Flows** - Write Python workflows using `@task` and `@flow` decorators
-2. **Register Flows** - Python client registers flows with the backend via WebSocket
-3. **Trigger Execution** - Click "Run" in the UI to trigger flows with different configurations
-4. **Real-Time Updates** - Backend engine orchestrates task execution and streams progress
-5. **Monitor Progress** - View live execution with weighted progress tracking in the UI
-6. **Persistent History** - All flows and runs are stored in SQLite database
-7. **Analyze Results** - Filter and search through execution history by status, flow name, or ID
+2. **Register Flows** - Python client registers flows with the backend via REST API
+3. **Trigger Execution** - Click trigger button in the UI to execute flows
+4. **Long Polling** - Python client continuously polls the backend for execution requests
+5. **Execute & Report** - Client executes tasks and sends progress updates back to the server
+6. **Real-Time Updates** - UI displays live execution progress with weighted progress bars
+7. **Persistent History** - All flows and runs are stored in SQLite database
+8. **Heartbeat Monitoring** - Client sends heartbeats; flows marked failed if client disconnects
+9. **Auto Shutdown** - Client automatically stops after all registered flows complete
 
 ## Architecture
 
 Perfect uses a three-tier architecture:
 
 - **Frontend (React + Vite)** - Modern UI built with React, displaying real-time flow execution
-- **Backend (Express + TypeScript)** - RESTful API and WebSocket server for client communication
+- **Backend (Express + TypeScript)** - RESTful API server for flow management and client communication
 - **Database (SQLite)** - Persistent storage for flow definitions and execution history
-- **Python Client** - SDK for defining and executing workflows in Python
+- **Python Client** - SDK for defining and executing workflows, with long-polling for requests
 
 ## Example Workflows
 
@@ -147,10 +163,11 @@ Perfect uses SQLite to persist all workflow data:
 - **Auto-initialized**: Database and tables created automatically on first run
 
 The database stores:
-- Flow definitions and task configurations
+- Flow definitions with task configurations and metadata tags
 - Complete execution history with state and progress
 - Task-level and flow-level logs
 - Timestamps for all operations
+- Configuration settings for each flow run
 
 All data persists across server restarts, allowing you to:
 - Review historical execution patterns
