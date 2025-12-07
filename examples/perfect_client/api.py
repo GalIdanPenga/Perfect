@@ -112,7 +112,7 @@ class PerfectAPIClient:
             print(f"✗ Failed to send log: {e}")
             return False
 
-    def update_task_state(self, run_id: str, task_index: int, state: str, progress: int = None, duration_ms: int = None) -> bool:
+    def update_task_state(self, run_id: str, task_index: int, state: str, progress: int = None, duration_ms: int = None, result: Dict = None) -> bool:
         """
         Update the state of a task in a flow run.
 
@@ -122,6 +122,7 @@ class PerfectAPIClient:
             state: The new state ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')
             progress: Optional progress percentage (0-100)
             duration_ms: Optional actual duration in milliseconds
+            result: Optional task result (TaskResult.to_dict())
 
         Returns:
             True if update successful, False otherwise
@@ -132,6 +133,8 @@ class PerfectAPIClient:
                 payload["progress"] = progress
             if duration_ms is not None:
                 payload["durationMs"] = duration_ms
+            if result is not None:
+                payload["result"] = result
 
             response = self.session.post(
                 f"{self.base_url}/api/runs/{run_id}/tasks/{task_index}/state",
@@ -288,13 +291,15 @@ class MockPerfectClient(PerfectAPIClient):
         print(f"[Mock] Log: {log_message}")
         return True
 
-    def update_task_state(self, run_id: str, task_index: int, state: str, progress: int = None, duration_ms: int = None) -> bool:
+    def update_task_state(self, run_id: str, task_index: int, state: str, progress: int = None, duration_ms: int = None, result: Dict = None) -> bool:
         """Mock task state update"""
         msg = f"[Mock] Task {task_index} state: {state}"
         if progress:
             msg += f" ({progress}%)"
         if duration_ms:
             msg += f" [took {duration_ms}ms]"
+        if result:
+            msg += f" [result: passed={result.get('passed')}, note={result.get('note')}]"
         print(msg)
         return True
 

@@ -25,6 +25,12 @@ export interface FlowDefinition {
   createdAt: string;
 }
 
+export interface TaskResult {
+  passed: boolean;
+  note: string;
+  table: Record<string, any>[];
+}
+
 export interface TaskRun {
   id: string;
   taskId: string;
@@ -37,6 +43,7 @@ export interface TaskRun {
   weight: number;
   estimatedTime: number;
   progress: number; // 0 to 100 for this specific task
+  result?: TaskResult;
 }
 
 export interface FlowRun {

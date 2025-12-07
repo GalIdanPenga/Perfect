@@ -58,6 +58,63 @@ export const TaskRow = ({ task }: TaskRowProps) => {
           ))}
         </div>
       )}
+
+      {/* Task Result */}
+      {task.result && task.state === TaskState.COMPLETED && (
+        <div className="mx-4 mb-3">
+          {/* Note Section */}
+          {task.result.note && (
+            <div className={`mb-2 p-2.5 rounded-lg border text-xs ${
+              task.result.passed
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full ${task.result.passed ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+                <span className="font-medium">{task.result.passed ? 'PASSED' : 'FAILED'}</span>
+                <span className="text-slate-400">•</span>
+                <span>{task.result.note}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Table Section */}
+          {task.result.table && task.result.table.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[10px] font-mono">
+                <thead>
+                  <tr className="border-b border-slate-700">
+                    {Object.keys(task.result.table[0]).map((key) => (
+                      <th key={key} className="text-left px-2 py-1.5 text-slate-400 font-semibold uppercase tracking-wider">
+                        {key}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {task.result.table.map((row, i) => (
+                    <tr key={i} className="border-b border-slate-800 last:border-0 hover:bg-slate-800/30">
+                      {Object.values(row).map((value, j) => (
+                        <td key={j} className="px-2 py-1.5 text-slate-300">
+                          {typeof value === 'boolean' ? (
+                            <span className={value ? 'text-emerald-400' : 'text-rose-400'}>
+                              {value ? '✓' : '✗'}
+                            </span>
+                          ) : typeof value === 'number' ? (
+                            <span className="text-sky-400">{value.toLocaleString()}</span>
+                          ) : (
+                            <span>{String(value)}</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

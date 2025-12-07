@@ -3,7 +3,8 @@ import {
   FlowRun,
   TaskRun,
   TaskState,
-  FlowRegistrationPayload
+  FlowRegistrationPayload,
+  TaskResult
 } from '../types';
 import { flowDb, runDb } from '../database/db';
 
@@ -121,7 +122,7 @@ export class FlowEngine {
   /**
    * Update task state for a running flow
    */
-  updateTaskState(runId: string, taskIndex: number, state: TaskState | string, progress?: number, durationMs?: number): boolean {
+  updateTaskState(runId: string, taskIndex: number, state: TaskState | string, progress?: number, durationMs?: number, result?: TaskResult): boolean {
     const run = this.runs.find(r => r.id === runId);
     if (!run || !run.tasks[taskIndex]) {
       return false;
@@ -138,6 +139,10 @@ export class FlowEngine {
 
     if (durationMs !== undefined) {
       task.durationMs = durationMs;
+    }
+
+    if (result !== undefined) {
+      task.result = result;
     }
 
     if (stateStr === 'RUNNING') {

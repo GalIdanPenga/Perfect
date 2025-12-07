@@ -8,7 +8,7 @@ definition of tasks and flows with weight-based progress tracking.
 import functools
 import time
 from typing import Callable, Optional, Any, List, Dict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from enum import Enum
 
 
@@ -19,6 +19,25 @@ class TaskState(Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     RETRYING = "RETRYING"
+
+
+@dataclass
+class TaskResult:
+    """
+    Result of a task execution.
+
+    Attributes:
+        passed: Whether the task passed or failed (boolean)
+        note: A string note or message about the task execution
+        table: List of dictionaries representing tabular data (all dicts must have same fields)
+    """
+    passed: bool
+    note: str = ""
+    table: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert TaskResult to dictionary for API transmission"""
+        return asdict(self)
 
 
 @dataclass

@@ -77,9 +77,9 @@ app.post('/api/flows/:runId/logs', (req, res) => {
 app.post('/api/runs/:runId/tasks/:taskIndex/state', (req, res) => {
   try {
     const { runId, taskIndex } = req.params;
-    const { state, progress, durationMs } = req.body;
+    const { state, progress, durationMs, result } = req.body;
 
-    const success = flowEngine.updateTaskState(runId, parseInt(taskIndex), state, progress, durationMs);
+    const success = flowEngine.updateTaskState(runId, parseInt(taskIndex), state, progress, durationMs, result);
 
     if (success) {
       res.json({ success: true });
