@@ -12,7 +12,9 @@ import {
   Filter,
   X,
   Search,
-  Hash
+  Hash,
+  Calendar,
+  ChevronRight
 } from 'lucide-react';
 import { FlowRun, TaskState, TaskRun } from './types';
 
@@ -29,17 +31,23 @@ interface ClientConfig {
 
 // --- Icons & Badges ---
 
-const PerfectLogo = () => (
-  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-cyber-primary">
-    {/* Outer circle */}
-    <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="2" opacity="0.3"/>
+const PerfectLogo = ({ size = 32 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-sky-400">
+    {/* Outer circle - thin ring */}
+    <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="1.5" opacity="0.3"/>
+
+    {/* Main perfect circle */}
     <circle cx="16" cy="16" r="11" stroke="currentColor" strokeWidth="2.5"/>
-    {/* Inner geometric pattern - hexagon */}
-    <path d="M16 8L21 11.5V18.5L16 22L11 18.5V11.5L16 8Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"/>
-    {/* Checkmark */}
-    <path d="M13 16L15.5 18.5L20 13" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
-    {/* Center dot */}
-    <circle cx="16" cy="16" r="1.5" fill="currentColor"/>
+
+    {/* Checkmark - symbol of perfection */}
+    <path
+      d="M 11 16 L 14.5 19.5 L 21 13"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      fill="none"
+    />
   </svg>
 );
 
@@ -139,6 +147,39 @@ const ActiveRunCard = ({ run }: { run: FlowRun }) => {
   const flowLogsRef = useRef<HTMLDivElement>(null);
   const isRunning = run.state === TaskState.RUNNING || run.state === TaskState.PENDING || run.state === TaskState.RETRYING;
 
+  // Calculate estimated time remaining
+  const calculateTimeRemaining = () => {
+    let remainingMs = 0;
+
+    for (const task of run.tasks) {
+      if (task.state === TaskState.PENDING) {
+        // Add full estimated time for pending tasks
+        remainingMs += task.estimatedTime;
+      } else if (task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) {
+        // Add remaining time for running tasks based on progress
+        const progressFraction = task.progress / 100;
+        remainingMs += task.estimatedTime * (1 - progressFraction);
+      }
+      // Completed and failed tasks contribute 0
+    }
+
+    return remainingMs;
+  };
+
+  const formatTimeRemaining = (ms: number) => {
+    if (ms < 1000) {
+      return `${Math.round(ms)}ms`;
+    } else if (ms < 60000) {
+      return `${(ms / 1000).toFixed(1)}s`;
+    } else {
+      const minutes = Math.floor(ms / 60000);
+      const seconds = Math.round((ms % 60000) / 1000);
+      return `${minutes}m ${seconds}s`;
+    }
+  };
+
+  const timeRemaining = isRunning ? calculateTimeRemaining() : 0;
+
   useEffect(() => {
     if (isRunning && flowLogsRef.current) {
       flowLogsRef.current.scrollTop = flowLogsRef.current.scrollHeight;
@@ -167,9 +208,17 @@ const ActiveRunCard = ({ run }: { run: FlowRun }) => {
           </p>
         </div>
         <div className="text-right">
-           <span className={`text-2xl font-bold font-mono tracking-tight ${run.state === TaskState.FAILED ? 'text-rose-400' : 'text-sky-400'}`}>
-             {run.progress}%
-           </span>
+           <div className="flex flex-col items-end gap-1">
+             <span className={`text-2xl font-bold font-mono tracking-tight ${run.state === TaskState.FAILED ? 'text-rose-400' : 'text-sky-400'}`}>
+               {run.progress}%
+             </span>
+             {isRunning && timeRemaining > 0 && (
+               <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                 <Clock size={10} className="text-slate-500" />
+                 <span>~{formatTimeRemaining(timeRemaining)} left</span>
+               </div>
+             )}
+           </div>
         </div>
       </div>
 
@@ -222,6 +271,8 @@ export default function App() {
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
   const [flowNameFilter, setFlowNameFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   // Fetch data from backend API
   useEffect(() => {
@@ -339,6 +390,26 @@ export default function App() {
     );
   }
 
+  // Filter by date
+  if (dateFilter !== 'all') {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    historyRuns = historyRuns.filter(r => {
+      const runDate = new Date(r.startTime);
+      if (dateFilter === 'today') {
+        return runDate >= today;
+      } else if (dateFilter === 'week') {
+        return runDate >= weekAgo;
+      } else if (dateFilter === 'month') {
+        return runDate >= monthAgo;
+      }
+      return true;
+    });
+  }
+
   // Get unique flow names for the flow name filter dropdown
   const uniqueFlowNames = Array.from(new Set(runs.map(r => r.flowName))).sort();
 
@@ -349,10 +420,12 @@ export default function App() {
     setStatusFilter('all');
     setFlowNameFilter('all');
     setSearchQuery('');
+    setDateFilter('all');
+    setShowAllHistory(false);
   };
 
   // Check if any filters are active
-  const hasActiveFilters = statusFilter !== 'all' || flowNameFilter !== 'all' || searchQuery.trim() !== '';
+  const hasActiveFilters = statusFilter !== 'all' || flowNameFilter !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all';
 
   const handleHistoryClick = (runId: string) => {
     setSelectedHistoryRunId(runId === selectedHistoryRunId ? null : runId);
@@ -407,7 +480,7 @@ export default function App() {
                 <div className="relative">
                   <div className="absolute inset-0 bg-sky-500/20 blur-xl rounded-full"></div>
                   <div className="bg-slate-800 p-8 rounded-2xl border border-slate-700 relative shadow-xl">
-                    <Terminal size={64} className="text-sky-500/50" />
+                    <PerfectLogo size={64} />
                   </div>
                 </div>
 
@@ -583,6 +656,22 @@ export default function App() {
                        <ChevronDown size={12} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" />
                      </div>
                    )}
+
+                   {/* Date Filter */}
+                   <div className="relative">
+                     <Calendar size={12} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" />
+                     <select
+                       value={dateFilter}
+                       onChange={(e) => setDateFilter(e.target.value as any)}
+                       className="bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-md py-2 pl-9 pr-8 appearance-none focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500 cursor-pointer hover:border-slate-600 transition-colors"
+                     >
+                       <option value="all">All Time</option>
+                       <option value="today">Today</option>
+                       <option value="week">Last 7 Days</option>
+                       <option value="month">Last 30 Days</option>
+                     </select>
+                     <ChevronDown size={12} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-slate-500 pointer-events-none" />
+                   </div>
                  </div>
 
                  {historyRuns.length === 0 ? (
@@ -592,28 +681,48 @@ export default function App() {
                      <p className="text-xs text-slate-600 mt-1">Try adjusting your filters</p>
                    </div>
                  ) : (
-                   <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
-                     {historyRuns.slice(0, 12).map(run => (
-                       <div
-                         key={run.id}
-                         onClick={() => handleHistoryClick(run.id)}
-                         className={`bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 hover:border-slate-600 transition-all cursor-pointer group ${
-                           selectedHistoryRunId === run.id
-                             ? 'border-sky-500 bg-sky-500/10 shadow-neon'
-                             : 'border-slate-700/50'
-                         }`}
-                       >
-                         <div className="flex justify-between items-center">
-                           <span className="font-medium text-xs truncate text-slate-300 group-hover:text-sky-400 transition-colors" title={run.flowName}>{run.flowName}</span>
-                           <StatusIcon state={run.state} size={14} />
+                   <>
+                     <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">
+                       {historyRuns.slice(0, showAllHistory ? historyRuns.length : 12).map(run => (
+                         <div
+                           key={run.id}
+                           onClick={() => handleHistoryClick(run.id)}
+                           className={`bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 hover:border-slate-600 transition-all cursor-pointer group ${
+                             selectedHistoryRunId === run.id
+                               ? 'border-sky-500 bg-sky-500/10 shadow-neon'
+                               : 'border-slate-700/50'
+                           }`}
+                         >
+                           <div className="flex justify-between items-center">
+                             <span className="font-medium text-xs truncate text-slate-300 group-hover:text-sky-400 transition-colors" title={run.flowName}>{run.flowName}</span>
+                             <StatusIcon state={run.state} size={14} />
+                           </div>
+                           <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
+                             <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{run.id.split('-')[1]}</span>
+                             <span>{new Date(run.startTime).toLocaleTimeString()}</span>
+                           </div>
                          </div>
-                         <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
-                           <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{run.id.split('-')[1]}</span>
-                           <span>{new Date(run.startTime).toLocaleTimeString()}</span>
-                         </div>
+                       ))}
+                     </div>
+
+                     {/* Show All / Show Less Button */}
+                     {historyRuns.length > 12 && (
+                       <div className="flex justify-center mt-4">
+                         <button
+                           onClick={() => setShowAllHistory(!showAllHistory)}
+                           className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-lg text-xs font-medium text-slate-400 hover:text-sky-400 hover:border-sky-500/50 hover:bg-sky-500/5 transition-all shadow-sm group"
+                         >
+                           <span>
+                             {showAllHistory ? `Show Less` : `Show All (${historyRuns.length} total)`}
+                           </span>
+                           <ChevronRight
+                             size={14}
+                             className={`transition-transform ${showAllHistory ? 'rotate-90' : 'rotate-0'} group-hover:translate-x-0.5`}
+                           />
+                         </button>
                        </div>
-                     ))}
-                   </div>
+                     )}
+                   </>
                  )}
 
                  {/* Selected History Detail */}
