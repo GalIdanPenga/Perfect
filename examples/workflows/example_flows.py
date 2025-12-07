@@ -463,7 +463,15 @@ def handle_execution_request(client, request: ExecutionRequest):
             if task_error:
                 client.update_task_state(request.run_id, i, 'FAILED', 0)
                 client.send_log(request.run_id, f"[Python Client] ❌ Task {task_def.name} failed: {str(task_error)}")
-                raise task_error
+
+                # Check if this is a crucial task
+                if task_def.crucial_pass:
+                    # Crucial task failed - stop the entire flow
+                    raise task_error
+                else:
+                    # Non-crucial task failed - log warning and continue
+                    client.send_log(request.run_id, f"[Python Client] ⚠️ Task {task_def.name} failed but marked as non-crucial - continuing flow")
+                    continue
 
             # Store result for next task
             task_results.append(task_result)

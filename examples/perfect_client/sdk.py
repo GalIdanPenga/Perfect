@@ -48,6 +48,7 @@ class TaskDefinition:
     description: str = ""
     weight: int = 1
     estimated_time: int = 1000  # milliseconds
+    crucial_pass: bool = True  # If True, task failure fails the entire flow
 
 
 @dataclass
@@ -118,18 +119,25 @@ class WorkflowRegistry:
         except Exception as e:
             print(f"[WorkflowRegistry] Warning: Failed to auto-register flow '{flow_def.name}': {e}")
 
-    def task(self, estimated_time: int = 1000) -> Callable:
+    def task(self, estimated_time: int = 1000, crucial_pass: bool = True) -> Callable:
         """
         Decorator to register a function as a task.
 
         Args:
             estimated_time: Expected duration in milliseconds (default: 1000)
                            Weight will be calculated automatically based on time estimation
+            crucial_pass: If True, task failure will fail the entire flow (default: True)
+                         If False, task failure will only log a warning and continue
 
         Example:
-            @task(estimated_time=3000)
-            def extract_data():
-                # Task implementation
+            @task(estimated_time=3000, crucial_pass=True)
+            def validate_data():
+                # Critical task - failure stops the flow
+                pass
+
+            @task(estimated_time=1000, crucial_pass=False)
+            def send_notification():
+                # Optional task - failure logs warning but flow continues
                 pass
         """
         def decorator(func: Callable) -> Callable:
@@ -141,7 +149,8 @@ class WorkflowRegistry:
                 func=func,
                 description=description,
                 weight=estimated_time,  # Use estimated_time as weight initially
-                estimated_time=estimated_time
+                estimated_time=estimated_time,
+                crucial_pass=crucial_pass
             )
 
             self._tasks[func.__name__] = task_def
@@ -257,7 +266,8 @@ class WorkflowRegistry:
                     "name": task.name,
                     "description": task.description,
                     "weight": task.weight,
-                    "estimatedTime": task.estimated_time
+                    "estimatedTime": task.estimated_time,
+                    "crucialPass": task.crucial_pass
                 }
                 for task in flow_def.tasks
             ]

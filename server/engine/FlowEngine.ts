@@ -201,7 +201,8 @@ export class FlowEngine {
           name: t.name,
           description: t.description || 'Registered task',
           weight: weight,
-          estimatedTime: estimatedTime
+          estimatedTime: estimatedTime,
+          crucialPass: t.crucialPass ?? true
         };
       }),
       createdAt: new Date().toISOString()
