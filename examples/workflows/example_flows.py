@@ -24,8 +24,9 @@ import threading
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from perfect_client.sdk import task, flow, get_registry, TaskResult, LogCapture
-from perfect_client.api import create_client, ExecutionRequest
+from perfect_client.sdk import task, flow, get_registry, TaskResult
+from perfect_client.api import create_client
+from perfect_client.executor import create_execution_handler
 
 
 # ==========================================
@@ -350,166 +351,8 @@ def weekly_report():
 
 
 # ==========================================
-# Client Logic
+# Client Setup
 # ==========================================
-
-def register_all_flows(client):
-    """Register all defined flows with Perfect"""
-    registry = get_registry()
-    flows = registry.get_flows()
-
-    print(f"\n[Perfect Client] Found {len(flows)} flows to register")
-    print("=" * 60)
-
-    for flow_def in flows:
-        # Analyze flow to get task information
-        analyzed_flow = registry.analyze_flow(flow_def.func.__name__)
-
-        # Convert to API format
-        payload = registry.to_dict(analyzed_flow)
-
-        # Register with Perfect
-        client.register_flow(payload)
-
-    print("=" * 60)
-    print(f"[Perfect Client] Registered {len(flows)} flows\n")
-
-
-def handle_execution_request(client, request: ExecutionRequest):
-    """
-    Handle an execution request from Perfect.
-
-    Args:
-        client: Perfect API client for sending logs
-        request: Execution request with run_id, flow_name, and configuration
-    """
-    config_upper = request.configuration.upper()
-
-    # Send initial logs
-    client.send_log(request.run_id, f"[Python Client] Received execution request with configuration: {config_upper}")
-    client.send_log(request.run_id, f"[Python Client] Initializing flow execution...")
-
-    # Get the flow to execute
-    registry = get_registry()
-    flow_def = None
-    for f in registry.get_flows():
-        if f.name == request.flow_name:
-            flow_def = f
-            break
-
-    if not flow_def:
-        client.send_log(request.run_id, f"[Python Client] ❌ Flow '{request.flow_name}' not found")
-        return
-
-    # Analyze flow to get tasks
-    analyzed_flow = registry.analyze_flow(flow_def.func.__name__)
-    total_tasks = len(analyzed_flow.tasks)
-
-    # Execute the flow
-    start_time = time.time()
-    current_task_index = -1
-    task_results = []  # Store task results for passing between tasks
-
-    try:
-        # Execute tasks sequentially
-        for i, task_def in enumerate(analyzed_flow.tasks):
-            current_task_index = i
-            client.send_log(request.run_id, f"[Python Client] Starting task {i+1}/{total_tasks}: {task_def.name}")
-            client.update_task_state(request.run_id, i, 'RUNNING', 0)
-
-            task_start = time.time()
-            # Use estimated time from decorator
-            estimated_ms = task_def.estimated_time
-            update_interval = 0.01  # Update every 10ms
-
-            # Start executing the task in a background thread
-            task_result = None
-            task_error = None
-
-            def execute_task():
-                nonlocal task_result, task_error
-                try:
-                    # Capture stdout and send print() statements to Perfect
-                    old_stdout = sys.stdout
-                    sys.stdout = LogCapture(client, request.run_id)
-
-                    try:
-                        # Execute the task function (tasks are independent, no chaining)
-                        task_result = task_def.func()
-                    finally:
-                        # Flush any remaining buffered output
-                        sys.stdout.flush()
-                        # Restore original stdout
-                        sys.stdout = old_stdout
-                except Exception as e:
-                    task_error = e
-
-            # Start task execution in background
-            import threading
-            task_thread = threading.Thread(target=execute_task, daemon=True)
-            task_thread.start()
-
-            # Update progress while task is running
-            elapsed_ms = 0
-            last_progress = 0
-
-            while task_thread.is_alive() and elapsed_ms < estimated_ms:
-                time.sleep(update_interval)
-                elapsed_ms = (time.time() - task_start) * 1000
-
-                # Calculate progress: min(99, elapsed/estimated * 100)
-                progress = min(99, int((elapsed_ms / estimated_ms) * 100))
-
-                if progress > last_progress:
-                    client.update_task_state(request.run_id, i, 'RUNNING', progress)
-                    last_progress = progress
-
-            # Wait for task to complete
-            task_thread.join()
-
-            # Calculate actual duration
-            actual_duration = int((time.time() - task_start) * 1000)
-
-            # Check for errors
-            if task_error:
-                client.update_task_state(request.run_id, i, 'FAILED', 0)
-                client.send_log(request.run_id, f"[Python Client] ❌ Task {task_def.name} failed: {str(task_error)}")
-
-                # Check if this is a crucial task
-                if task_def.crucial_pass:
-                    # Crucial task failed - stop the entire flow
-                    raise task_error
-                else:
-                    # Non-crucial task failed - log warning and continue
-                    client.send_log(request.run_id, f"[Python Client] ⚠️ Task {task_def.name} failed but marked as non-crucial - continuing flow")
-                    continue
-
-            # Store result for next task
-            task_results.append(task_result)
-
-            # Send task result to server if it's a TaskResult object
-            result_dict = None
-            if task_result and hasattr(task_result, 'to_dict'):
-                result_dict = task_result.to_dict()
-                client.send_log(request.run_id, f"[Python Client] Task result: {task_result.note}")
-
-            # Mark task as completed with actual duration and result
-            client.update_task_state(
-                request.run_id, i, 'COMPLETED', 100,
-                duration_ms=actual_duration,
-                result=result_dict
-            )
-            client.send_log(request.run_id, f"[Python Client] ✓ Task {task_def.name} completed in {actual_duration}ms")
-
-        duration = int((time.time() - start_time) * 1000)
-        client.send_log(request.run_id, f"[Python Client] ✓ Flow execution completed successfully in {duration}ms")
-
-    except Exception as e:
-        duration = int((time.time() - start_time) * 1000)
-        # Mark the current task as failed if we were executing one
-        if current_task_index >= 0:
-            client.update_task_state(request.run_id, current_task_index, 'FAILED', 0)
-        client.send_log(request.run_id, f"[Python Client] ❌ Flow execution failed after {duration}ms: {str(e)}")
 
 
 def main():
@@ -518,7 +361,7 @@ def main():
     print("Perfect Python Client")
     print("=" * 60)
 
-    # Create API client - connect to Perfect backend
+    # Create API client and connect to Perfect backend
     client = create_client(mock=False)
 
     try:
@@ -526,37 +369,27 @@ def main():
         registry = get_registry()
         registry.set_client(client)
 
-        # Track completed executions
+        # Track completion for auto-shutdown
         total_flows = len(registry.get_flows())
-        completed_executions = {'count': 0}
+        completed_count = {'value': 0}
         execution_lock = threading.Lock()
 
-        # Set up execution handler to run in separate threads for concurrency
-        def threaded_execution_handler(req):
-            def wrapped_handler():
-                handle_execution_request(client, req)
+        def on_flow_complete(flow_name: str):
+            """Called when a flow completes execution"""
+            with execution_lock:
+                completed_count['value'] += 1
+                print(f"\n[Perfect Client] Completed {completed_count['value']}/{total_flows} flows")
 
-                # Track completion
-                with execution_lock:
-                    completed_executions['count'] += 1
-                    print(f"\n[Perfect Client] Completed {completed_executions['count']}/{total_flows} flows")
+                # Auto-shutdown after all flows complete
+                if completed_count['value'] >= total_flows:
+                    print("[Perfect Client] All flows completed. Shutting down...")
+                    client.stop_listening()
 
-                    # Auto-shutdown after all flows complete (safe since no auto-trigger is used)
-                    if completed_executions['count'] >= total_flows:
-                        print("[Perfect Client] All flows completed. Shutting down...")
-                        client.stop_listening()
+        # Create execution handler using the executor module
+        execution_handler = create_execution_handler(client, on_flow_complete)
 
-            thread = threading.Thread(
-                target=wrapped_handler,
-                daemon=True
-            )
-            thread.start()
-
-        client.on_execution_request(threaded_execution_handler)
-
-        # Start listening for execution requests
-        # Note: This requires a running Perfect backend server
-        # For now, this will show connection errors since there's no backend
+        # Register the handler and start listening for execution requests
+        client.on_execution_request(execution_handler)
         client.listen_for_executions()
 
     except KeyboardInterrupt:
