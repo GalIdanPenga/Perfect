@@ -7,6 +7,7 @@ definition of tasks and flows with weight-based progress tracking.
 
 import functools
 import time
+import sys
 from typing import Callable, Optional, Any, List, Dict
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -19,6 +20,49 @@ class TaskState(Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
     RETRYING = "RETRYING"
+
+
+class LogCapture:
+    """
+    Captures stdout and sends it as logs to Perfect.
+
+    This class is used internally by the SDK to capture print() statements
+    during task execution and send them as logs to the Perfect backend.
+    """
+    def __init__(self, client, run_id: str):
+        """
+        Initialize the log capture.
+
+        Args:
+            client: PerfectAPIClient instance for sending logs
+            run_id: The run ID to associate logs with
+        """
+        self.client = client
+        self.run_id = run_id
+        self.buffer = ""
+
+    def write(self, text: str):
+        """Write text to stdout and buffer it for log transmission"""
+        # Write to original stdout too (for local debugging)
+        sys.__stdout__.write(text)
+        sys.__stdout__.flush()
+
+        # Accumulate text in buffer
+        self.buffer += text
+
+        # Send complete lines as logs
+        while '\n' in self.buffer:
+            line, self.buffer = self.buffer.split('\n', 1)
+            if line.strip():  # Only send non-empty lines
+                self.client.send_log(self.run_id, f"[Task Output] {line}")
+
+    def flush(self):
+        """Flush any remaining buffered content"""
+        sys.__stdout__.flush()
+        # Send any remaining buffered content
+        if self.buffer.strip():
+            self.client.send_log(self.run_id, f"[Task Output] {self.buffer}")
+            self.buffer = ""
 
 
 @dataclass

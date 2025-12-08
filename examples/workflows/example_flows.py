@@ -24,7 +24,7 @@ import threading
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from perfect_client.sdk import task, flow, get_registry, TaskResult
+from perfect_client.sdk import task, flow, get_registry, TaskResult, LogCapture
 from perfect_client.api import create_client, ExecutionRequest
 
 
@@ -429,8 +429,18 @@ def handle_execution_request(client, request: ExecutionRequest):
             def execute_task():
                 nonlocal task_result, task_error
                 try:
-                    # Execute the task function (tasks are independent, no chaining)
-                    task_result = task_def.func()
+                    # Capture stdout and send print() statements to Perfect
+                    old_stdout = sys.stdout
+                    sys.stdout = LogCapture(client, request.run_id)
+
+                    try:
+                        # Execute the task function (tasks are independent, no chaining)
+                        task_result = task_def.func()
+                    finally:
+                        # Flush any remaining buffered output
+                        sys.stdout.flush()
+                        # Restore original stdout
+                        sys.stdout = old_stdout
                 except Exception as e:
                     task_error = e
 
