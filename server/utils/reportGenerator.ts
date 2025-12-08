@@ -17,9 +17,19 @@ export function generateFlowReport(run: FlowRun, clientName: string = 'default')
       fs.mkdirSync(reportsDir, { recursive: true });
     }
 
-    // Generate filename with timestamp
+    // Generate filename with tags and timestamp
     const timestamp = new Date(run.startTime).toISOString().replace(/[:.]/g, '-');
-    const filename = `${run.flowName.replace(/\s+/g, '_')}_${timestamp}.html`;
+    const flowNamePart = run.flowName.replace(/\s+/g, '_');
+
+    // Format tags for filename
+    let tagsPart = '';
+    if (run.tags && Object.keys(run.tags).length > 0) {
+      tagsPart = '_' + Object.entries(run.tags)
+        .map(([key, value]) => `${key}-${value}`)
+        .join('_');
+    }
+
+    const filename = `${flowNamePart}${tagsPart}_${timestamp}.html`;
     const filePath = path.join(reportsDir, filename);
 
     // Generate HTML content
