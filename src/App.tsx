@@ -568,15 +568,20 @@ export default function App() {
                                 {/* Flow Name and Status */}
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
                                   <StatusIcon state={run.state} size={16} />
-                                  <span
-                                    className="font-semibold text-sm truncate transition-colors"
-                                    style={{
-                                      color: isSelected ? runColor : '#cbd5e1'
-                                    }}
-                                    title={run.flowName}
-                                  >
-                                    {run.flowName}
-                                  </span>
+                                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                                    <span
+                                      className="font-semibold text-sm transition-colors"
+                                      style={{
+                                        color: isSelected ? runColor : '#cbd5e1'
+                                      }}
+                                      title={run.flowName}
+                                    >
+                                      {run.flowName}
+                                    </span>
+                                    {run.tags && Object.keys(run.tags).length > 0 && (
+                                      <TagBadges tags={run.tags} />
+                                    )}
+                                  </div>
                                 </div>
 
                                 {/* Configuration Badge */}

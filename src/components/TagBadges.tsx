@@ -8,15 +8,15 @@ export const TagBadges = ({ tags }: TagBadgesProps) => {
   if (!tags || Object.keys(tags).length === 0) return null;
 
   return (
-    <div className="flex flex-wrap gap-1.5 mt-2">
+    <div className="flex flex-wrap gap-1.5">
       {Object.entries(tags).map(([key, value]) => (
         <span
           key={key}
-          className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-700/40 border border-slate-600/50 rounded text-[10px] font-mono text-slate-400"
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-sky-500/20 to-indigo-500/20 border border-sky-500/50 rounded-md text-xs font-mono shadow-sm"
         >
-          <Tag size={10} className="text-slate-500" />
-          <span className="text-slate-500">{key}:</span>
-          <span className="text-slate-300">{value}</span>
+          <Tag size={12} className="text-sky-400" />
+          <span className="text-sky-400 font-semibold">{key}:</span>
+          <span className="text-white font-medium">{value}</span>
         </span>
       ))}
     </div>
