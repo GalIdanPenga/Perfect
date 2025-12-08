@@ -7,6 +7,7 @@ import {
   TaskResult
 } from '../types';
 import { flowDb, runDb, statsDb } from '../database/db';
+import { generateFlowReport } from '../utils/reportGenerator';
 
 /**
  * FlowEngine - Core workflow orchestration engine
@@ -34,6 +35,9 @@ export class FlowEngine {
     this.flows = flowDb.getAllFlows();
     this.runs = runDb.getAllRuns();
     console.log(`[FlowEngine] Loaded ${this.flows.length} flows and ${this.runs.length} runs from database`);
+
+    // Fail any stuck flows from previous server instance
+    this.failStuckFlows();
 
     // Start the simulation loop for progress updates
     this.tickInterval = setInterval(() => this.tick(), this.TICK_INTERVAL_MS);
@@ -170,9 +174,13 @@ export class FlowEngine {
       run.state = TaskState.COMPLETED;
       run.progress = 100;
       run.endTime = new Date().toISOString();
+      // Generate report on successful completion
+      generateFlowReport(run, run.clientName || 'default');
     } else if (anyFailed) {
       run.state = TaskState.FAILED;
       run.endTime = new Date().toISOString();
+      // Generate report on failure
+      generateFlowReport(run, run.clientName || 'default');
     } else {
       // Update weighted progress
       this.updateRunProgress(run);
@@ -262,7 +270,7 @@ export class FlowEngine {
   /**
    * Trigger a flow execution
    */
-  triggerFlow(flowId: string, configuration: string = 'development', clientColor?: string): void {
+  triggerFlow(flowId: string, configuration: string = 'development', clientColor?: string, clientName?: string): void {
     const flow = this.flows.find(f => f.id === flowId);
     if (!flow) return;
 
@@ -288,7 +296,8 @@ export class FlowEngine {
         progress: 0
       })),
       progress: 0,
-      clientColor: clientColor
+      clientColor: clientColor,
+      clientName: clientName
     };
 
     this.runs.unshift(newRun);
@@ -427,6 +436,42 @@ export class FlowEngine {
   }
 
   /**
+   * Fail any flows that were running when server was restarted
+   */
+  private failStuckFlows(): void {
+    const stuckRuns = this.runs.filter(
+      r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING
+    );
+
+    if (stuckRuns.length > 0) {
+      console.log(`[FlowEngine] Found ${stuckRuns.length} stuck flows from previous server instance - failing them`);
+
+      stuckRuns.forEach(run => {
+        run.state = TaskState.FAILED;
+        run.endTime = new Date().toISOString();
+        run.logs.push('[System] Flow failed: Server was restarted');
+
+        // Mark all running/pending tasks as failed
+        run.tasks.forEach(task => {
+          if (task.state === TaskState.RUNNING || task.state === TaskState.PENDING) {
+            task.state = TaskState.FAILED;
+            task.endTime = new Date().toISOString();
+            task.logs.push('[System] Task failed: Server was restarted');
+          }
+        });
+
+        // Save the failed run to database
+        runDb.saveRun(run);
+
+        // Generate report for the failed flow
+        generateFlowReport(run, run.clientName || 'default');
+      });
+
+      this.notifyStateChange();
+    }
+  }
+
+  /**
    * Update the client heartbeat timestamp
    */
   updateHeartbeat(): void {
@@ -470,6 +515,9 @@ export class FlowEngine {
 
           // Save the failed run to database
           runDb.saveRun(run);
+
+          // Generate report for the failed flow
+          generateFlowReport(run, run.clientName || 'default');
         });
 
         this.notifyStateChange();

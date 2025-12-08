@@ -56,8 +56,9 @@ app.post('/api/flows', (req, res) => {
     const config = autoTriggerConfig || 'development';
     const activeClient = getActiveClient();
     const clientColor = activeClient?.color;
-    console.log(`[Server] Auto-triggering flow '${flow.name}' with config: ${config}${clientColor ? ` and client color: ${clientColor}` : ''}`);
-    flowEngine.triggerFlow(flow.id, config, clientColor);
+    const clientName = activeClient?.name;
+    console.log(`[Server] Auto-triggering flow '${flow.name}' with config: ${config}${clientColor ? ` and client color: ${clientColor}` : ''}${clientName ? ` for client: ${clientName}` : ''}`);
+    flowEngine.triggerFlow(flow.id, config, clientColor, clientName);
 
     res.json({ success: true, flow });
   } catch (error: any) {
