@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Activity,
   Play,
-  Terminal,
   ChevronDown,
   Filter,
   X,
@@ -43,6 +42,7 @@ export default function App() {
 
   // Local UI state
   const [selectedHistoryRunId, setSelectedHistoryRunId] = useState<string | null>(null);
+  const [closingHistoryRunId, setClosingHistoryRunId] = useState<string | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
 
@@ -71,8 +71,6 @@ export default function App() {
   // Get unique flow names for the flow name filter dropdown
   const uniqueFlowNames = getUniqueFlowNames(runs);
 
-  const selectedHistoryRun = selectedHistoryRunId ? runs.find(r => r.id === selectedHistoryRunId) : null;
-
   // Helper to clear all filters
   const clearFilters = () => {
     setStatusFilter('all');
@@ -86,17 +84,66 @@ export default function App() {
   const hasActiveFilters = statusFilter !== 'all' || flowNameFilter !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all';
 
   const handleHistoryClick = (runId: string) => {
-    setSelectedHistoryRunId(runId === selectedHistoryRunId ? null : runId);
+    if (runId === selectedHistoryRunId) {
+      // Start closing animation
+      setClosingHistoryRunId(runId);
+      // Wait for animation to complete before clearing selection
+      setTimeout(() => {
+        setSelectedHistoryRunId(null);
+        setClosingHistoryRunId(null);
+      }, 300); // Match animation duration
+    } else {
+      setClosingHistoryRunId(null);
+      setSelectedHistoryRunId(runId);
+    }
   };
 
   return (
-    <div
-      className="h-screen flex flex-col overflow-hidden text-slate-200 font-sans transition-all duration-700"
-      style={{
-        background: `radial-gradient(ellipse at top, ${themeColor}12 0%, #0f172a 50%, #0f172a 100%)`,
-        backgroundColor: '#0f172a'
-      }}
-    >
+    <>
+      <style>{`
+        @keyframes smoothExpand {
+          from {
+            opacity: 0;
+            max-height: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            max-height: 2000px;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes smoothCollapse {
+          from {
+            opacity: 1;
+            max-height: 2000px;
+            transform: translateY(0);
+          }
+          to {
+            opacity: 0;
+            max-height: 0;
+            transform: translateY(-10px);
+          }
+        }
+
+        @keyframes selectPulse {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.02); }
+          100% { transform: scale(1); }
+        }
+
+        .animate-selectPulse {
+          animation: selectPulse 0.3s ease-out;
+        }
+      `}</style>
+      <div
+        className="h-screen flex flex-col overflow-hidden text-slate-200 font-sans transition-all duration-700"
+        style={{
+          background: `radial-gradient(ellipse at top, ${themeColor}12 0%, #0f172a 50%, #0f172a 100%)`,
+          backgroundColor: '#0f172a'
+        }}
+      >
 
       {/* Top Navigation Bar */}
       <header
@@ -502,51 +549,88 @@ export default function App() {
                    </div>
                  ) : (
                    <>
-                     <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-3">
-                       {historyRuns.slice(0, showAllHistory ? historyRuns.length : 12).map(run => {
-                         const runColor = run.clientColor || themeColor;
-                         return (
-                           <div
-                             key={run.id}
-                             onClick={() => handleHistoryClick(run.id)}
-                             className="bg-slate-800/40 p-3 rounded-lg border flex flex-col gap-2 transition-all cursor-pointer group"
-                             style={{
-                               borderColor: selectedHistoryRunId === run.id ? runColor : '#475569',
-                               backgroundColor: selectedHistoryRunId === run.id ? `${runColor}15` : 'rgba(30, 41, 59, 0.4)',
-                               boxShadow: selectedHistoryRunId === run.id ? `0 0 20px ${runColor}30` : 'none'
-                             }}
-                             onMouseEnter={(e) => {
-                               if (selectedHistoryRunId !== run.id) {
-                                 e.currentTarget.style.borderColor = '#64748b';
-                               }
-                             }}
-                             onMouseLeave={(e) => {
-                               if (selectedHistoryRunId !== run.id) {
-                                 e.currentTarget.style.borderColor = '#475569';
-                               }
-                             }}
-                           >
-                             <div className="flex justify-between items-center">
-                               <span
-                                 className="font-medium text-xs truncate text-slate-300 transition-colors"
-                                 title={run.flowName}
-                                 style={{
-                                   color: selectedHistoryRunId === run.id ? runColor : undefined
-                                 }}
-                               >{run.flowName}</span>
-                               <StatusIcon state={run.state} size={14} />
-                             </div>
-                             <div className="flex justify-between items-center text-[10px] text-slate-500 font-mono">
-                               <span className="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{run.id.split('-')[1]}</span>
-                               <span>{new Date(run.startTime).toLocaleTimeString()}</span>
-                             </div>
-                           </div>
-                         );
-                       })}
+                     <div className="flex flex-col gap-2">
+                       {historyRuns.slice(0, showAllHistory ? historyRuns.length : 10).map(run => {
+                        const runColor = run.clientColor || themeColor;
+                        const isSelected = selectedHistoryRunId === run.id;
+                        return (
+                          <React.Fragment key={run.id}>
+                            <div
+                              onClick={() => handleHistoryClick(run.id)}
+                              className={`bg-slate-800/40 p-3 rounded-lg border transition-all cursor-pointer hover:bg-slate-800/60 ${isSelected ? 'animate-selectPulse' : ''}`}
+                              style={{
+                                borderColor: isSelected ? runColor : '#475569',
+                                backgroundColor: isSelected ? `${runColor}15` : 'rgba(30, 41, 59, 0.4)',
+                                boxShadow: isSelected ? `0 0 20px ${runColor}30` : 'none'
+                              }}
+                            >
+                              <div className="flex items-center justify-between gap-4">
+                                {/* Flow Name and Status */}
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                  <StatusIcon state={run.state} size={16} />
+                                  <span
+                                    className="font-semibold text-sm truncate transition-colors"
+                                    style={{
+                                      color: isSelected ? runColor : '#cbd5e1'
+                                    }}
+                                    title={run.flowName}
+                                  >
+                                    {run.flowName}
+                                  </span>
+                                </div>
+
+                                {/* Configuration Badge */}
+                                {run.configuration && (
+                                  <span className="text-[10px] font-mono px-2 py-1 rounded bg-slate-700/50 text-sky-400 uppercase tracking-wider">
+                                    {run.configuration}
+                                  </span>
+                                )}
+
+                                {/* Run ID */}
+                                <span className="text-[10px] font-mono px-2 py-1 rounded bg-slate-900/50 text-slate-400">
+                                  {run.id.split('-')[0]}
+                                </span>
+
+                                {/* Time */}
+                                <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
+                                  <Clock size={12} />
+                                  <span>{new Date(run.startTime).toLocaleTimeString()}</span>
+                                </div>
+
+                                {/* Progress */}
+                                <span
+                                  className="text-sm font-bold font-mono w-12 text-right"
+                                  style={{
+                                    color: run.state === TaskState.FAILED ? '#f87171' : isSelected ? runColor : '#38bdf8'
+                                  }}
+                                >
+                                  {run.progress}%
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Expanded Details - Inline */}
+                            {(isSelected || closingHistoryRunId === run.id) && (
+                              <div
+                                className="ml-6 overflow-hidden"
+                                style={{
+                                  animation: closingHistoryRunId === run.id
+                                    ? 'smoothCollapse 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards'
+                                    : 'smoothExpand 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards'
+                                }}
+                              >
+                                <div className="pt-3">
+                                  <ActiveRunCard run={run} clientColor={run.clientColor} />
+                                </div>
+                              </div>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                      </div>
 
                      {/* Show All / Show Less Button */}
-                     {historyRuns.length > 12 && (
+                     {historyRuns.length > 10 && (
                        <div className="flex justify-center mt-4">
                          <button
                            onClick={() => setShowAllHistory(!showAllHistory)}
@@ -578,27 +662,6 @@ export default function App() {
                      )}
                    </>
                  )}
-
-                 {/* Selected History Detail */}
-                 {selectedHistoryRun && (
-                   <div className="mt-6">
-                     <div className="flex items-center justify-between mb-4">
-                       <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                         <Terminal size={14} /> Flow Details
-                       </h4>
-                       <button
-                         onClick={() => setSelectedHistoryRunId(null)}
-                         className="text-xs transition-colors"
-                         style={{ color: '#64748b' }}
-                         onMouseEnter={(e) => e.currentTarget.style.color = selectedHistoryRun.clientColor || themeColor}
-                         onMouseLeave={(e) => e.currentTarget.style.color = '#64748b'}
-                       >
-                         Close
-                       </button>
-                     </div>
-                     <ActiveRunCard run={selectedHistoryRun} clientColor={selectedHistoryRun.clientColor} />
-                   </div>
-                 )}
               </div>
             )}
           </div>
@@ -610,5 +673,6 @@ export default function App() {
         <StatisticsWindow onClose={() => setShowStatistics(false)} />
       )}
     </div>
+    </>
   );
 }
