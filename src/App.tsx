@@ -11,13 +11,15 @@ import {
   Calendar,
   ChevronRight,
   XCircle,
-  Clock
+  Clock,
+  BarChart3
 } from 'lucide-react';
 import { TaskState } from './types';
 import { PerfectLogo } from './components/PerfectLogo';
 import { StatusIcon, StatusBadge } from './components/StatusComponents';
 import { TagBadges } from './components/TagBadges';
 import { ActiveRunCard } from './components/ActiveRunCard';
+import { StatisticsWindow } from './components/StatisticsWindow';
 import { useFlowRuns } from './hooks/useFlowRuns';
 import { useClientStatus } from './hooks/useClientStatus';
 import { useClientConfigs } from './hooks/useClientConfigs';
@@ -42,6 +44,7 @@ export default function App() {
   // Local UI state
   const [selectedHistoryRunId, setSelectedHistoryRunId] = useState<string | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
@@ -196,12 +199,24 @@ export default function App() {
                 </span>
               )}
             </h2>
-            <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
-              <span
-                className="w-1.5 h-1.5 rounded-full animate-pulse transition-colors duration-700"
-                style={{ backgroundColor: themeColor }}
-              ></span>
-              Real-time feed
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowStatistics(true)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/50 border border-slate-700 text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-all duration-200 hover:border-sky-500/50"
+                style={{
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                }}
+              >
+                <BarChart3 size={14} />
+                Statistics
+              </button>
+              <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
+                <span
+                  className="w-1.5 h-1.5 rounded-full animate-pulse transition-colors duration-700"
+                  style={{ backgroundColor: themeColor }}
+                ></span>
+                Real-time feed
+              </div>
             </div>
           </div>
           
@@ -589,6 +604,11 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      {/* Statistics Window */}
+      {showStatistics && (
+        <StatisticsWindow onClose={() => setShowStatistics(false)} />
+      )}
     </div>
   );
 }

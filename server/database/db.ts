@@ -131,6 +131,18 @@ function initializeDatabase() {
     )
   `);
 
+  // Create task_statistics table for tracking historical performance
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS task_statistics (
+      flow_name TEXT NOT NULL,
+      task_name TEXT NOT NULL,
+      avg_duration_ms REAL NOT NULL,
+      sample_count INTEGER NOT NULL,
+      last_updated TEXT NOT NULL,
+      PRIMARY KEY (flow_name, task_name)
+    )
+  `);
+
   // Create indices for better performance
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_tasks_flow_id ON tasks(flow_id);
@@ -418,6 +430,86 @@ export const runDb = {
   // Delete all runs for a specific flow
   deleteRunsByFlowId(flowId: string) {
     db.prepare('DELETE FROM flow_runs WHERE flow_id = ?').run(flowId);
+  }
+};
+
+// Task statistics operations
+export const statsDb = {
+  // Update statistics for a task (using incremental average)
+  updateTaskStats(flowName: string, taskName: string, durationMs: number) {
+    const existing = db.prepare(
+      'SELECT avg_duration_ms, sample_count FROM task_statistics WHERE flow_name = ? AND task_name = ?'
+    ).get(flowName, taskName) as any;
+
+    if (existing) {
+      // Calculate new average using incremental formula
+      const newCount = existing.sample_count + 1;
+      const newAvg = existing.avg_duration_ms + (durationMs - existing.avg_duration_ms) / newCount;
+
+      db.prepare(`
+        UPDATE task_statistics
+        SET avg_duration_ms = ?, sample_count = ?, last_updated = ?
+        WHERE flow_name = ? AND task_name = ?
+      `).run(newAvg, newCount, new Date().toISOString(), flowName, taskName);
+    } else {
+      // First sample for this task
+      db.prepare(`
+        INSERT INTO task_statistics (flow_name, task_name, avg_duration_ms, sample_count, last_updated)
+        VALUES (?, ?, ?, 1, ?)
+      `).run(flowName, taskName, durationMs, new Date().toISOString());
+    }
+  },
+
+  // Get statistics for a specific task in a flow
+  getTaskStats(flowName: string, taskName: string): { avgDurationMs: number; sampleCount: number } | undefined {
+    const row = db.prepare(
+      'SELECT avg_duration_ms, sample_count FROM task_statistics WHERE flow_name = ? AND task_name = ?'
+    ).get(flowName, taskName) as any;
+
+    if (!row) return undefined;
+
+    return {
+      avgDurationMs: row.avg_duration_ms,
+      sampleCount: row.sample_count
+    };
+  },
+
+  // Get all statistics for a flow
+  getFlowStats(flowName: string): Map<string, { avgDurationMs: number; sampleCount: number }> {
+    const rows = db.prepare(
+      'SELECT task_name, avg_duration_ms, sample_count FROM task_statistics WHERE flow_name = ?'
+    ).all(flowName) as any[];
+
+    const statsMap = new Map<string, { avgDurationMs: number; sampleCount: number }>();
+    rows.forEach(row => {
+      statsMap.set(row.task_name, {
+        avgDurationMs: row.avg_duration_ms,
+        sampleCount: row.sample_count
+      });
+    });
+
+    return statsMap;
+  },
+
+  // Get all statistics (for UI display)
+  getAllStats(): Array<{
+    flowName: string;
+    taskName: string;
+    avgDurationMs: number;
+    sampleCount: number;
+    lastUpdated: string;
+  }> {
+    const rows = db.prepare(
+      'SELECT flow_name, task_name, avg_duration_ms, sample_count, last_updated FROM task_statistics ORDER BY flow_name, task_name'
+    ).all() as any[];
+
+    return rows.map(row => ({
+      flowName: row.flow_name,
+      taskName: row.task_name,
+      avgDurationMs: row.avg_duration_ms,
+      sampleCount: row.sample_count,
+      lastUpdated: row.last_updated
+    }));
   }
 };
 

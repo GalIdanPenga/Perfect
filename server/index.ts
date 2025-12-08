@@ -3,6 +3,7 @@ import cors from 'cors';
 import clientRoutes, { getActiveClient } from './routes/clientRoutes';
 import engineRoutes from './routes/engineRoutes';
 import { flowEngine } from './engine/FlowEngine';
+import { statsDb } from './database/db';
 
 const app = express();
 const PORT = 3001;
@@ -97,6 +98,16 @@ app.post('/api/runs/:runId/tasks/:taskIndex/state', (req, res) => {
 app.post('/api/heartbeat', (req, res) => {
   flowEngine.updateHeartbeat();
   res.json({ success: true });
+});
+
+// Get statistics endpoint
+app.get('/api/statistics', (req, res) => {
+  try {
+    const statistics = statsDb.getAllStats();
+    res.json({ success: true, statistics });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 // Long-poll endpoint for Python client to receive execution requests

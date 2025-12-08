@@ -273,7 +273,7 @@ def infra_health_check():
 # Flow 4: Weekly Executive Report
 # ==========================================
 
-@task(estimated_time=3000)
+@task(estimated_time=8000)
 def compute_kpis():
     """Aggregate revenue metrics"""
     print("Computing KPIs...")
@@ -289,7 +289,7 @@ def compute_kpis():
     )
 
 
-@task(estimated_time=7000)
+@task(estimated_time=5000)
 def generate_charts(metrics=None):
     """Plot matplotlib figures"""
     print("Generating charts...")
@@ -418,6 +418,7 @@ def handle_execution_request(client, request: ExecutionRequest):
             client.update_task_state(request.run_id, i, 'RUNNING', 0)
 
             task_start = time.time()
+            # Use estimated time from decorator
             estimated_ms = task_def.estimated_time
             update_interval = 0.01  # Update every 10ms
 

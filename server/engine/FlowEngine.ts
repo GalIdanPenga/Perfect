@@ -6,7 +6,7 @@ import {
   FlowRegistrationPayload,
   TaskResult
 } from '../types';
-import { flowDb, runDb } from '../database/db';
+import { flowDb, runDb, statsDb } from '../database/db';
 
 /**
  * FlowEngine - Core workflow orchestration engine
@@ -150,6 +150,16 @@ export class FlowEngine {
     } else if (stateStr === 'COMPLETED' || stateStr === 'FAILED') {
       task.endTime = new Date().toISOString();
       task.progress = stateStr === 'COMPLETED' ? 100 : task.progress;
+
+      // Update statistics when task completes successfully
+      if (stateStr === 'COMPLETED' && task.durationMs !== undefined) {
+        try {
+          statsDb.updateTaskStats(run.flowName, task.taskName, task.durationMs);
+          console.log(`[FlowEngine] Updated statistics for ${run.flowName}/${task.taskName}: ${task.durationMs}ms`);
+        } catch (error) {
+          console.error(`[FlowEngine] Failed to update statistics:`, error);
+        }
+      }
     }
 
     // Update run state if all tasks complete or any failed
@@ -182,8 +192,27 @@ export class FlowEngine {
       return this.flows.find(f => f.name === payload.name)!;
     }
 
-    // Calculate total estimated time for automatic weight calculation
-    const totalEstimatedTime = payload.tasks.reduce((sum, t) => sum + (t.estimatedTime || 1000), 0);
+    // Get statistics for this flow
+    const flowStats = statsDb.getFlowStats(payload.name);
+    console.log(`[FlowEngine] Registering flow '${payload.name}' with ${flowStats.size} task statistics available`);
+
+    // Determine duration for each task (use statistics if available, otherwise use estimatedTime)
+    const taskDurations = payload.tasks.map(t => {
+      const estimatedTime = t.estimatedTime || 1000;
+      const stats = flowStats.get(t.name);
+
+      // Use statistics if we have at least 2 samples (to ensure some reliability)
+      if (stats && stats.sampleCount >= 2) {
+        console.log(`[FlowEngine] Using statistics for ${payload.name}/${t.name}: ${Math.round(stats.avgDurationMs)}ms (${stats.sampleCount} samples) vs estimated ${estimatedTime}ms`);
+        return stats.avgDurationMs;
+      } else {
+        console.log(`[FlowEngine] Using estimated time for ${payload.name}/${t.name}: ${estimatedTime}ms (no statistics)`);
+        return estimatedTime;
+      }
+    });
+
+    // Calculate total duration for weight calculation
+    const totalDuration = taskDurations.reduce((sum, duration) => sum + duration, 0);
 
     const newFlow: FlowDefinition = {
       id: `flow-${this.generateId()}`,
@@ -191,10 +220,18 @@ export class FlowEngine {
       description: payload.description,
       codeSnippet: '',
       tags: payload.tags,
-      tasks: payload.tasks.map(t => {
-        const estimatedTime = t.estimatedTime || 1000;
-        // Calculate weight as: estimatedTime / totalEstimatedTime
-        const weight = totalEstimatedTime > 0 ? estimatedTime / totalEstimatedTime : 1 / payload.tasks.length;
+      tasks: payload.tasks.map((t, index) => {
+        const duration = taskDurations[index];
+        const clientEstimatedTime = t.estimatedTime || 1000;
+        const stats = flowStats.get(t.name);
+
+        // Use statistics for estimatedTime if we have at least 2 samples, otherwise use client's estimate
+        const estimatedTime = (stats && stats.sampleCount >= 2)
+          ? Math.round(stats.avgDurationMs)
+          : clientEstimatedTime;
+
+        // Calculate weight as: duration / totalDuration
+        const weight = totalDuration > 0 ? duration / totalDuration : 1 / payload.tasks.length;
 
         return {
           id: `task-${this.generateId()}`,
