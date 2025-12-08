@@ -1,15 +1,14 @@
 import { FlowRun, TaskState } from '../types';
 
 export const getActiveRuns = (runs: FlowRun[]) => {
-  return runs.filter(
-    r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING || r.state === TaskState.RETRYING
-  );
+  // Keep ALL runs in active section (including completed/failed)
+  // Only exclude if explicitly moved to history
+  return runs;
 };
 
 export const getHistoryRuns = (runs: FlowRun[]) => {
-  return runs.filter(
-    r => r.state !== TaskState.RUNNING && r.state !== TaskState.PENDING && r.state !== TaskState.RETRYING
-  );
+  // History is now empty - all flows stay in active section until reset
+  return [];
 };
 
 export const filterRunsByStatus = (

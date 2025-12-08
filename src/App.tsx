@@ -45,6 +45,7 @@ export default function App() {
   const [closingHistoryRunId, setClosingHistoryRunId] = useState<string | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
+  const [currentSessionStartTime, setCurrentSessionStartTime] = useState<string | null>(null);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
@@ -56,9 +57,27 @@ export default function App() {
   const selectedClient = availableClients.find(c => c.id === selectedClientId);
   const themeColor = getThemeColor(selectedClient, activeClient);
 
-  // Get active and history runs using utility functions
-  const activeRuns = getActiveRuns(runs);
-  const allHistoryRuns = getHistoryRuns(runs);
+  // Separate current session runs from past runs
+  const currentSessionRuns = currentSessionStartTime
+    ? runs.filter(run => new Date(run.startTime) >= new Date(currentSessionStartTime))
+    : [];
+
+  const pastRuns = currentSessionStartTime
+    ? runs.filter(run => new Date(run.startTime) < new Date(currentSessionStartTime))
+    : runs;
+
+  // Active runs are current session runs (regardless of state)
+  const activeRuns = currentSessionRuns;
+
+  // History runs are past runs that are completed/failed
+  const allHistoryRuns = pastRuns.filter(
+    r => r.state === TaskState.COMPLETED || r.state === TaskState.FAILED
+  );
+
+  // Count truly active (running/pending) flows for the badge
+  const runningFlowsCount = activeRuns.filter(
+    run => run.state === TaskState.RUNNING || run.state === TaskState.PENDING || run.state === TaskState.RETRYING
+  ).length;
 
   // Apply filters to history runs using utility function
   const historyRuns = applyAllFilters(allHistoryRuns, {
@@ -82,6 +101,24 @@ export default function App() {
 
   // Check if any filters are active
   const hasActiveFilters = statusFilter !== 'all' || flowNameFilter !== 'all' || searchQuery.trim() !== '' || dateFilter !== 'all';
+
+  // Check if all flows are finished (completed or failed)
+  const allFlowsFinished = activeRuns.length > 0 && activeRuns.every(
+    run => run.state === TaskState.COMPLETED || run.state === TaskState.FAILED
+  );
+
+  // Handler to return to client selection
+  const handleReturnToClients = () => {
+    setClientStatus('stopped');
+    setCurrentSessionStartTime(null); // Clear session marker
+  };
+
+  // Track when client starts - mark session start time
+  React.useEffect(() => {
+    if (clientStatus === 'running' && !currentSessionStartTime) {
+      setCurrentSessionStartTime(new Date().toISOString());
+    }
+  }, [clientStatus, currentSessionStartTime]);
 
   const handleHistoryClick = (runId: string) => {
     if (runId === selectedHistoryRunId) {
@@ -211,10 +248,10 @@ export default function App() {
               <Activity
                 size={14}
                 className={`animate-pulse transition-colors duration-700`}
-                style={{ color: activeRuns.length > 0 ? themeColor : '#64748b' }}
+                style={{ color: runningFlowsCount > 0 ? themeColor : '#64748b' }}
               />
               Live Monitor
-              {activeRuns.length > 0 && (
+              {runningFlowsCount > 0 && (
                 <span
                   className="px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all duration-700"
                   style={{
@@ -224,7 +261,7 @@ export default function App() {
                     boxShadow: `0 0 15px ${themeColor}25`
                   }}
                 >
-                  {activeRuns.length} ACTIVE
+                  {runningFlowsCount} ACTIVE
                 </span>
               )}
               {/* Active Client Indicator */}
@@ -449,11 +486,53 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 pb-12">
-                {activeRuns.map(run => (
-                  <ActiveRunCard key={run.id} run={run} clientColor={activeClient?.color} />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 pb-12">
+                  {activeRuns.map(run => (
+                    <ActiveRunCard key={run.id} run={run} clientColor={activeClient?.color} />
+                  ))}
+                </div>
+
+                {/* Return to Clients Button - Show when all flows are finished */}
+                {allFlowsFinished && (
+                  <div className="flex justify-center mt-8 mb-12">
+                    <button
+                      onClick={handleReturnToClients}
+                      className="group relative px-8 py-4 rounded-xl border-2 transition-all duration-300 hover:scale-105 active:scale-95"
+                      style={{
+                        borderColor: themeColor,
+                        background: `linear-gradient(135deg, ${themeColor}15 0%, ${themeColor}05 100%)`,
+                        boxShadow: `0 8px 32px ${themeColor}30`
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <ChevronRight
+                          size={20}
+                          className="transform group-hover:-translate-x-1 transition-transform"
+                          style={{ color: themeColor }}
+                        />
+                        <span
+                          className="text-sm font-bold tracking-wide"
+                          style={{ color: themeColor }}
+                        >
+                          Return to Client Selection
+                        </span>
+                        <ChevronRight
+                          size={20}
+                          className="transform group-hover:translate-x-1 transition-transform"
+                          style={{ color: themeColor }}
+                        />
+                      </div>
+
+                      {/* Animated border glow */}
+                      <div
+                        className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-50 blur-xl transition-opacity duration-300 -z-10"
+                        style={{ background: themeColor }}
+                      ></div>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
             
             {/* History Section */}
