@@ -184,7 +184,7 @@ export default function App() {
 
       {/* Top Navigation Bar */}
       <header
-        className="backdrop-blur-md border-b h-16 flex-none px-6 flex items-center justify-between shadow-sm z-20 relative transition-all duration-700"
+        className="backdrop-blur-md border-b h-14 flex-none px-5 flex items-center justify-between shadow-sm z-20 relative transition-all duration-700"
         style={{
           backgroundColor: `${themeColor}12`,
           borderBottomColor: `${themeColor}50`,
@@ -237,7 +237,7 @@ export default function App() {
         <div className="flex-1 flex flex-col relative">
           {/* Dashboard Header */}
            <div
-             className="p-5 border-b flex justify-between items-center shadow-sm backdrop-blur-sm transition-all duration-700"
+             className="p-3 border-b flex justify-between items-center shadow-sm backdrop-blur-sm transition-all duration-700"
              style={{
                borderBottomColor: `${themeColor}30`,
                backgroundColor: `${themeColor}10`,
@@ -304,9 +304,9 @@ export default function App() {
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
             {activeRuns.length === 0 ? (
-              <div className="h-[70vh] flex flex-col items-center justify-center text-slate-600 space-y-8">
+              <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-6">
                 <div className="relative">
                   <div
                     className="absolute inset-0 blur-xl rounded-full transition-colors duration-700"
@@ -324,19 +324,19 @@ export default function App() {
                 </div>
 
                 {/* Client Control - Centered */}
-                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 text-center max-w-md w-full shadow-2xl">
-                  <h3 className="text-lg font-bold text-slate-300 mb-2">Python Client</h3>
-                  <p className="text-xs text-slate-500 mb-6 leading-relaxed">
+                <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center max-w-md w-full shadow-2xl">
+                  <h3 className="text-base font-bold text-slate-300 mb-1">Python Client</h3>
+                  <p className="text-xs text-slate-500 mb-4 leading-relaxed">
                     Start the Python client to register and automatically execute workflows.
                   </p>
 
                   {/* Client Selector */}
                   {availableClients.length > 0 && (
-                    <div className="mb-6 text-left">
-                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                    <div className="mb-4 text-left">
+                      <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                         Select Client Configuration
                       </label>
-                      <div className="space-y-2">
+                      <div className="space-y-1.5">
                         {availableClients.map(client => {
                           const isSelected = selectedClientId === client.id;
                           const clientColor = client.color || '#0ea5e9'; // default sky-500
@@ -346,7 +346,7 @@ export default function App() {
                               key={client.id}
                               onClick={() => setSelectedClientId(client.id)}
                               disabled={clientStatus === 'running' || clientStatus === 'starting'}
-                              className="w-full text-left p-4 rounded-lg border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
+                              className="w-full text-left p-3 rounded-lg border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
                               style={{
                                 borderColor: isSelected ? clientColor : '#334155',
                                 background: isSelected
@@ -365,17 +365,17 @@ export default function App() {
                                 ></div>
                               )}
 
-                              <div className="flex items-start gap-3">
-                                {/* Large color indicator */}
+                              <div className="flex items-start gap-2.5">
+                                {/* Compact color indicator */}
                                 {client.color && (
                                   <div
-                                    className="mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shadow-lg relative"
+                                    className="mt-0.5 w-6 h-6 rounded-md flex items-center justify-center shadow-lg relative"
                                     style={{
                                       background: `linear-gradient(135deg, ${client.color} 0%, ${client.color}cc 100%)`,
-                                      boxShadow: `0 4px 12px ${client.color}60, inset 0 1px 0 rgba(255,255,255,0.2)`
+                                      boxShadow: `0 2px 8px ${client.color}60, inset 0 1px 0 rgba(255,255,255,0.2)`
                                     }}
                                   >
-                                    <div className="w-3 h-3 bg-white/90 rounded-full"></div>
+                                    <div className="w-2 h-2 bg-white/90 rounded-full"></div>
                                   </div>
                                 )}
                                 <div className="flex-1">
@@ -385,7 +385,7 @@ export default function App() {
                                   >
                                     {client.name}
                                   </div>
-                                  <div className="text-xs text-slate-500 leading-relaxed">
+                                  <div className="text-xs text-slate-500 leading-snug">
                                     {client.description}
                                   </div>
                                 </div>
@@ -415,7 +415,7 @@ export default function App() {
                     <button
                       onClick={() => handleStartClient(selectedClientId)}
                       disabled={isStartingClient}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 text-white rounded-lg font-medium text-base transition-all shadow-lg disabled:text-slate-500 disabled:cursor-not-allowed active:scale-95 disabled:bg-slate-700"
+                      className="w-full flex items-center justify-center gap-2 px-5 py-2.5 text-white rounded-lg font-medium text-sm transition-all shadow-lg disabled:text-slate-500 disabled:cursor-not-allowed active:scale-95 disabled:bg-slate-700"
                       style={{
                         backgroundColor: isStartingClient ? '#334155' : themeColor,
                         boxShadow: isStartingClient ? 'none' : `0 10px 30px ${themeColor}40, 0 0 20px ${themeColor}30`
@@ -440,14 +440,14 @@ export default function App() {
                   ) : (
                     <button
                       onClick={handleStopClient}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-rose-500 text-slate-300 hover:text-white rounded-lg font-medium text-base transition-all shadow-lg active:scale-95"
+                      className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-rose-500 text-slate-300 hover:text-white rounded-lg font-medium text-sm transition-all shadow-lg active:scale-95"
                     >
-                      <XCircle size={20} />
+                      <XCircle size={18} />
                       Stop Client
                     </button>
                   )}
 
-                  <p className="text-xs text-slate-500 mt-4 leading-relaxed">
+                  <p className="text-xs text-slate-500 mt-3 leading-snug">
                     {clientStatus === 'running'
                       ? 'Client is connected. Flows will auto-execute upon registration.'
                       : 'Once started, all registered flows will execute automatically.'}
@@ -456,7 +456,7 @@ export default function App() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6 pb-12">
+                <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 pb-6">
                   {activeRuns.map(run => (
                     <ActiveRunCard key={run.id} run={run} clientColor={activeClient?.color} />
                   ))}
@@ -464,7 +464,7 @@ export default function App() {
 
                 {/* Return to Clients Button - Show when all flows are finished */}
                 {allFlowsFinished && (
-                  <div className="flex justify-center mt-8 mb-12">
+                  <div className="flex justify-center mt-4 mb-6">
                     <button
                       onClick={handleReturnToClients}
                       className="group relative px-8 py-4 rounded-xl border-2 transition-all duration-300 hover:scale-105 active:scale-95"
@@ -506,8 +506,8 @@ export default function App() {
             
             {/* History Section */}
             {allHistoryRuns.length > 0 && (
-              <div className="mt-12 border-t border-slate-800 pt-8 mb-8">
-                 <div className="flex items-center justify-between mb-4">
+              <div className="mt-6 border-t border-slate-800 pt-4 mb-4">
+                 <div className="flex items-center justify-between mb-3">
                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                      <Clock size={14} /> Execution History
                      <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full text-xs font-mono">
@@ -526,7 +526,7 @@ export default function App() {
                  </div>
 
                  {/* Filter Controls */}
-                 <div className="flex flex-wrap gap-3 mb-4 p-4 bg-slate-800/30 border border-slate-700/50 rounded-lg">
+                 <div className="flex flex-wrap gap-2 mb-3 p-3 bg-slate-800/30 border border-slate-700/50 rounded-lg">
                    {/* Search Input */}
                    <div className="relative flex-1 min-w-[200px]">
                      <Search size={14} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-500" />
@@ -597,7 +597,7 @@ export default function App() {
                    </div>
                  ) : (
                    <>
-                     <div className="flex flex-col gap-2">
+                     <div className="flex flex-col gap-1.5">
                        {historyRuns.slice(0, showAllHistory ? historyRuns.length : 10).map(run => {
                         const runColor = run.clientColor || themeColor;
                         const isSelected = selectedHistoryRunId === run.id;
@@ -605,7 +605,7 @@ export default function App() {
                           <React.Fragment key={run.id}>
                             <div
                               onClick={() => handleHistoryClick(run.id)}
-                              className={`bg-slate-800/40 p-3 rounded-lg border transition-all cursor-pointer hover:bg-slate-800/60 ${isSelected ? 'animate-selectPulse' : ''}`}
+                              className={`bg-slate-800/40 p-2.5 rounded-lg border transition-all cursor-pointer hover:bg-slate-800/60 ${isSelected ? 'animate-selectPulse' : ''}`}
                               style={{
                                 borderColor: isSelected ? runColor : '#475569',
                                 backgroundColor: isSelected ? `${runColor}15` : 'rgba(30, 41, 59, 0.4)',
@@ -658,14 +658,14 @@ export default function App() {
                             {/* Expanded Details - Inline */}
                             {(isSelected || closingHistoryRunId === run.id) && (
                               <div
-                                className="ml-6 overflow-hidden"
+                                className="ml-4 overflow-hidden"
                                 style={{
                                   animation: closingHistoryRunId === run.id
                                     ? 'smoothCollapse 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards'
                                     : 'smoothExpand 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards'
                                 }}
                               >
-                                <div className="pt-3">
+                                <div className="pt-2">
                                   <ActiveRunCard run={run} clientColor={run.clientColor} />
                                 </div>
                               </div>
@@ -677,7 +677,7 @@ export default function App() {
 
                      {/* Show All / Show Less Button */}
                      {historyRuns.length > 10 && (
-                       <div className="flex justify-center mt-4">
+                       <div className="flex justify-center mt-3">
                          <button
                            onClick={() => setShowAllHistory(!showAllHistory)}
                            className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 border rounded-lg text-xs font-medium transition-all shadow-sm group"

@@ -71,7 +71,7 @@ export const ActiveRunCard = ({ run, clientColor }: ActiveRunCardProps) => {
     >
       {/* Header */}
       <div
-        className="p-4 border-b flex justify-between items-center"
+        className="p-3 border-b flex justify-between items-center"
         style={{
           borderBottomColor: clientColor ? `${clientColor}30` : '#475569',
           background: clientColor ? `${clientColor}08` : 'rgba(30, 41, 59, 0.3)'
@@ -135,7 +135,7 @@ export const ActiveRunCard = ({ run, clientColor }: ActiveRunCardProps) => {
 
       {/* Flow Logs */}
       {run.logs && run.logs.length > 0 && (
-        <div ref={flowLogsRef} className="mx-4 mt-3 p-2.5 bg-slate-950/70 border border-slate-800 rounded-lg text-xs font-mono max-h-24 overflow-y-auto custom-scrollbar shadow-inner">
+        <div ref={flowLogsRef} className="mx-3 mt-2 p-2 bg-slate-950/70 border border-slate-800 rounded-lg text-xs font-mono max-h-20 overflow-y-auto custom-scrollbar shadow-inner">
           {run.logs.map((log, i) => (
             <div key={i} className="text-slate-200 mb-0.5 leading-relaxed">
               {log}
@@ -145,7 +145,7 @@ export const ActiveRunCard = ({ run, clientColor }: ActiveRunCardProps) => {
       )}
 
       {/* Tasks List */}
-      <div className="flex-1 overflow-y-auto max-h-[320px] custom-scrollbar bg-slate-900/20">
+      <div className="flex-1 overflow-y-auto max-h-[260px] custom-scrollbar bg-slate-900/20">
         {run.tasks.map(task => (
           <TaskRow key={task.id} task={task} />
         ))}
