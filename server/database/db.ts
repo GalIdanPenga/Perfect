@@ -68,6 +68,17 @@ function initializeDatabase() {
     }
   }
 
+  // Migration: Add report_path column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE flow_runs ADD COLUMN report_path TEXT`);
+    console.log('[Database] Added report_path column to flow_runs table');
+  } catch (e: any) {
+    // Column already exists, ignore error
+    if (!e.message.includes('duplicate column name')) {
+      throw e;
+    }
+  }
+
   // Migration: Add crucial_pass column to tasks if it doesn't exist
   try {
     db.exec(`ALTER TABLE tasks ADD COLUMN crucial_pass INTEGER NOT NULL DEFAULT 1`);
@@ -263,8 +274,8 @@ export const runDb = {
   saveRun(run: FlowRun) {
     const stmt = db.prepare(`
       INSERT OR REPLACE INTO flow_runs
-      (id, flow_id, flow_name, state, start_time, end_time, configuration, tags, progress, client_color)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, flow_id, flow_name, state, start_time, end_time, configuration, tags, progress, client_color, report_path)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -277,7 +288,8 @@ export const runDb = {
       run.configuration,
       JSON.stringify(run.tags || {}),
       run.progress,
-      run.clientColor || null
+      run.clientColor || null,
+      run.reportPath || null
     );
 
     // Delete existing task runs and logs for this run
@@ -353,6 +365,7 @@ export const runDb = {
         tags: run.tags ? JSON.parse(run.tags) : {},
         progress: run.progress,
         clientColor: run.client_color,
+        reportPath: run.report_path,
         logs: logs.map(l => l.log_entry),
         tasks: tasks.map(task => {
           const taskLogs = db.prepare(
@@ -398,6 +411,7 @@ export const runDb = {
       tags: run.tags ? JSON.parse(run.tags) : {},
       progress: run.progress,
       clientColor: run.client_color,
+      reportPath: run.report_path,
       logs: logs.map(l => l.log_entry),
       tasks: tasks.map(task => {
         const taskLogs = db.prepare(
