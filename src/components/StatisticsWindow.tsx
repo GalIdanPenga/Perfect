@@ -9,12 +9,20 @@ interface TaskStatistic {
   lastUpdated: string;
 }
 
+interface FlowStatistic {
+  flowName: string;
+  avgDurationMs: number;
+  sampleCount: number;
+  lastUpdated: string;
+}
+
 interface StatisticsWindowProps {
   onClose: () => void;
 }
 
 export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
   const [statistics, setStatistics] = useState<TaskStatistic[]>([]);
+  const [flowStatistics, setFlowStatistics] = useState<FlowStatistic[]>([]);
   const [loading, setLoading] = useState(true);
   const [groupByFlow, setGroupByFlow] = useState(true);
 
@@ -28,7 +36,8 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
       const response = await fetch('http://localhost:3001/api/statistics');
       const data = await response.json();
       if (data.success) {
-        setStatistics(data.statistics);
+        setStatistics(data.taskStatistics || []);
+        setFlowStatistics(data.flowStatistics || []);
       }
     } catch (error) {
       console.error('Failed to fetch statistics:', error);
@@ -129,7 +138,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
             <div className="flex items-center justify-center h-full">
               <div className="text-slate-400">Loading statistics...</div>
             </div>
-          ) : statistics.length === 0 ? (
+          ) : statistics.length === 0 && flowStatistics.length === 0 ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center">
                 <BarChart3 size={48} className="text-slate-600 mx-auto mb-4" />
@@ -139,7 +148,63 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
                 </div>
               </div>
             </div>
-          ) : groupByFlow ? (
+          ) : (
+            <div className="space-y-6">
+              {/* Flow Statistics Section */}
+              {flowStatistics.length > 0 && (
+                <div className="bg-slate-800/30 rounded-lg border border-slate-700 overflow-hidden">
+                  <div className="bg-slate-800/50 px-4 py-3 border-b border-slate-700">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-white flex items-center gap-2">
+                        <TrendingUp size={18} className="text-sky-400" />
+                        Flow Statistics
+                      </h3>
+                      <span className="text-sm text-slate-400">
+                        Average completion times per flow
+                      </span>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700">
+                          <th className="text-left px-4 py-2 text-slate-400 font-semibold">Flow Name</th>
+                          <th className="text-right px-4 py-2 text-slate-400 font-semibold">Avg Duration</th>
+                          <th className="text-right px-4 py-2 text-slate-400 font-semibold">Samples</th>
+                          <th className="text-right px-4 py-2 text-slate-400 font-semibold">Last Updated</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {flowStatistics.map((stat, idx) => (
+                          <tr
+                            key={idx}
+                            className="border-b border-slate-800 last:border-0 hover:bg-slate-800/30 transition-colors"
+                          >
+                            <td className="px-4 py-3 text-white font-semibold">{stat.flowName}</td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="text-sky-400 font-bold text-base">
+                                {formatDuration(stat.avgDurationMs)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="text-emerald-400 font-semibold">
+                                {stat.sampleCount}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-slate-400">
+                              {formatDate(stat.lastUpdated)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Task Statistics Section */}
+              {statistics.length > 0 && (
+                groupByFlow ? (
             <div className="space-y-6">
               {Object.entries(groupedStats).map(([flowName, tasks]) => (
                 <div key={flowName} className="bg-slate-800/30 rounded-lg border border-slate-700 overflow-hidden">
@@ -192,43 +257,46 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="bg-slate-800/30 rounded-lg border border-slate-700 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="text-left px-4 py-2 text-slate-400 font-semibold">Flow Name</th>
-                    <th className="text-left px-4 py-2 text-slate-400 font-semibold">Task Name</th>
-                    <th className="text-right px-4 py-2 text-slate-400 font-semibold">Avg Duration</th>
-                    <th className="text-right px-4 py-2 text-slate-400 font-semibold">Samples</th>
-                    <th className="text-right px-4 py-2 text-slate-400 font-semibold">Last Updated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {statistics.map((stat, idx) => (
-                    <tr
-                      key={idx}
-                      className="border-b border-slate-800 last:border-0 hover:bg-slate-800/30 transition-colors"
-                    >
-                      <td className="px-4 py-3 text-slate-300">{stat.flowName}</td>
-                      <td className="px-4 py-3 text-slate-300 font-mono">{stat.taskName}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-sky-400 font-semibold">
-                          {formatDuration(stat.avgDurationMs)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="text-emerald-400 font-semibold">
-                          {stat.sampleCount}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-slate-400">
-                        {formatDate(stat.lastUpdated)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                ) : (
+                  <div className="bg-slate-800/30 rounded-lg border border-slate-700 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-700">
+                          <th className="text-left px-4 py-2 text-slate-400 font-semibold">Flow Name</th>
+                          <th className="text-left px-4 py-2 text-slate-400 font-semibold">Task Name</th>
+                          <th className="text-right px-4 py-2 text-slate-400 font-semibold">Avg Duration</th>
+                          <th className="text-right px-4 py-2 text-slate-400 font-semibold">Samples</th>
+                          <th className="text-right px-4 py-2 text-slate-400 font-semibold">Last Updated</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {statistics.map((stat, idx) => (
+                          <tr
+                            key={idx}
+                            className="border-b border-slate-800 last:border-0 hover:bg-slate-800/30 transition-colors"
+                          >
+                            <td className="px-4 py-3 text-slate-300">{stat.flowName}</td>
+                            <td className="px-4 py-3 text-slate-300 font-mono">{stat.taskName}</td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="text-sky-400 font-semibold">
+                                {formatDuration(stat.avgDurationMs)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <span className="text-emerald-400 font-semibold">
+                                {stat.sampleCount}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-slate-400">
+                              {formatDate(stat.lastUpdated)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              )}
             </div>
           )}
         </div>

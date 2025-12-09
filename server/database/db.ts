@@ -154,6 +154,16 @@ function initializeDatabase() {
     )
   `);
 
+  // Create flow_statistics table for tracking flow-level performance
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS flow_statistics (
+      flow_name TEXT PRIMARY KEY,
+      avg_duration_ms REAL NOT NULL,
+      sample_count INTEGER NOT NULL,
+      last_updated TEXT NOT NULL
+    )
+  `);
+
   // Create indices for better performance
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_tasks_flow_id ON tasks(flow_id);
@@ -520,6 +530,64 @@ export const statsDb = {
     return rows.map(row => ({
       flowName: row.flow_name,
       taskName: row.task_name,
+      avgDurationMs: row.avg_duration_ms,
+      sampleCount: row.sample_count,
+      lastUpdated: row.last_updated
+    }));
+  },
+
+  // Update statistics for a flow (using incremental average)
+  updateFlowStats(flowName: string, durationMs: number) {
+    const existing = db.prepare(
+      'SELECT avg_duration_ms, sample_count FROM flow_statistics WHERE flow_name = ?'
+    ).get(flowName) as any;
+
+    if (existing) {
+      // Calculate new average using incremental formula
+      const newCount = existing.sample_count + 1;
+      const newAvg = existing.avg_duration_ms + (durationMs - existing.avg_duration_ms) / newCount;
+
+      db.prepare(`
+        UPDATE flow_statistics
+        SET avg_duration_ms = ?, sample_count = ?, last_updated = ?
+        WHERE flow_name = ?
+      `).run(newAvg, newCount, new Date().toISOString(), flowName);
+    } else {
+      // First sample for this flow
+      db.prepare(`
+        INSERT INTO flow_statistics (flow_name, avg_duration_ms, sample_count, last_updated)
+        VALUES (?, ?, 1, ?)
+      `).run(flowName, durationMs, new Date().toISOString());
+    }
+  },
+
+  // Get statistics for a specific flow
+  getFlowStatsForFlow(flowName: string): { avgDurationMs: number; sampleCount: number } | undefined {
+    const row = db.prepare(
+      'SELECT avg_duration_ms, sample_count FROM flow_statistics WHERE flow_name = ?'
+    ).get(flowName) as any;
+
+    if (!row) return undefined;
+
+    return {
+      avgDurationMs: row.avg_duration_ms,
+      sampleCount: row.sample_count
+    };
+  },
+
+  // Get all flow statistics (for UI display)
+  getAllFlowStats(): Array<{
+    flowName: string;
+    avgDurationMs: number;
+    sampleCount: number;
+    lastUpdated: string;
+  }> {
+    const rows = db.prepare(
+      'SELECT flow_name, avg_duration_ms, sample_count, last_updated FROM flow_statistics ORDER BY flow_name'
+    ).all() as any[];
+
+    return rows.map(row => ({
+      flowName: row.flow_name,
       avgDurationMs: row.avg_duration_ms,
       sampleCount: row.sample_count,
       lastUpdated: row.last_updated

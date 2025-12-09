@@ -112,8 +112,9 @@ app.post('/api/heartbeat', (req, res) => {
 // Get statistics endpoint
 app.get('/api/statistics', (req, res) => {
   try {
-    const statistics = statsDb.getAllStats();
-    res.json({ success: true, statistics });
+    const taskStatistics = statsDb.getAllStats();
+    const flowStatistics = statsDb.getAllFlowStats();
+    res.json({ success: true, taskStatistics, flowStatistics });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

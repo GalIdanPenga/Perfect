@@ -632,13 +632,6 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                {/* Configuration Badge */}
-                                {run.configuration && (
-                                  <span className="text-xs font-mono px-2 py-1 rounded bg-slate-700/50 text-sky-400 uppercase tracking-wider">
-                                    {run.configuration}
-                                  </span>
-                                )}
-
                                 {/* Run ID */}
                                 <span className="text-xs font-mono px-2 py-1 rounded bg-slate-900/50 text-slate-400">
                                   {run.id.split('-')[0]}

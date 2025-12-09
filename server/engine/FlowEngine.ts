@@ -176,6 +176,10 @@ export class FlowEngine {
       run.endTime = new Date().toISOString();
       // Generate report on successful completion
       run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+
+      // Update flow statistics (only for successful runs)
+      const flowDuration = new Date(run.endTime).getTime() - new Date(run.startTime).getTime();
+      statsDb.updateFlowStats(run.flowName, flowDuration);
     } else if (anyFailed) {
       run.state = TaskState.FAILED;
       run.endTime = new Date().toISOString();

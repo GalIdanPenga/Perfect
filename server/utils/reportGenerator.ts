@@ -332,7 +332,7 @@ function generateReportHTML(run: FlowRun, clientName: string): string {
     <div class="header">
       <h1>${run.flowName}</h1>
       <div class="subtitle">
-        Client: ${clientName} | Run ID: ${run.id} | Configuration: ${run.configuration || 'default'}
+        Client: ${clientName} | Run ID: ${run.id}
       </div>
       ${run.tags ? Object.entries(run.tags).map(([key, value]) =>
         `<span class="tag-badge"><span class="tag-key">${key}:</span> <span class="tag-value">${value}</span></span>`
