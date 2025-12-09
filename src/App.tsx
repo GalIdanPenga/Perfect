@@ -45,7 +45,10 @@ export default function App() {
   const [closingHistoryRunId, setClosingHistoryRunId] = useState<string | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
-  const [currentSessionStartTime, setCurrentSessionStartTime] = useState<string | null>(null);
+  const [currentSessionStartTime, setCurrentSessionStartTime] = useState<string | null>(() => {
+    // Restore session start time from localStorage on initial load
+    return localStorage.getItem('currentSessionStartTime');
+  });
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
@@ -111,12 +114,15 @@ export default function App() {
   const handleReturnToClients = () => {
     setClientStatus('stopped');
     setCurrentSessionStartTime(null); // Clear session marker
+    localStorage.removeItem('currentSessionStartTime'); // Clear from localStorage
   };
 
   // Track when client starts - mark session start time
   React.useEffect(() => {
     if (clientStatus === 'running' && !currentSessionStartTime) {
-      setCurrentSessionStartTime(new Date().toISOString());
+      const startTime = new Date().toISOString();
+      setCurrentSessionStartTime(startTime);
+      localStorage.setItem('currentSessionStartTime', startTime);
     }
   }, [clientStatus, currentSessionStartTime]);
 

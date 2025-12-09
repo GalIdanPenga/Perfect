@@ -4,7 +4,10 @@ import { API_BASE_URL } from '../constants';
 
 export const useClientConfigs = () => {
   const [availableClients, setAvailableClients] = useState<ClientConfig[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string>('');
+  const [selectedClientId, setSelectedClientId] = useState<string>(() => {
+    // Restore selected client ID from localStorage on initial load
+    return localStorage.getItem('selectedClientId') || '';
+  });
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -13,9 +16,11 @@ export const useClientConfigs = () => {
         if (response.ok) {
           const data = await response.json();
           setAvailableClients(data.clients);
-          // Set default to first client
-          if (data.clients.length > 0) {
-            setSelectedClientId(data.clients[0].id);
+          // Set default to first client only if no client is selected
+          if (data.clients.length > 0 && !selectedClientId) {
+            const defaultId = data.clients[0].id;
+            setSelectedClientId(defaultId);
+            localStorage.setItem('selectedClientId', defaultId);
           }
         }
       } catch (error) {
@@ -26,5 +31,11 @@ export const useClientConfigs = () => {
     fetchClients();
   }, []);
 
-  return { availableClients, selectedClientId, setSelectedClientId };
+  // Create a wrapper function to also persist to localStorage
+  const setSelectedClientIdWithPersistence = (id: string) => {
+    setSelectedClientId(id);
+    localStorage.setItem('selectedClientId', id);
+  };
+
+  return { availableClients, selectedClientId, setSelectedClientId: setSelectedClientIdWithPersistence };
 };
