@@ -85,7 +85,7 @@ export const ActiveRunCard = ({ run, clientColor }: ActiveRunCardProps) => {
           <TagBadges tags={run.tags} />
         </div>
         <div className="text-right">
-           <div className="flex flex-col items-end gap-1">
+           <div className="flex flex-col items-end gap-2">
              <span className={`text-2xl font-bold font-mono tracking-tight ${run.state === TaskState.FAILED ? 'text-rose-400' : 'text-sky-400'}`}>
                {run.progress}%
              </span>
@@ -94,6 +94,21 @@ export const ActiveRunCard = ({ run, clientColor }: ActiveRunCardProps) => {
                  <Clock size={12} className="text-slate-400" />
                  <span>~{formatTimeRemaining(timeRemaining)} left</span>
                </div>
+             )}
+             {!isRunning && run.reportPath && (
+               <a
+                 href={`http://localhost:3001/${run.reportPath}`}
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 className="px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all hover:scale-105 active:scale-95 shadow-sm"
+                 style={{
+                   backgroundColor: clientColor ? `${clientColor}15` : 'rgba(56, 189, 248, 0.1)',
+                   borderColor: clientColor || '#38bdf8',
+                   color: clientColor || '#38bdf8'
+                 }}
+               >
+                 Open Report
+               </a>
              )}
            </div>
         </div>

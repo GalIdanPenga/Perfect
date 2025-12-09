@@ -175,12 +175,12 @@ export class FlowEngine {
       run.progress = 100;
       run.endTime = new Date().toISOString();
       // Generate report on successful completion
-      generateFlowReport(run, run.clientName || 'default');
+      run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
     } else if (anyFailed) {
       run.state = TaskState.FAILED;
       run.endTime = new Date().toISOString();
       // Generate report on failure
-      generateFlowReport(run, run.clientName || 'default');
+      run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
     } else {
       // Update weighted progress
       this.updateRunProgress(run);
@@ -464,7 +464,8 @@ export class FlowEngine {
         runDb.saveRun(run);
 
         // Generate report for the failed flow
-        generateFlowReport(run, run.clientName || 'default');
+        run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+        runDb.saveRun(run);
       });
 
       this.notifyStateChange();

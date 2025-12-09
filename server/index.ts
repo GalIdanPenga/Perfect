@@ -1,15 +1,23 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import clientRoutes, { getActiveClient } from './routes/clientRoutes';
 import engineRoutes from './routes/engineRoutes';
 import { flowEngine } from './engine/FlowEngine';
 import { statsDb } from './database/db';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = 3001;
 
 app.use(cors());
 app.use(express.json());
+
+// Serve static reports
+app.use('/Reports', express.static(path.join(__dirname, '../Reports')));
 
 app.use('/api/client', clientRoutes);
 app.use('/api/engine', engineRoutes);

@@ -60,6 +60,7 @@ export interface FlowRun {
   progress: number;
   clientColor?: string;
   clientName?: string;
+  reportPath?: string;
 }
 
 export interface FlowRegistrationPayload {

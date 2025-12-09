@@ -8,8 +8,9 @@ const __dirname = path.dirname(__filename);
 
 /**
  * Generates a static HTML report for a completed flow run
+ * @returns The relative path to the report (e.g., "Reports/client/flow_timestamp.html")
  */
-export function generateFlowReport(run: FlowRun, clientName: string = 'default'): void {
+export function generateFlowReport(run: FlowRun, clientName: string = 'default'): string | null {
   try {
     // Create Reports directory structure
     const reportsDir = path.join(__dirname, '../../Reports', clientName);
@@ -38,8 +39,12 @@ export function generateFlowReport(run: FlowRun, clientName: string = 'default')
     // Write to file
     fs.writeFileSync(filePath, html, 'utf-8');
     console.log(`[ReportGenerator] Generated report: ${filePath}`);
+
+    // Return relative path for accessing via web server
+    return `Reports/${clientName}/${filename}`;
   } catch (error) {
     console.error('[ReportGenerator] Failed to generate report:', error);
+    return null;
   }
 }
 
