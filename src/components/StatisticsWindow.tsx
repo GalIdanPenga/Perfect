@@ -25,10 +25,23 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
   const [flowStatistics, setFlowStatistics] = useState<FlowStatistic[]>([]);
   const [loading, setLoading] = useState(true);
   const [groupByFlow, setGroupByFlow] = useState(true);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isOpening, setIsOpening] = useState(true);
 
   useEffect(() => {
     fetchStatistics();
+    // Trigger opening animation
+    requestAnimationFrame(() => {
+      setIsOpening(false);
+    });
   }, []);
+
+  const handleClose = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      onClose();
+    }, 200); // Match animation duration
+  };
 
   const fetchStatistics = async () => {
     try {
@@ -70,8 +83,18 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
   const totalTasks = statistics.length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-slate-900 rounded-xl border border-slate-700 shadow-2xl w-[90vw] h-[85vh] flex flex-col">
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
+        isClosing || isOpening ? 'opacity-0' : 'opacity-100'
+      }`}
+      onClick={handleClose}
+    >
+      <div
+        className={`bg-slate-900 rounded-xl border border-slate-700 shadow-2xl w-[90vw] h-[85vh] flex flex-col transition-all duration-200 ${
+          isClosing || isOpening ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-700">
           <div className="flex items-center gap-3">
@@ -84,7 +107,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-slate-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-800"
           >
             <X size={20} />
