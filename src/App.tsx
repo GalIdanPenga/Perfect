@@ -195,7 +195,7 @@ export default function App() {
           <PerfectLogo />
           <h1 className="text-xl font-bold text-slate-100 tracking-tight">Perfect</h1>
           <span
-            className="text-[10px] px-2 py-0.5 rounded-full border font-mono tracking-wide transition-all duration-700"
+            className="text-xs px-2 py-0.5 rounded-full border font-mono tracking-wide transition-all duration-700"
             style={{
               backgroundColor: `${themeColor}18`,
               color: themeColor,
@@ -253,7 +253,7 @@ export default function App() {
               Live Monitor
               {runningFlowsCount > 0 && (
                 <span
-                  className="px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all duration-700"
+                  className="px-2 py-0.5 rounded-full text-xs font-bold border transition-all duration-700"
                   style={{
                     backgroundColor: `${themeColor}15`,
                     color: themeColor,
@@ -267,7 +267,7 @@ export default function App() {
               {/* Active Client Indicator */}
               {activeClient && activeClient.color && (
                 <span
-                  className="px-2.5 py-1 rounded-md text-[10px] font-bold border-2 flex items-center gap-1.5 transition-all duration-700"
+                  className="px-2.5 py-1 rounded-md text-xs font-bold border-2 flex items-center gap-1.5 transition-all duration-700"
                   style={{
                     backgroundColor: `${activeClient.color}18`,
                     borderColor: activeClient.color,
@@ -294,7 +294,7 @@ export default function App() {
                 <BarChart3 size={14} />
                 Statistics
               </button>
-              <div className="text-[10px] text-slate-500 font-mono flex items-center gap-2">
+              <div className="text-xs text-slate-500 font-mono flex items-center gap-2">
                 <span
                   className="w-1.5 h-1.5 rounded-full animate-pulse transition-colors duration-700"
                   style={{ backgroundColor: themeColor }}
@@ -410,37 +410,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Status Display */}
-                  <div className="flex items-center justify-center gap-2 mb-4">
-                    <div
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        clientStatus === 'starting' ? 'animate-pulse' :
-                        clientStatus === 'running' ? 'animate-pulse' : ''
-                      }`}
-                      style={{
-                        backgroundColor:
-                          clientStatus === 'running' && activeClient?.color ? activeClient.color :
-                          clientStatus === 'running' ? '#10b981' :
-                          clientStatus === 'starting' ? '#f59e0b' :
-                          clientStatus === 'error' ? '#ef4444' :
-                          '#475569'
-                      }}
-                    ></div>
-                    <span className="text-sm text-slate-400 font-mono">
-                      Status: <span
-                        className="uppercase font-bold"
-                        style={{
-                          color:
-                            clientStatus === 'running' && activeClient?.color ? activeClient.color :
-                            clientStatus === 'running' ? '#34d399' :
-                            clientStatus === 'starting' ? '#fbbf24' :
-                            clientStatus === 'error' ? '#f87171' :
-                            '#64748b'
-                        }}
-                      >{clientStatus}</span>
-                    </span>
-                  </div>
-
                   {/* Action Buttons */}
                   {clientStatus === 'stopped' || clientStatus === 'error' ? (
                     <button
@@ -541,14 +510,14 @@ export default function App() {
                  <div className="flex items-center justify-between mb-4">
                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
                      <Clock size={14} /> Execution History
-                     <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-mono">
+                     <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full text-xs font-mono">
                        {historyRuns.length}
                      </span>
                    </h3>
                    {hasActiveFilters && (
                      <button
                        onClick={clearFilters}
-                       className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-[10px] font-bold text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all shadow-sm group"
+                       className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-xs font-bold text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all shadow-sm group"
                      >
                        <X size={12} className="group-hover:text-rose-400" />
                        Clear Filters
@@ -665,13 +634,13 @@ export default function App() {
 
                                 {/* Configuration Badge */}
                                 {run.configuration && (
-                                  <span className="text-[10px] font-mono px-2 py-1 rounded bg-slate-700/50 text-sky-400 uppercase tracking-wider">
+                                  <span className="text-xs font-mono px-2 py-1 rounded bg-slate-700/50 text-sky-400 uppercase tracking-wider">
                                     {run.configuration}
                                   </span>
                                 )}
 
                                 {/* Run ID */}
-                                <span className="text-[10px] font-mono px-2 py-1 rounded bg-slate-900/50 text-slate-400">
+                                <span className="text-xs font-mono px-2 py-1 rounded bg-slate-900/50 text-slate-400">
                                   {run.id.split('-')[0]}
                                 </span>
 

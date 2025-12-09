@@ -79,20 +79,9 @@ export const ActiveRunCard = ({ run, clientColor }: ActiveRunCardProps) => {
       >
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-slate-100">{run.flowName}</h3>
+            <h3 className="text-lg font-bold text-white">{run.flowName}</h3>
             <StatusBadge state={run.state} />
           </div>
-          <p className="text-[10px] text-slate-400 font-mono mt-1 flex items-center gap-2">
-            ID: {run.id}
-            {run.configuration && (
-              <>
-                <span className="w-1 h-1 rounded-full bg-slate-600"></span>
-                <span className="text-sky-400 uppercase tracking-wider">{run.configuration}</span>
-              </>
-            )}
-            <span className="w-1 h-1 rounded-full bg-slate-600"></span>
-            {new Date(run.startTime).toLocaleTimeString()}
-          </p>
           <TagBadges tags={run.tags} />
         </div>
         <div className="text-right">
@@ -101,8 +90,8 @@ export const ActiveRunCard = ({ run, clientColor }: ActiveRunCardProps) => {
                {run.progress}%
              </span>
              {isRunning && timeRemaining > 0 && (
-               <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
-                 <Clock size={10} className="text-slate-500" />
+               <div className="flex items-center gap-1.5 text-xs text-slate-300 font-mono">
+                 <Clock size={12} className="text-slate-400" />
                  <span>~{formatTimeRemaining(timeRemaining)} left</span>
                </div>
              )}
@@ -131,9 +120,9 @@ export const ActiveRunCard = ({ run, clientColor }: ActiveRunCardProps) => {
 
       {/* Flow Logs */}
       {run.logs && run.logs.length > 0 && (
-        <div ref={flowLogsRef} className="mx-4 mt-3 p-2.5 bg-slate-950/70 border border-slate-800 rounded-lg text-[10px] font-mono max-h-24 overflow-y-auto custom-scrollbar shadow-inner">
+        <div ref={flowLogsRef} className="mx-4 mt-3 p-2.5 bg-slate-950/70 border border-slate-800 rounded-lg text-xs font-mono max-h-24 overflow-y-auto custom-scrollbar shadow-inner">
           {run.logs.map((log, i) => (
-            <div key={i} className="text-slate-300 mb-0.5 opacity-90 leading-relaxed">
+            <div key={i} className="text-slate-200 mb-0.5 leading-relaxed">
               {log}
             </div>
           ))}

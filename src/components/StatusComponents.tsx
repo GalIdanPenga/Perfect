@@ -37,7 +37,7 @@ export const StatusBadge = ({ state }: StatusBadgeProps) => {
   };
 
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${styles[state] || styles[TaskState.PENDING]} flex items-center gap-1.5 shadow-sm`}>
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border ${styles[state] || styles[TaskState.PENDING]} flex items-center gap-1.5 shadow-sm`}>
       {state === TaskState.RUNNING && <span className="w-1.5 h-1.5 rounded-full bg-current animate-pulse"/>}
       {state}
     </span>

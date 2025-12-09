@@ -69,7 +69,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
             <BarChart3 className="text-sky-400" size={24} />
             <div>
               <h2 className="text-xl font-bold text-white">Task Statistics</h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-sm text-slate-400">
                 Historical performance data from flow executions
               </p>
             </div>
@@ -87,21 +87,21 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
           <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
             <div className="flex items-center gap-2 text-sky-400 mb-2">
               <TrendingUp size={16} />
-              <span className="text-xs font-semibold uppercase tracking-wider">Total Flows</span>
+              <span className="text-sm font-semibold uppercase tracking-wider">Total Flows</span>
             </div>
             <div className="text-2xl font-bold text-white">{totalFlows}</div>
           </div>
           <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
             <div className="flex items-center gap-2 text-emerald-400 mb-2">
               <BarChart3 size={16} />
-              <span className="text-xs font-semibold uppercase tracking-wider">Total Tasks</span>
+              <span className="text-sm font-semibold uppercase tracking-wider">Total Tasks</span>
             </div>
             <div className="text-2xl font-bold text-white">{totalTasks}</div>
           </div>
           <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
             <div className="flex items-center gap-2 text-purple-400 mb-2">
               <Clock size={16} />
-              <span className="text-xs font-semibold uppercase tracking-wider">Total Samples</span>
+              <span className="text-sm font-semibold uppercase tracking-wider">Total Samples</span>
             </div>
             <div className="text-2xl font-bold text-white">{totalSamples}</div>
           </div>
@@ -111,13 +111,13 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
         <div className="px-6 py-3 border-b border-slate-700 flex items-center justify-between">
           <button
             onClick={() => setGroupByFlow(!groupByFlow)}
-            className="text-xs px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+            className="text-sm px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
           >
             {groupByFlow ? 'Ungroup' : 'Group by Flow'}
           </button>
           <button
             onClick={fetchStatistics}
-            className="text-xs px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 transition-colors"
+            className="text-sm px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 transition-colors"
           >
             Refresh
           </button>
@@ -134,7 +134,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
               <div className="text-center">
                 <BarChart3 size={48} className="text-slate-600 mx-auto mb-4" />
                 <div className="text-slate-400">No statistics available yet</div>
-                <div className="text-xs text-slate-500 mt-2">
+                <div className="text-sm text-slate-500 mt-2">
                   Statistics will appear after flows complete
                 </div>
               </div>
@@ -147,7 +147,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
                   <div className="bg-slate-800/50 px-4 py-3 border-b border-slate-700">
                     <div className="flex items-center justify-between">
                       <h3 className="font-semibold text-white">{flowName}</h3>
-                      <span className="text-xs text-slate-400">
+                      <span className="text-sm text-slate-400">
                         {tasks.length} task{tasks.length !== 1 ? 's' : ''}
                       </span>
                     </div>
@@ -155,7 +155,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
 
                   {/* Tasks Table */}
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs">
+                    <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-slate-700">
                           <th className="text-left px-4 py-2 text-slate-400 font-semibold">Task Name</th>
@@ -194,7 +194,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
             </div>
           ) : (
             <div className="bg-slate-800/30 rounded-lg border border-slate-700 overflow-hidden">
-              <table className="w-full text-xs">
+              <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-700">
                     <th className="text-left px-4 py-2 text-slate-400 font-semibold">Flow Name</th>
