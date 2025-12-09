@@ -638,11 +638,6 @@ export default function App() {
                                   </div>
                                 </div>
 
-                                {/* Run ID */}
-                                <span className="text-xs font-mono px-2 py-1 rounded bg-slate-900/50 text-slate-400">
-                                  {run.id.split('-')[0]}
-                                </span>
-
                                 {/* Time */}
                                 <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
                                   <Clock size={12} />
