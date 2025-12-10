@@ -123,6 +123,51 @@ export default function App() {
     run => run.state === TaskState.COMPLETED || run.state === TaskState.FAILED
   );
 
+  // Calculate overall progress across all running flows
+  const calculateOverallProgress = () => {
+    if (activeRuns.length === 0) return 0;
+
+    const totalProgress = activeRuns.reduce((sum, run) => sum + run.progress, 0);
+    return Math.floor(totalProgress / activeRuns.length);
+  };
+
+  // Calculate total time remaining for all flows
+  const calculateTotalTimeRemaining = () => {
+    let maxTimeRemaining = 0;
+
+    activeRuns.forEach(run => {
+      let runTimeRemaining = 0;
+
+      run.tasks.forEach(task => {
+        if (task.state === TaskState.PENDING) {
+          runTimeRemaining += task.estimatedTime;
+        } else if (task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) {
+          const progressFraction = task.progress / 100;
+          runTimeRemaining += task.estimatedTime * (1 - progressFraction);
+        }
+      });
+
+      maxTimeRemaining = Math.max(maxTimeRemaining, runTimeRemaining);
+    });
+
+    return maxTimeRemaining;
+  };
+
+  const formatTimeRemaining = (ms: number) => {
+    if (ms < 1000) {
+      return `${Math.round(ms)}ms`;
+    } else if (ms < 60000) {
+      return `${(ms / 1000).toFixed(1)}s`;
+    } else {
+      const minutes = Math.floor(ms / 60000);
+      const seconds = Math.round((ms % 60000) / 1000);
+      return `${minutes}m ${seconds}s`;
+    }
+  };
+
+  const overallProgress = calculateOverallProgress();
+  const totalTimeRemaining = calculateTotalTimeRemaining();
+
   // Handler to return to client selection
   const handleReturnToClients = () => {
     setClientStatus('stopped');
@@ -180,8 +225,17 @@ export default function App() {
           100% { transform: scale(1); }
         }
 
+        @keyframes shimmer {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(100%); }
+        }
+
         .animate-selectPulse {
           animation: selectPulse 0.3s ease-out;
+        }
+
+        .animate-shimmer {
+          animation: shimmer 2s infinite;
         }
       `}</style>
       <div
@@ -466,6 +520,75 @@ export default function App() {
               </div>
             ) : (
               <>
+                {/* Overall Progress Bar - Show when flows are running */}
+                {!allFlowsFinished && activeRuns.length > 0 && (
+                  <div className="mb-6 mx-auto max-w-4xl">
+                    <div
+                      className="backdrop-blur-md rounded-xl shadow-lg overflow-hidden border-2 transition-all"
+                      style={{
+                        borderColor: `${themeColor}60`,
+                        boxShadow: `0 0 30px ${themeColor}20`,
+                        background: `linear-gradient(135deg, ${themeColor}08 0%, transparent 100%)`
+                      }}
+                    >
+                      <div className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div
+                              className="text-xs font-bold uppercase tracking-widest text-slate-300 flex items-center gap-2"
+                            >
+                              <Activity
+                                size={16}
+                                className="animate-pulse"
+                                style={{ color: themeColor }}
+                              />
+                              Overall Progress
+                            </div>
+                            <span
+                              className="px-2.5 py-0.5 rounded-full text-xs font-bold border"
+                              style={{
+                                backgroundColor: `${themeColor}15`,
+                                color: themeColor,
+                                borderColor: `${themeColor}40`
+                              }}
+                            >
+                              {activeRuns.length} {activeRuns.length === 1 ? 'Flow' : 'Flows'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-4">
+                            {totalTimeRemaining > 0 && (
+                              <div className="flex items-center gap-2 text-xs text-slate-300 font-mono">
+                                <Clock size={14} className="text-slate-400" />
+                                <span>~{formatTimeRemaining(totalTimeRemaining)} remaining</span>
+                              </div>
+                            )}
+                            <span
+                              className="text-3xl font-bold font-mono tracking-tight"
+                              style={{ color: themeColor }}
+                            >
+                              {overallProgress}%
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="h-3 bg-slate-900/60 rounded-full overflow-hidden border border-slate-700/50 relative">
+                          <div
+                            className="h-full transition-all duration-500 ease-out relative"
+                            style={{
+                              width: `${overallProgress}%`,
+                              background: `linear-gradient(90deg, ${themeColor} 0%, ${themeColor}cc 100%)`
+                            }}
+                          >
+                            {/* Animated shimmer effect */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 pb-6">
                   {activeRuns.map(run => (
                     <ActiveRunCard key={run.id} run={run} clientColor={activeClient?.color} />
