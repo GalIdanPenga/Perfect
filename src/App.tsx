@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Activity,
   Play,
@@ -33,12 +33,50 @@ import {
 
 // --- Main Layout ---
 
+// Function to play completion notification sound
+const playCompletionSound = () => {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+
+    // Create three tones for a pleasant notification sound
+    const playTone = (frequency: number, startTime: number, duration: number) => {
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.frequency.value = frequency;
+      oscillator.type = 'sine';
+
+      // Envelope for smooth sound
+      gainNode.gain.setValueAtTime(0, startTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+
+      oscillator.start(startTime);
+      oscillator.stop(startTime + duration);
+    };
+
+    const now = audioContext.currentTime;
+    // Play a cheerful ascending melody: C5, E5, G5
+    playTone(523.25, now, 0.15);        // C5
+    playTone(659.25, now + 0.1, 0.15);  // E5
+    playTone(783.99, now + 0.2, 0.25);  // G5
+  } catch (error) {
+    console.log('Audio notification not supported:', error);
+  }
+};
+
 export default function App() {
   // Local UI state (must be before hooks that use it)
   const [currentSessionStartTime, setCurrentSessionStartTime] = useState<string | null>(() => {
     // Restore session start time from localStorage on initial load
     return localStorage.getItem('currentSessionStartTime');
   });
+
+  // Track previous state to detect completion transition
+  const prevAllFlowsFinishedRef = useRef<boolean>(false);
 
   // Custom hooks for data fetching
   const { runs, refreshRuns } = useFlowRuns();
@@ -167,6 +205,16 @@ export default function App() {
 
   const overallProgress = calculateOverallProgress();
   const totalTimeRemaining = calculateTotalTimeRemaining();
+
+  // Play sound notification when all flows complete
+  useEffect(() => {
+    // Check if flows just finished (transition from false to true)
+    if (allFlowsFinished && !prevAllFlowsFinishedRef.current) {
+      playCompletionSound();
+    }
+    // Update the ref to current state
+    prevAllFlowsFinishedRef.current = allFlowsFinished;
+  }, [allFlowsFinished]);
 
   // Handler to return to client selection
   const handleReturnToClients = () => {
