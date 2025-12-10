@@ -100,6 +100,8 @@ export default function App() {
   const [closingHistoryRunId, setClosingHistoryRunId] = useState<string | null>(null);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
+  const [showClientConfirmation, setShowClientConfirmation] = useState(false);
+  const [pendingClientId, setPendingClientId] = useState<string | null>(null);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
@@ -220,6 +222,31 @@ export default function App() {
   const handleReturnToClients = () => {
     setClientStatus('stopped');
     setSessionStartTime(null); // Clear session marker and localStorage
+  };
+
+  // Handler to show confirmation dialog when switching clients
+  const handleClientClick = (clientId: string) => {
+    if (clientStatus === 'running' || clientStatus === 'starting') {
+      // Don't allow switching while client is active
+      return;
+    }
+    setPendingClientId(clientId);
+    setShowClientConfirmation(true);
+  };
+
+  // Handler to confirm client selection
+  const handleConfirmClientSelection = () => {
+    if (pendingClientId) {
+      setSelectedClientId(pendingClientId);
+    }
+    setShowClientConfirmation(false);
+    setPendingClientId(null);
+  };
+
+  // Handler to cancel client selection
+  const handleCancelClientSelection = () => {
+    setShowClientConfirmation(false);
+    setPendingClientId(null);
   };
 
 
@@ -456,7 +483,7 @@ export default function App() {
                           return (
                             <button
                               key={client.id}
-                              onClick={() => setSelectedClientId(client.id)}
+                              onClick={() => handleClientClick(client.id)}
                               disabled={clientStatus === 'running' || clientStatus === 'starting'}
                               className="w-full text-left p-3 rounded-lg border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
                               style={{
@@ -926,6 +953,87 @@ export default function App() {
       {showStatistics && (
         <StatisticsWindow onClose={() => setShowStatistics(false)} />
       )}
+
+      {/* Client Confirmation Dialog */}
+      {showClientConfirmation && pendingClientId && (() => {
+        const pendingClient = availableClients.find((c: any) => c.id === pendingClientId);
+        const confirmThemeColor = pendingClient?.color || themeColor;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div
+              className="bg-slate-800 rounded-xl border-2 shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-selectPulse"
+              style={{
+                borderColor: confirmThemeColor,
+                boxShadow: `0 20px 60px ${confirmThemeColor}40`
+              }}
+            >
+              {/* Header */}
+              <div
+                className="p-4 border-b"
+                style={{
+                  borderBottomColor: `${confirmThemeColor}30`,
+                  background: `linear-gradient(135deg, ${confirmThemeColor}15 0%, ${confirmThemeColor}05 100%)`
+                }}
+              >
+                <h3
+                  className="text-lg font-bold flex items-center gap-2"
+                  style={{ color: confirmThemeColor }}
+                >
+                  <ChevronRight size={20} />
+                  Confirm Client Selection
+                </h3>
+              </div>
+
+              {/* Body */}
+              <div className="p-6">
+                <p className="text-slate-300 text-sm">
+                  Are you sure you want to choose
+                  <span
+                    className="font-bold mx-1.5 px-2 py-0.5 rounded"
+                    style={{
+                      color: confirmThemeColor,
+                      backgroundColor: `${confirmThemeColor}20`
+                    }}
+                  >
+                    {pendingClient?.name}
+                  </span>
+                  ?
+                </p>
+              </div>
+
+              {/* Footer */}
+              <div className="flex gap-3 p-4 bg-slate-900/50 border-t border-slate-700">
+                <button
+                  onClick={handleCancelClientSelection}
+                  className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg font-medium text-sm transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmClientSelection}
+                  className="flex-1 px-4 py-2.5 text-white rounded-lg font-medium text-sm transition-all shadow-lg"
+                  style={{
+                    backgroundColor: confirmThemeColor,
+                    boxShadow: `0 4px 12px ${confirmThemeColor}40`
+                  }}
+                  onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    const r = parseInt(confirmThemeColor.slice(1, 3), 16);
+                    const g = parseInt(confirmThemeColor.slice(3, 5), 16);
+                    const b = parseInt(confirmThemeColor.slice(5, 7), 16);
+                    e.currentTarget.style.backgroundColor = `rgb(${Math.max(0, r-20)}, ${Math.max(0, g-20)}, ${Math.max(0, b-20)})`;
+                  }}
+                  onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                    e.currentTarget.style.backgroundColor = confirmThemeColor;
+                  }}
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
     </>
   );
