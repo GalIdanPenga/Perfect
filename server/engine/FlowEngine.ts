@@ -133,6 +133,14 @@ export class FlowEngine {
     }
 
     const task = run.tasks[taskIndex];
+
+    // Don't allow updates to tasks that are already in a terminal state (COMPLETED or FAILED)
+    // This prevents the Python client from overwriting FAILED states after Stop is clicked
+    if (task.state === TaskState.COMPLETED || task.state === TaskState.FAILED) {
+      console.log(`[FlowEngine] Ignoring state update for task ${task.taskName} - already in terminal state ${task.state}`);
+      return false;
+    }
+
     // Convert string to TaskState enum (handle both uppercase and lowercase)
     const stateStr = typeof state === 'string' ? state.toUpperCase() : state;
     task.state = stateStr as TaskState;
@@ -529,6 +537,44 @@ export class FlowEngine {
         // Reset heartbeat to avoid repeated failure notifications
         this.lastClientHeartbeat = null;
       }
+    }
+  }
+
+  /**
+   * Manually fail all running flows (e.g., when user clicks Stop button)
+   * Only the currently running task in each flow will be marked as failed.
+   */
+  failAllRunningFlows(): void {
+    const runningRuns = this.runs.filter(
+      r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING
+    );
+
+    if (runningRuns.length > 0) {
+      console.log(`[FlowEngine] Manually failing ${runningRuns.length} running flows due to stop request`);
+
+      runningRuns.forEach(run => {
+        run.state = TaskState.FAILED;
+        run.endTime = new Date().toISOString();
+        run.logs.push('[System] Flow failed: User stopped the client');
+
+        // Only fail the currently running task, not pending tasks
+        run.tasks.forEach(task => {
+          if (task.state === TaskState.RUNNING) {
+            task.state = TaskState.FAILED;
+            task.endTime = new Date().toISOString();
+            task.logs.push('[System] Task failed: User stopped the client');
+          }
+        });
+
+        // Save the failed run to database
+        runDb.saveRun(run);
+
+        // Generate report for the failed flow
+        run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+        runDb.saveRun(run);
+      });
+
+      this.notifyStateChange();
     }
   }
 

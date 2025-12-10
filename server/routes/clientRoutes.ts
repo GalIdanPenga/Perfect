@@ -3,6 +3,7 @@ import { ChildProcess, spawn } from 'child_process';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { flowEngine } from '../engine/FlowEngine';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -167,7 +168,7 @@ router.post('/start', (req, res) => {
 
 /**
  * POST /api/client/stop
- * Stop the Python client process
+ * Stop the Python client process and fail all running flows
  */
 router.post('/stop', (req, res) => {
   if (!pythonProcess) {
@@ -180,6 +181,8 @@ router.post('/stop', (req, res) => {
 
   try {
     clientLogs.push('[Server] Stopping Python client...');
+
+    // Kill the process first to stop it from sending more updates
     pythonProcess.kill('SIGTERM');
 
     // Force kill after 5 seconds if still running
@@ -188,6 +191,11 @@ router.post('/stop', (req, res) => {
         pythonProcess.kill('SIGKILL');
       }
     }, 5000);
+
+    // Wait a brief moment for the process to stop sending updates, then fail all running flows
+    setTimeout(() => {
+      flowEngine.failAllRunningFlows();
+    }, 100);
 
     res.json({
       success: true,

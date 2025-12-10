@@ -41,7 +41,7 @@ export default function App() {
   });
 
   // Custom hooks for data fetching
-  const runs = useFlowRuns();
+  const { runs, refreshRuns } = useFlowRuns();
   const { clientStatus, setClientStatus, activeClient } = useClientStatus();
   const { availableClients, selectedClientId, setSelectedClientId } = useClientConfigs();
 
@@ -55,7 +55,7 @@ export default function App() {
     }
   };
 
-  const { isStartingClient, handleStartClient, handleStopClient } = useClientActions(setClientStatus, setSessionStartTime);
+  const { isStartingClient, handleStartClient, handleStopClient } = useClientActions(setClientStatus, setSessionStartTime, refreshRuns);
 
   // More local UI state
   const [selectedHistoryRunId, setSelectedHistoryRunId] = useState<string | null>(null);
@@ -472,9 +472,10 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Return to Clients Button - Show when all flows are finished */}
-                {allFlowsFinished && (
-                  <div className="flex justify-center mt-4 mb-6">
+                {/* Action Button - Stop or Return to Client Selection */}
+                <div className="flex justify-center mt-4 mb-6">
+                  {allFlowsFinished ? (
+                    // Show "Return to Client Selection" when all flows are finished
                     <button
                       onClick={handleReturnToClients}
                       className="group relative px-8 py-4 rounded-xl border-2 transition-all duration-300 hover:scale-105 active:scale-95"
@@ -509,11 +510,42 @@ export default function App() {
                         style={{ background: themeColor }}
                       ></div>
                     </button>
-                  </div>
-                )}
+                  ) : (
+                    // Show "Stop" button when flows are running
+                    <button
+                      onClick={handleStopClient}
+                      className="group relative px-8 py-4 rounded-xl border-2 transition-all duration-300 hover:scale-105 active:scale-95"
+                      style={{
+                        borderColor: '#ef4444',
+                        background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.05) 100%)',
+                        boxShadow: '0 8px 32px rgba(239, 68, 68, 0.3)'
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <XCircle
+                          size={20}
+                          className="transition-transform group-hover:rotate-90"
+                          style={{ color: '#ef4444' }}
+                        />
+                        <span
+                          className="text-sm font-bold tracking-wide"
+                          style={{ color: '#ef4444' }}
+                        >
+                          Stop
+                        </span>
+                      </div>
+
+                      {/* Animated border glow */}
+                      <div
+                        className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-50 blur-xl transition-opacity duration-300 -z-10"
+                        style={{ background: '#ef4444' }}
+                      ></div>
+                    </button>
+                  )}
+                </div>
               </>
             )}
-            
+
             {/* History Section */}
             {allHistoryRuns.length > 0 && (
               <div className="mt-6 border-t border-slate-800 pt-4 mb-4">

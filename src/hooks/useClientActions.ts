@@ -3,7 +3,8 @@ import { API_BASE_URL } from '../constants';
 
 export const useClientActions = (
   setClientStatus: (status: 'stopped' | 'starting' | 'running' | 'error') => void,
-  setSessionStartTime: (time: string | null) => void
+  setSessionStartTime: (time: string | null) => void,
+  refreshRuns?: () => Promise<void>
 ) => {
   const [isStartingClient, setIsStartingClient] = useState(false);
 
@@ -43,6 +44,13 @@ export const useClientActions = (
         method: 'POST'
       });
       setClientStatus('stopped');
+
+      // Wait for the flows to be failed (100ms + small buffer), then refresh
+      if (refreshRuns) {
+        setTimeout(async () => {
+          await refreshRuns();
+        }, 200);
+      }
     } catch (error) {
       console.error('Failed to stop client:', error);
     }
