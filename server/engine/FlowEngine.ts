@@ -204,20 +204,27 @@ export class FlowEngine {
     if (stateStr === 'RUNNING') {
       if (!task.startTime) {
         task.startTime = new Date().toISOString();
-      } else {
-        // Real-time outlier detection for running tasks
+      }
+
+      // Real-time outlier detection for running tasks (check on EVERY update)
+      if (task.startTime) {
         const elapsedMs = Date.now() - new Date(task.startTime).getTime();
         const stats = statsDb.getTaskStats(run.flowName, task.taskName);
 
         if (stats) {
           const warning = detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount);
-          if (warning) {
-            task.performanceWarning = warning;
-            console.log(`[FlowEngine] ⚠️  Real-time warning: ${run.flowName}/${task.taskName} - ${warning.message}`);
-          } else {
-            // Clear warning if task speed normalizes
-            task.performanceWarning = undefined;
+
+          // Only log when warning status changes
+          const hadWarning = task.performanceWarning !== undefined;
+          const hasWarning = warning !== null;
+
+          if (hasWarning && !hadWarning) {
+            console.log(`[FlowEngine] ⚠️  Real-time warning triggered: ${run.flowName}/${task.taskName} - ${warning.message} (elapsed: ${elapsedMs}ms)`);
+          } else if (!hasWarning && hadWarning) {
+            console.log(`[FlowEngine] ✓  Warning cleared: ${run.flowName}/${task.taskName} - task speed normalized`);
           }
+
+          task.performanceWarning = warning || undefined;
         }
       }
     } else if (stateStr === 'COMPLETED' || stateStr === 'FAILED') {
@@ -420,14 +427,56 @@ export class FlowEngine {
 
   /**
    * Simulation engine tick - updates task progress and state
+   * Also checks for performance outliers on running tasks
    */
   private tick(): void {
+    let changed = false;
+
+    // Real-time outlier detection for all running tasks (runs even when simulation disabled)
+    this.runs.forEach(run => {
+      if (run.state !== TaskState.RUNNING && run.state !== TaskState.PENDING) {
+        return;
+      }
+
+      run.tasks.forEach(task => {
+        if (task.state === TaskState.RUNNING && task.startTime) {
+          const elapsedMs = Date.now() - new Date(task.startTime).getTime();
+          const stats = statsDb.getTaskStats(run.flowName, task.taskName);
+
+          if (stats) {
+            const warning = detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount);
+
+            // Only log when warning status changes
+            const hadWarning = task.performanceWarning !== undefined;
+            const hasWarning = warning !== null;
+
+            if (hasWarning && !hadWarning) {
+              console.log(`[FlowEngine] ⚠️  Real-time warning triggered: ${run.flowName}/${task.taskName} - ${warning.message} (elapsed: ${elapsedMs}ms)`);
+              changed = true;
+            } else if (!hasWarning && hadWarning) {
+              console.log(`[FlowEngine] ✓  Warning cleared: ${run.flowName}/${task.taskName} - task speed normalized`);
+              changed = true;
+            }
+
+            if (task.performanceWarning !== warning) {
+              task.performanceWarning = warning || undefined;
+              changed = true;
+            }
+          }
+        }
+      });
+    });
+
+    if (changed) {
+      this.notifyStateChange();
+    }
+
     // Skip simulation if disabled (for real Python client execution)
     if (!this.simulationEnabled) {
       return;
     }
 
-    let changed = false;
+    changed = false;
 
     this.runs.forEach(run => {
       // Skip finished runs
