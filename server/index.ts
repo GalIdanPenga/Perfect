@@ -120,6 +120,32 @@ app.get('/api/statistics', (req, res) => {
   }
 });
 
+// Get task history endpoint (for time-series chart)
+app.get('/api/statistics/task-history/:flowName/:taskName', (req, res) => {
+  try {
+    const { flowName, taskName } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+    const history = statsDb.getTaskHistory(decodeURIComponent(flowName), decodeURIComponent(taskName), limit);
+    const stats = statsDb.getTaskStats(decodeURIComponent(flowName), decodeURIComponent(taskName));
+    res.json({ success: true, history, stats });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get flow history endpoint (for time-series chart)
+app.get('/api/statistics/flow-history/:flowName', (req, res) => {
+  try {
+    const { flowName } = req.params;
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+    const history = statsDb.getFlowHistory(decodeURIComponent(flowName), limit);
+    const stats = statsDb.getAllFlowStats().find(s => s.flowName === decodeURIComponent(flowName));
+    res.json({ success: true, history, stats });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Long-poll endpoint for Python client to receive execution requests
 app.get('/api/execution-requests', (req, res) => {
   // Update heartbeat when client polls

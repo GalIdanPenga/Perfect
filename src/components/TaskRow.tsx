@@ -29,6 +29,21 @@ export const TaskRow = ({ task }: TaskRowProps) => {
                   {Math.floor(task.progress)}%
                 </span>
               )}
+              {task.performanceWarning && (
+                <span
+                  className={`text-xs px-1.5 py-0.5 rounded-md border font-semibold flex items-center gap-1 ${
+                    task.performanceWarning.severity === 'critical'
+                      ? 'bg-red-500/20 text-red-300 border-red-500/40'
+                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                  } ${isRunning ? 'animate-pulse' : ''}`}
+                  title={task.performanceWarning.message}
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                  {task.performanceWarning.severity === 'critical' ? 'CRITICAL' : 'SLOW'}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-0.5">
               <span>W: {(task.weight * 100).toFixed(1)}%</span>
@@ -113,6 +128,30 @@ export const TaskRow = ({ task }: TaskRowProps) => {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Performance Warning Details */}
+      {task.performanceWarning && (
+        <div className="mx-4 mb-3">
+          <div className={`p-2.5 rounded-lg border text-sm ${
+            task.performanceWarning.severity === 'critical'
+              ? 'bg-red-500/10 border-red-500/30 text-red-300'
+              : 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+          }`}>
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span className="font-medium">
+                {task.performanceWarning.severity === 'critical' ? 'Critical Performance Issue' : 'Performance Warning'}
+              </span>
+              <span className="text-slate-300">•</span>
+              <span className={task.performanceWarning.severity === 'critical' ? 'text-red-200' : 'text-amber-200'}>
+                {task.performanceWarning.message}
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>

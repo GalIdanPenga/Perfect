@@ -12,6 +12,7 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
 - 💾 **Persistent Storage** - SQLite database for flows and execution history
 - 🔍 **Advanced Filtering** - Search and filter execution history by status, flow name, or ID
 - 💓 **Client Heartbeat** - Automatic failure detection when Python client disconnects
+- 📈 **Performance Analytics** - Track task performance with standard deviation and statistical outlier detection
 
 ## Run Locally
 
@@ -174,3 +175,42 @@ All data persists across server restarts, allowing you to:
 - Debug failed runs by examining logs
 - Track performance metrics over time
 - Maintain an audit trail of all workflow executions
+
+## Performance Monitoring
+
+Perfect automatically tracks task performance and detects outliers using statistical analysis:
+
+### Statistics Tracking
+- **Average Duration**: Rolling average of task execution times
+- **Standard Deviation**: Measure of execution time variability
+- **Sample Count**: Number of historical executions tracked
+- **Last Updated**: Timestamp of most recent execution
+
+### Outlier Detection
+
+Tasks are flagged with performance warnings using three detection methods:
+
+1. **Statistical Thresholds** (Priority 1 - Always applies with sufficient data)
+   - **Warning**: 3σ (99.7% confidence) - Task is 3+ standard deviations slower than average
+   - **Critical**: 4σ (99.99% confidence) - Task is 4+ standard deviations slower than average
+
+2. **Absolute Thresholds** (Priority 3 - Used with small sample sizes)
+   - **Warning**: 2x average duration
+   - **Critical**: 3x average duration
+
+3. **Practical Significance** (Applied only to absolute thresholds)
+   - Must be >1000ms slower AND >50% slower than average
+   - Prevents false positives on small timing differences
+
+### Performance Warning Display
+
+Performance warnings appear in multiple locations:
+
+- **Task Row**: Warning badge with severity indicator (SLOW/CRITICAL)
+- **Flow Header**: Summary badge when any task has warnings
+- **Statistics Window**: Historical performance data with standard deviation
+- **Reports**: Performance issues highlighted in generated HTML reports
+
+**Real-Time Detection**: Warnings appear during task execution, not just after completion, allowing for proactive monitoring.
+
+**Configuration**: Outlier thresholds can be adjusted in `server/engine/FlowEngine.ts` under the `OUTLIER_THRESHOLDS` constant.

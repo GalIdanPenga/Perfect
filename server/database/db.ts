@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { FlowDefinition, FlowRun, TaskRun } from '../types';
+import { FlowDefinition, FlowRun } from '../types';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -150,9 +150,20 @@ function initializeDatabase() {
       avg_duration_ms REAL NOT NULL,
       sample_count INTEGER NOT NULL,
       last_updated TEXT NOT NULL,
+      m2 REAL NOT NULL DEFAULT 0,
       PRIMARY KEY (flow_name, task_name)
     )
   `);
+
+  // Migration: Add m2 column to task_statistics if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE task_statistics ADD COLUMN m2 REAL NOT NULL DEFAULT 0`);
+    console.log('[Database] Added m2 column to task_statistics table');
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) {
+      throw e;
+    }
+  }
 
   // Create flow_statistics table for tracking flow-level performance
   db.exec(`
@@ -160,9 +171,30 @@ function initializeDatabase() {
       flow_name TEXT PRIMARY KEY,
       avg_duration_ms REAL NOT NULL,
       sample_count INTEGER NOT NULL,
-      last_updated TEXT NOT NULL
+      last_updated TEXT NOT NULL,
+      m2 REAL NOT NULL DEFAULT 0
     )
   `);
+
+  // Migration: Add m2 column to flow_statistics if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE flow_statistics ADD COLUMN m2 REAL NOT NULL DEFAULT 0`);
+    console.log('[Database] Added m2 column to flow_statistics table');
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) {
+      throw e;
+    }
+  }
+
+  // Migration: Add performance_warning column to task_runs if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE task_runs ADD COLUMN performance_warning TEXT`);
+    console.log('[Database] Added performance_warning column to task_runs table');
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) {
+      throw e;
+    }
+  }
 
   // Create indices for better performance
   db.exec(`
@@ -310,8 +342,8 @@ export const runDb = {
     // Insert task runs
     const taskStmt = db.prepare(`
       INSERT INTO task_runs
-      (id, run_id, task_id, task_name, state, start_time, end_time, duration_ms, weight, estimated_time, progress, result)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      (id, run_id, task_id, task_name, state, start_time, end_time, duration_ms, weight, estimated_time, progress, result, performance_warning)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const task of run.tasks) {
@@ -327,7 +359,8 @@ export const runDb = {
         task.weight,
         task.estimatedTime,
         task.progress,
-        task.result ? JSON.stringify(task.result) : null
+        task.result ? JSON.stringify(task.result) : null,
+        task.performanceWarning ? JSON.stringify(task.performanceWarning) : null
       );
 
       // Insert task logs
@@ -394,6 +427,7 @@ export const runDb = {
             estimatedTime: task.estimated_time,
             progress: task.progress,
             result: task.result ? JSON.parse(task.result) : undefined,
+            performanceWarning: task.performance_warning ? JSON.parse(task.performance_warning) : undefined,
             logs: taskLogs.map(l => l.log_entry)
           };
         })
@@ -440,6 +474,7 @@ export const runDb = {
           estimatedTime: task.estimated_time,
           progress: task.progress,
           result: task.result ? JSON.parse(task.result) : undefined,
+          performanceWarning: task.performance_warning ? JSON.parse(task.performance_warning) : undefined,
           logs: taskLogs.map(l => l.log_entry)
         };
       })
@@ -459,55 +494,67 @@ export const runDb = {
 
 // Task statistics operations
 export const statsDb = {
-  // Update statistics for a task (using incremental average)
+  // Update statistics for a task (using Welford's online algorithm for variance)
   updateTaskStats(flowName: string, taskName: string, durationMs: number) {
     const existing = db.prepare(
-      'SELECT avg_duration_ms, sample_count FROM task_statistics WHERE flow_name = ? AND task_name = ?'
+      'SELECT avg_duration_ms, sample_count, m2 FROM task_statistics WHERE flow_name = ? AND task_name = ?'
     ).get(flowName, taskName) as any;
 
     if (existing) {
-      // Calculate new average using incremental formula
+      // Welford's online algorithm for variance
       const newCount = existing.sample_count + 1;
-      const newAvg = existing.avg_duration_ms + (durationMs - existing.avg_duration_ms) / newCount;
+      const delta = durationMs - existing.avg_duration_ms;
+      const newAvg = existing.avg_duration_ms + delta / newCount;
+      const delta2 = durationMs - newAvg;
+      const newM2 = existing.m2 + delta * delta2;
 
       db.prepare(`
         UPDATE task_statistics
-        SET avg_duration_ms = ?, sample_count = ?, last_updated = ?
+        SET avg_duration_ms = ?, sample_count = ?, m2 = ?, last_updated = ?
         WHERE flow_name = ? AND task_name = ?
-      `).run(newAvg, newCount, new Date().toISOString(), flowName, taskName);
+      `).run(newAvg, newCount, newM2, new Date().toISOString(), flowName, taskName);
     } else {
-      // First sample for this task
+      // First sample for this task (m2 starts at 0)
       db.prepare(`
-        INSERT INTO task_statistics (flow_name, task_name, avg_duration_ms, sample_count, last_updated)
-        VALUES (?, ?, ?, 1, ?)
+        INSERT INTO task_statistics (flow_name, task_name, avg_duration_ms, sample_count, m2, last_updated)
+        VALUES (?, ?, ?, 1, 0, ?)
       `).run(flowName, taskName, durationMs, new Date().toISOString());
     }
   },
 
   // Get statistics for a specific task in a flow
-  getTaskStats(flowName: string, taskName: string): { avgDurationMs: number; sampleCount: number } | undefined {
+  getTaskStats(flowName: string, taskName: string): { avgDurationMs: number; stdDevDurationMs: number; sampleCount: number } | undefined {
     const row = db.prepare(
-      'SELECT avg_duration_ms, sample_count FROM task_statistics WHERE flow_name = ? AND task_name = ?'
+      'SELECT avg_duration_ms, sample_count, m2 FROM task_statistics WHERE flow_name = ? AND task_name = ?'
     ).get(flowName, taskName) as any;
 
     if (!row) return undefined;
 
+    // Calculate standard deviation from M2 using sample variance (n-1)
+    const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
+    const stdDev = Math.sqrt(variance);
+
     return {
       avgDurationMs: row.avg_duration_ms,
+      stdDevDurationMs: stdDev,
       sampleCount: row.sample_count
     };
   },
 
   // Get all statistics for a flow
-  getFlowStats(flowName: string): Map<string, { avgDurationMs: number; sampleCount: number }> {
+  getFlowStats(flowName: string): Map<string, { avgDurationMs: number; stdDevDurationMs: number; sampleCount: number }> {
     const rows = db.prepare(
-      'SELECT task_name, avg_duration_ms, sample_count FROM task_statistics WHERE flow_name = ?'
+      'SELECT task_name, avg_duration_ms, sample_count, m2 FROM task_statistics WHERE flow_name = ?'
     ).all(flowName) as any[];
 
-    const statsMap = new Map<string, { avgDurationMs: number; sampleCount: number }>();
+    const statsMap = new Map<string, { avgDurationMs: number; stdDevDurationMs: number; sampleCount: number }>();
     rows.forEach(row => {
+      const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
+      const stdDev = Math.sqrt(variance);
+
       statsMap.set(row.task_name, {
         avgDurationMs: row.avg_duration_ms,
+        stdDevDurationMs: stdDev,
         sampleCount: row.sample_count
       });
     });
@@ -520,57 +567,72 @@ export const statsDb = {
     flowName: string;
     taskName: string;
     avgDurationMs: number;
+    stdDevDurationMs: number;
     sampleCount: number;
     lastUpdated: string;
   }> {
     const rows = db.prepare(
-      'SELECT flow_name, task_name, avg_duration_ms, sample_count, last_updated FROM task_statistics ORDER BY flow_name, task_name'
+      'SELECT flow_name, task_name, avg_duration_ms, sample_count, m2, last_updated FROM task_statistics ORDER BY flow_name, task_name'
     ).all() as any[];
 
-    return rows.map(row => ({
-      flowName: row.flow_name,
-      taskName: row.task_name,
-      avgDurationMs: row.avg_duration_ms,
-      sampleCount: row.sample_count,
-      lastUpdated: row.last_updated
-    }));
+    return rows.map(row => {
+      const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
+      const stdDev = Math.sqrt(variance);
+
+      return {
+        flowName: row.flow_name,
+        taskName: row.task_name,
+        avgDurationMs: row.avg_duration_ms,
+        stdDevDurationMs: stdDev,
+        sampleCount: row.sample_count,
+        lastUpdated: row.last_updated
+      };
+    });
   },
 
-  // Update statistics for a flow (using incremental average)
+  // Update statistics for a flow (using Welford's online algorithm for variance)
   updateFlowStats(flowName: string, durationMs: number) {
     const existing = db.prepare(
-      'SELECT avg_duration_ms, sample_count FROM flow_statistics WHERE flow_name = ?'
+      'SELECT avg_duration_ms, sample_count, m2 FROM flow_statistics WHERE flow_name = ?'
     ).get(flowName) as any;
 
     if (existing) {
-      // Calculate new average using incremental formula
+      // Welford's online algorithm
       const newCount = existing.sample_count + 1;
-      const newAvg = existing.avg_duration_ms + (durationMs - existing.avg_duration_ms) / newCount;
+      const delta = durationMs - existing.avg_duration_ms;
+      const newAvg = existing.avg_duration_ms + delta / newCount;
+      const delta2 = durationMs - newAvg;
+      const newM2 = existing.m2 + delta * delta2;
 
       db.prepare(`
         UPDATE flow_statistics
-        SET avg_duration_ms = ?, sample_count = ?, last_updated = ?
+        SET avg_duration_ms = ?, sample_count = ?, m2 = ?, last_updated = ?
         WHERE flow_name = ?
-      `).run(newAvg, newCount, new Date().toISOString(), flowName);
+      `).run(newAvg, newCount, newM2, new Date().toISOString(), flowName);
     } else {
-      // First sample for this flow
+      // First sample for this flow (m2 starts at 0)
       db.prepare(`
-        INSERT INTO flow_statistics (flow_name, avg_duration_ms, sample_count, last_updated)
-        VALUES (?, ?, 1, ?)
+        INSERT INTO flow_statistics (flow_name, avg_duration_ms, sample_count, m2, last_updated)
+        VALUES (?, ?, 1, 0, ?)
       `).run(flowName, durationMs, new Date().toISOString());
     }
   },
 
   // Get statistics for a specific flow
-  getFlowStatsForFlow(flowName: string): { avgDurationMs: number; sampleCount: number } | undefined {
+  getFlowStatsForFlow(flowName: string): { avgDurationMs: number; stdDevDurationMs: number; sampleCount: number } | undefined {
     const row = db.prepare(
-      'SELECT avg_duration_ms, sample_count FROM flow_statistics WHERE flow_name = ?'
+      'SELECT avg_duration_ms, sample_count, m2 FROM flow_statistics WHERE flow_name = ?'
     ).get(flowName) as any;
 
     if (!row) return undefined;
 
+    // Calculate standard deviation from M2 using sample variance (n-1)
+    const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
+    const stdDev = Math.sqrt(variance);
+
     return {
       avgDurationMs: row.avg_duration_ms,
+      stdDevDurationMs: stdDev,
       sampleCount: row.sample_count
     };
   },
@@ -579,18 +641,79 @@ export const statsDb = {
   getAllFlowStats(): Array<{
     flowName: string;
     avgDurationMs: number;
+    stdDevDurationMs: number;
     sampleCount: number;
     lastUpdated: string;
   }> {
     const rows = db.prepare(
-      'SELECT flow_name, avg_duration_ms, sample_count, last_updated FROM flow_statistics ORDER BY flow_name'
+      'SELECT flow_name, avg_duration_ms, sample_count, m2, last_updated FROM flow_statistics ORDER BY flow_name'
     ).all() as any[];
 
-    return rows.map(row => ({
-      flowName: row.flow_name,
-      avgDurationMs: row.avg_duration_ms,
-      sampleCount: row.sample_count,
-      lastUpdated: row.last_updated
+    return rows.map(row => {
+      const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
+      const stdDev = Math.sqrt(variance);
+
+      return {
+        flowName: row.flow_name,
+        avgDurationMs: row.avg_duration_ms,
+        stdDevDurationMs: stdDev,
+        sampleCount: row.sample_count,
+        lastUpdated: row.last_updated
+      };
+    });
+  },
+
+  // Get historical task run data for charting
+  getTaskHistory(flowName: string, taskName: string, limit: number = 100): Array<{
+    runId: string;
+    timestamp: string;
+    durationMs: number;
+  }> {
+    const rows = db.prepare(`
+      SELECT
+        tr.run_id,
+        tr.end_time as timestamp,
+        tr.duration_ms
+      FROM task_runs tr
+      JOIN flow_runs fr ON tr.run_id = fr.id
+      WHERE fr.flow_name = ?
+        AND tr.task_name = ?
+        AND tr.duration_ms IS NOT NULL
+        AND tr.state = 'COMPLETED'
+      ORDER BY tr.end_time DESC
+      LIMIT ?
+    `).all(flowName, taskName, limit) as any[];
+
+    return rows.reverse().map(row => ({
+      runId: row.run_id,
+      timestamp: row.timestamp,
+      durationMs: row.duration_ms
+    }));
+  },
+
+  // Get historical flow run data for charting
+  getFlowHistory(flowName: string, limit: number = 100): Array<{
+    runId: string;
+    timestamp: string;
+    durationMs: number;
+  }> {
+    const rows = db.prepare(`
+      SELECT
+        id as run_id,
+        end_time as timestamp,
+        CAST((julianday(end_time) - julianday(start_time)) * 86400000 AS INTEGER) as duration_ms
+      FROM flow_runs
+      WHERE flow_name = ?
+        AND end_time IS NOT NULL
+        AND state = 'COMPLETED'
+      ORDER BY end_time DESC
+      LIMIT ?
+    `).all(flowName, limit) as any[];
+
+    return rows.reverse().map(row => ({
+      runId: row.run_id,
+      timestamp: row.timestamp,
+      durationMs: row.duration_ms
     }));
   }
 };

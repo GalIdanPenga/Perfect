@@ -4,10 +4,54 @@ import {
   TaskRun,
   TaskState,
   FlowRegistrationPayload,
-  TaskResult
+  TaskResult,
+  PerformanceWarning
 } from '../types';
 import { flowDb, runDb, statsDb } from '../database/db';
 import { generateFlowReport } from '../utils/reportGenerator';
+
+/**
+ * Detect if a task duration is an outlier based on statistical analysis
+ * Simple approach: z-score with sample-size-adjusted thresholds
+ * Only detects tasks that are SLOWER than expected (not faster)
+ */
+function detectOutlier(
+  actualMs: number,
+  avgMs: number,
+  stdDevMs: number,
+  sampleCount: number
+): PerformanceWarning | null {
+  // Need at least 2 samples to calculate variance
+  if (sampleCount < 2 || stdDevMs === 0) {
+    return null;
+  }
+
+  // Calculate difference (only care about slower tasks)
+  const diff = actualMs - avgMs;
+
+  // If task is faster or on-time, no warning needed
+  if (diff <= 0) {
+    return null;
+  }
+
+  // Calculate z-score: how many standard deviations SLOWER than mean
+  const zScore = diff / stdDevMs;
+
+  // Sample-size-adjusted thresholds:
+  // - Small sample size (< 20): Use stricter threshold (5σ) to avoid false positives
+  // - Large sample size (>= 20): Use standard threshold (3.3σ)
+  const threshold = sampleCount < 20 ? 5.0 : 3.3;
+
+  if (zScore > threshold) {
+    return {
+      type: 'slow',
+      severity: 'warning',
+      message: `${(actualMs / 1000).toFixed(1)}s (${zScore.toFixed(1)}σ from ${(avgMs / 1000).toFixed(1)}s avg, n=${sampleCount})`
+    };
+  }
+
+  return null;
+}
 
 /**
  * FlowEngine - Core workflow orchestration engine
@@ -158,18 +202,58 @@ export class FlowEngine {
     }
 
     if (stateStr === 'RUNNING') {
-      task.startTime = new Date().toISOString();
+      if (!task.startTime) {
+        task.startTime = new Date().toISOString();
+      } else {
+        // Real-time outlier detection for running tasks
+        const elapsedMs = Date.now() - new Date(task.startTime).getTime();
+        const stats = statsDb.getTaskStats(run.flowName, task.taskName);
+
+        if (stats) {
+          const warning = detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount);
+          if (warning) {
+            task.performanceWarning = warning;
+            console.log(`[FlowEngine] ⚠️  Real-time warning: ${run.flowName}/${task.taskName} - ${warning.message}`);
+          } else {
+            // Clear warning if task speed normalizes
+            task.performanceWarning = undefined;
+          }
+        }
+      }
     } else if (stateStr === 'COMPLETED' || stateStr === 'FAILED') {
       task.endTime = new Date().toISOString();
       task.progress = stateStr === 'COMPLETED' ? 100 : task.progress;
 
-      // Update statistics when task completes successfully
+      // Check for performance outliers on completion
       if (stateStr === 'COMPLETED' && task.durationMs !== undefined) {
-        try {
-          statsDb.updateTaskStats(run.flowName, task.taskName, task.durationMs);
-          console.log(`[FlowEngine] Updated statistics for ${run.flowName}/${task.taskName}: ${task.durationMs}ms`);
-        } catch (error) {
-          console.error(`[FlowEngine] Failed to update statistics:`, error);
+        const stats = statsDb.getTaskStats(run.flowName, task.taskName);
+
+        if (stats) {
+          const warning = detectOutlier(task.durationMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount);
+          // Always update warning (set or clear) based on final duration
+          task.performanceWarning = warning || undefined;
+          if (warning) {
+            console.log(`[FlowEngine] ⚠️  Performance warning: ${run.flowName}/${task.taskName} - ${warning.message} (excluded from statistics)`);
+          }
+
+          // Update statistics ONLY if this is not an outlier
+          // Outliers should not corrupt the average and standard deviation
+          if (!warning) {
+            try {
+              statsDb.updateTaskStats(run.flowName, task.taskName, task.durationMs);
+              console.log(`[FlowEngine] Updated statistics for ${run.flowName}/${task.taskName}: ${task.durationMs}ms`);
+            } catch (error) {
+              console.error(`[FlowEngine] Failed to update statistics:`, error);
+            }
+          }
+        } else {
+          // No existing statistics, this is the first run - always include
+          try {
+            statsDb.updateTaskStats(run.flowName, task.taskName, task.durationMs);
+            console.log(`[FlowEngine] Initial statistics for ${run.flowName}/${task.taskName}: ${task.durationMs}ms`);
+          } catch (error) {
+            console.error(`[FlowEngine] Failed to create initial statistics:`, error);
+          }
         }
       }
     }
@@ -185,9 +269,17 @@ export class FlowEngine {
       // Generate report on successful completion
       run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
 
-      // Update flow statistics (only for successful runs)
+      // Update flow statistics (only for successful runs WITHOUT warnings)
+      // If any task had a performance warning, the whole flow is considered an outlier
       const flowDuration = new Date(run.endTime).getTime() - new Date(run.startTime).getTime();
-      statsDb.updateFlowStats(run.flowName, flowDuration);
+      const hasAnyWarnings = run.tasks.some(t => t.performanceWarning);
+
+      if (!hasAnyWarnings) {
+        statsDb.updateFlowStats(run.flowName, flowDuration);
+        console.log(`[FlowEngine] Updated flow statistics for ${run.flowName}: ${flowDuration}ms`);
+      } else {
+        console.log(`[FlowEngine] Flow ${run.flowName} had performance warnings - excluded from statistics`);
+      }
     } else if (anyFailed) {
       run.state = TaskState.FAILED;
       run.endTime = new Date().toISOString();

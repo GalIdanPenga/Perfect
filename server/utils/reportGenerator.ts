@@ -93,6 +93,9 @@ function generateReportHTML(run: FlowRun, clientName: string): string {
   const successCount = run.tasks.filter(t => t.state === TaskState.COMPLETED).length;
   const failedCount = run.tasks.filter(t => t.state === TaskState.FAILED).length;
   const passRate = run.tasks.length > 0 ? (successCount / run.tasks.length * 100).toFixed(1) : '0';
+  const warningCount = run.tasks.filter(t => t.performanceWarning && t.performanceWarning.severity === 'warning').length;
+  const criticalCount = run.tasks.filter(t => t.performanceWarning && t.performanceWarning.severity === 'critical').length;
+  const hasWarnings = warningCount > 0 || criticalCount > 0;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -337,10 +340,18 @@ function generateReportHTML(run: FlowRun, clientName: string): string {
       ${run.tags ? Object.entries(run.tags).map(([key, value]) =>
         `<span class="tag-badge"><span class="tag-key">${key}:</span> <span class="tag-value">${value}</span></span>`
       ).join('') : ''}
-      <div style="margin-top: 1rem;">
+      <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center;">
         <span class="status-badge" style="background-color: ${getStatusColor(run.state)}; color: white;">
           ${run.state}
         </span>
+        ${hasWarnings ? `
+        <span class="status-badge" style="background-color: ${criticalCount > 0 ? 'rgba(239, 68, 68, 0.2)' : 'rgba(251, 191, 36, 0.2)'}; color: ${criticalCount > 0 ? '#fca5a5' : '#fcd34d'}; border: 1px solid ${criticalCount > 0 ? '#ef4444' : '#f59e0b'};">
+          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          ${criticalCount > 0 ? 'CRITICAL' : 'SLOW'}
+        </span>
+        ` : ''}
       </div>
     </div>
 
@@ -370,6 +381,16 @@ function generateReportHTML(run: FlowRun, clientName: string): string {
         <div class="label">Start Time</div>
         <div class="value" style="font-size: 1rem;">${new Date(run.startTime).toLocaleString()}</div>
       </div>
+      ${hasWarnings ? `
+      <div class="stat-card" style="border-color: ${criticalCount > 0 ? '#ef4444' : '#f59e0b'};">
+        <div class="label" style="color: ${criticalCount > 0 ? '#fca5a5' : '#fcd34d'};">Performance Issues</div>
+        <div class="value" style="color: ${criticalCount > 0 ? '#ef4444' : '#f59e0b'};">
+          ${criticalCount > 0 ? `${criticalCount} Critical` : ''}
+          ${criticalCount > 0 && warningCount > 0 ? ', ' : ''}
+          ${warningCount > 0 ? `${warningCount} Warning${warningCount !== 1 ? 's' : ''}` : ''}
+        </div>
+      </div>
+      ` : ''}
     </div>
 
     <!-- Flow Logs -->
@@ -427,6 +448,18 @@ function generateTaskHTML(task: TaskRun): string {
       <div class="progress-bar">
         <div class="progress-fill" style="width: ${task.progress}%; background: ${task.state === TaskState.FAILED ? '#ef4444' : 'linear-gradient(90deg, #3b82f6 0%, #6366f1 100%)'}"></div>
       </div>
+
+      ${task.performanceWarning ? `
+        <div style="margin-top: 0.75rem; padding: 0.75rem; background: ${task.performanceWarning.severity === 'critical' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(251, 191, 36, 0.1)'}; border: 1px solid ${task.performanceWarning.severity === 'critical' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(251, 191, 36, 0.3)'}; border-radius: 6px;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; color: ${task.performanceWarning.severity === 'critical' ? '#fca5a5' : '#fcd34d'};">
+            <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink: 0;">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <strong>${task.performanceWarning.severity === 'critical' ? 'Critical Performance Issue' : 'Performance Warning'}</strong>
+            <span style="color: ${task.performanceWarning.severity === 'critical' ? '#fecaca' : '#fde68a'};">• ${task.performanceWarning.message}</span>
+          </div>
+        </div>
+      ` : ''}
 
       ${task.result ? `
         <div style="margin-top: 0.75rem;">

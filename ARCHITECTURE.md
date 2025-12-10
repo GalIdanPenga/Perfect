@@ -18,9 +18,13 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 ├── server/                       # Backend Express server
 │   ├── engine/                  # Flow orchestration engine
 │   │   └── FlowEngine.ts       # Core workflow execution engine
+│   ├── database/                # Database operations
+│   │   └── db.ts               # SQLite database with statistics tracking
 │   ├── routes/                  # API route handlers
 │   │   ├── clientRoutes.ts     # Python client management endpoints
 │   │   └── engineRoutes.ts     # Flow and run management endpoints
+│   ├── utils/                   # Utility modules
+│   │   └── reportGenerator.ts  # HTML report generation
 │   ├── types/                   # Shared TypeScript types
 │   │   └── index.ts            # Backend type definitions
 │   └── index.ts                 # Server entry point
@@ -54,7 +58,11 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 
 **Key Components:**
 - `App.tsx` - Main application with flow library and live monitoring
-- `types/index.ts` - Shared frontend types
+- `components/ActiveRunCard.tsx` - Flow execution card with real-time progress
+- `components/TaskRow.tsx` - Task execution row with performance warnings
+- `components/StatisticsWindow.tsx` - Historical performance statistics with standard deviation
+- `components/StatusComponents.tsx` - Reusable status icons and badges
+- `types/index.ts` - Shared frontend types including PerformanceWarning interface
 
 ### 2. Backend Layer (`server/`)
 
@@ -95,6 +103,7 @@ export class FlowEngine {
 - `POST /api/engine/trigger/:flowId` - Trigger flow execution
 - `POST /api/engine/register` - Register new flow (Python client)
 - `POST /api/engine/runs/:runId/logs` - Add logs (Python client)
+- `GET /api/statistics` - Get task and flow performance statistics
 
 ### 3. Python Client Layer (`examples/`)
 
@@ -269,15 +278,85 @@ router.get('/my-endpoint', (req, res) => {
 export default router;
 ```
 
+## Database Schema
+
+### Core Tables
+
+**flows** - Flow definitions
+- `id` (PRIMARY KEY)
+- `name`, `description`, `tags` (JSON)
+- Flow configuration metadata
+
+**runs** - Flow execution history
+- `id` (PRIMARY KEY), `flow_id` (FOREIGN KEY)
+- `state`, `progress`, `start_time`, `end_time`
+- `configuration`, `tags`, `client_name`
+
+**tasks** - Task definitions within flows
+- `id` (PRIMARY KEY), `flow_id` (FOREIGN KEY)
+- `name`, `weight`, `estimated_time`
+
+**task_runs** - Task execution history
+- `id` (PRIMARY KEY), `run_id` (FOREIGN KEY)
+- `task_id` (FOREIGN KEY)
+- `state`, `progress`, `duration_ms`
+- `performance_warning` (JSON)
+
+### Statistics Tables
+
+**task_statistics** - Historical task performance
+- `id` (PRIMARY KEY)
+- `flow_name`, `task_name`
+- `avg_duration_ms` - Rolling average
+- `m2` - Sum of squared differences (Welford's algorithm)
+- `sample_count` - Number of executions
+- `last_updated` - Timestamp
+
+**flow_statistics** - Historical flow performance
+- Same structure as task_statistics
+- Tracks overall flow completion times
+
+### Performance Monitoring Implementation
+
+Perfect uses **Welford's Online Algorithm** for incremental variance calculation:
+
+```typescript
+// Update running statistics without storing all samples
+const delta = newValue - oldAvg;
+const newAvg = oldAvg + delta / newCount;
+const delta2 = newValue - newAvg;
+const newM2 = oldM2 + delta * delta2;
+
+// Calculate standard deviation using sample variance (n-1)
+const variance = count > 1 ? m2 / (count - 1) : 0;
+const stdDev = Math.sqrt(variance);
+```
+
+**Outlier Detection Algorithm** (`FlowEngine.ts`):
+
+1. Calculate z-score: `z = (actual - avg) / stdDev`
+2. Check statistical thresholds (3σ, 4σ) - **Priority 1**
+3. Check practical significance (>1000ms AND >50% slower) - **Priority 2**
+4. Check absolute thresholds (2x, 3x) - **Priority 3**
+
+Warnings are stored in `task_runs.performance_warning` as JSON:
+```json
+{
+  "type": "slow",
+  "severity": "warning" | "critical",
+  "message": "11.0s (498.0σ from 10.0s avg)"
+}
+```
+
 ## Future Enhancements
 
 1. **WebSocket Communication** - Replace HTTP polling with real-time WebSocket connection
-2. **Database Persistence** - Store flows and runs in PostgreSQL/MongoDB
+2. **Performance Graphs** - Add visualizations to StatisticsWindow showing trends over time
 3. **Authentication** - Add user authentication and authorization
 4. **Distributed Execution** - Support for distributed task execution
 5. **Advanced Scheduling** - Cron-based automatic flow triggering
 6. **Flow Versioning** - Track and manage flow definition versions
-7. **Metrics & Analytics** - Detailed performance metrics and dashboards
+7. **Alerting System** - Notify users when critical performance issues are detected
 
 ## Technology Stack
 

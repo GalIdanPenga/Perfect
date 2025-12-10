@@ -31,6 +31,12 @@ export interface TaskResult {
   table: Record<string, any>[];
 }
 
+export interface PerformanceWarning {
+  type: 'slow';
+  message: string;
+  severity: 'warning' | 'critical';
+}
+
 export interface TaskRun {
   id: string;
   taskId: string;
@@ -44,6 +50,7 @@ export interface TaskRun {
   estimatedTime: number;
   progress: number; // 0 to 100 for this specific task
   result?: TaskResult;
+  performanceWarning?: PerformanceWarning;
 }
 
 export interface FlowRun {

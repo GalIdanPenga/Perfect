@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { X, BarChart3, TrendingUp, Clock } from 'lucide-react';
+import { X, BarChart3, TrendingUp, Clock, LineChart } from 'lucide-react';
+import { PerformanceHistoryModal } from './PerformanceHistoryModal';
 
 interface TaskStatistic {
   flowName: string;
   taskName: string;
   avgDurationMs: number;
+  stdDevDurationMs: number;
   sampleCount: number;
   lastUpdated: string;
 }
@@ -12,6 +14,7 @@ interface TaskStatistic {
 interface FlowStatistic {
   flowName: string;
   avgDurationMs: number;
+  stdDevDurationMs: number;
   sampleCount: number;
   lastUpdated: string;
 }
@@ -27,6 +30,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
   const [groupByFlow, setGroupByFlow] = useState(true);
   const [isClosing, setIsClosing] = useState(false);
   const [isOpening, setIsOpening] = useState(true);
+  const [selectedChart, setSelectedChart] = useState<{ type: 'task' | 'flow'; flowName: string; taskName?: string } | null>(null);
 
   useEffect(() => {
     fetchStatistics();
@@ -193,8 +197,10 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
                         <tr className="border-b border-slate-700">
                           <th className="text-left px-4 py-2 text-slate-400 font-semibold">Flow Name</th>
                           <th className="text-right px-4 py-2 text-slate-400 font-semibold">Avg Duration</th>
+                          <th className="text-right px-4 py-2 text-slate-400 font-semibold">Std Dev (±)</th>
                           <th className="text-right px-4 py-2 text-slate-400 font-semibold">Samples</th>
                           <th className="text-right px-4 py-2 text-slate-400 font-semibold">Last Updated</th>
+                          <th className="text-center px-4 py-2 text-slate-400 font-semibold">Chart</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -210,12 +216,26 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right">
+                              <span className="text-purple-400 font-semibold">
+                                {formatDuration(stat.stdDevDurationMs)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
                               <span className="text-emerald-400 font-semibold">
                                 {stat.sampleCount}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right text-slate-400">
                               {formatDate(stat.lastUpdated)}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => setSelectedChart({ type: 'flow', flowName: stat.flowName })}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 transition-colors text-xs font-semibold"
+                              >
+                                <LineChart size={14} />
+                                View
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -248,8 +268,10 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
                         <tr className="border-b border-slate-700">
                           <th className="text-left px-4 py-2 text-slate-400 font-semibold">Task Name</th>
                           <th className="text-right px-4 py-2 text-slate-400 font-semibold">Avg Duration</th>
+                          <th className="text-right px-4 py-2 text-slate-400 font-semibold">Std Dev (±)</th>
                           <th className="text-right px-4 py-2 text-slate-400 font-semibold">Samples</th>
                           <th className="text-right px-4 py-2 text-slate-400 font-semibold">Last Updated</th>
+                          <th className="text-center px-4 py-2 text-slate-400 font-semibold">Chart</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -265,12 +287,26 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right">
+                              <span className="text-purple-400 font-semibold">
+                                {formatDuration(stat.stdDevDurationMs)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
                               <span className="text-emerald-400 font-semibold">
                                 {stat.sampleCount}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right text-slate-400">
                               {formatDate(stat.lastUpdated)}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => setSelectedChart({ type: 'task', flowName: flowName, taskName: stat.taskName })}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 transition-colors text-xs font-semibold"
+                              >
+                                <LineChart size={14} />
+                                View
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -288,8 +324,10 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
                           <th className="text-left px-4 py-2 text-slate-400 font-semibold">Flow Name</th>
                           <th className="text-left px-4 py-2 text-slate-400 font-semibold">Task Name</th>
                           <th className="text-right px-4 py-2 text-slate-400 font-semibold">Avg Duration</th>
+                          <th className="text-right px-4 py-2 text-slate-400 font-semibold">Std Dev (±)</th>
                           <th className="text-right px-4 py-2 text-slate-400 font-semibold">Samples</th>
                           <th className="text-right px-4 py-2 text-slate-400 font-semibold">Last Updated</th>
+                          <th className="text-center px-4 py-2 text-slate-400 font-semibold">Chart</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -306,12 +344,26 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right">
+                              <span className="text-purple-400 font-semibold">
+                                {formatDuration(stat.stdDevDurationMs)}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
                               <span className="text-emerald-400 font-semibold">
                                 {stat.sampleCount}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-right text-slate-400">
                               {formatDate(stat.lastUpdated)}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <button
+                                onClick={() => setSelectedChart({ type: 'task', flowName: stat.flowName, taskName: stat.taskName })}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 transition-colors text-xs font-semibold"
+                              >
+                                <LineChart size={14} />
+                                View
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -324,6 +376,16 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
           )}
         </div>
       </div>
+
+      {/* Performance History Modal */}
+      {selectedChart && (
+        <PerformanceHistoryModal
+          type={selectedChart.type}
+          flowName={selectedChart.flowName}
+          taskName={selectedChart.taskName}
+          onClose={() => setSelectedChart(null)}
+        />
+      )}
     </div>
   );
 }
