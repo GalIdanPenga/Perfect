@@ -102,6 +102,7 @@ export default function App() {
   const [showStatistics, setShowStatistics] = useState(false);
   const [showClientConfirmation, setShowClientConfirmation] = useState(false);
   const [pendingClientId, setPendingClientId] = useState<string | null>(null);
+  const [showStopConfirmation, setShowStopConfirmation] = useState(false);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
@@ -247,6 +248,17 @@ export default function App() {
   const handleCancelClientSelection = () => {
     setShowClientConfirmation(false);
     setPendingClientId(null);
+  };
+
+  // Handler to show stop confirmation dialog
+  const handleStopClientClick = () => {
+    setShowStopConfirmation(true);
+  };
+
+  // Handler to confirm and stop client
+  const handleConfirmStopClient = () => {
+    setShowStopConfirmation(false);
+    handleStopClient();
   };
 
 
@@ -578,7 +590,7 @@ export default function App() {
                     </button>
                   ) : (
                     <button
-                      onClick={handleStopClient}
+                      onClick={handleStopClientClick}
                       className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-rose-500 text-slate-300 hover:text-white rounded-lg font-medium text-sm transition-all shadow-lg active:scale-95"
                     >
                       <XCircle size={18} />
@@ -711,7 +723,7 @@ export default function App() {
                   ) : (
                     // Show "Stop" button when flows are running
                     <button
-                      onClick={handleStopClient}
+                      onClick={handleStopClientClick}
                       className="group relative px-8 py-4 rounded-xl border-2 transition-all duration-300 hover:scale-105 active:scale-95"
                       style={{
                         borderColor: '#ef4444',
@@ -1034,6 +1046,79 @@ export default function App() {
           </div>
         );
       })()}
+
+      {/* Stop Confirmation Dialog */}
+      {showStopConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div
+            className="bg-slate-800 rounded-xl border-2 shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-selectPulse"
+            style={{
+              borderColor: '#ef4444',
+              boxShadow: '0 20px 60px rgba(239, 68, 68, 0.4)'
+            }}
+          >
+            {/* Header */}
+            <div
+              className="p-4 border-b"
+              style={{
+                borderBottomColor: 'rgba(239, 68, 68, 0.3)',
+                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.05) 100%)'
+              }}
+            >
+              <h3
+                className="text-lg font-bold flex items-center gap-2"
+                style={{ color: '#ef4444' }}
+              >
+                <XCircle size={20} />
+                Confirm Stop
+              </h3>
+            </div>
+
+            {/* Body */}
+            <div className="p-6">
+              <p className="text-slate-300 text-sm">
+                Are you sure you want to stop
+                <span
+                  className="font-bold mx-1.5 px-2 py-0.5 rounded"
+                  style={{
+                    color: '#ef4444',
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)'
+                  }}
+                >
+                  {activeClient?.name || 'the client'}
+                </span>
+                ?
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 p-4 bg-slate-900/50 border-t border-slate-700">
+              <button
+                onClick={() => setShowStopConfirmation(false)}
+                className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg font-medium text-sm transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmStopClient}
+                className="flex-1 px-4 py-2.5 text-white rounded-lg font-medium text-sm transition-all shadow-lg"
+                style={{
+                  backgroundColor: '#ef4444',
+                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)'
+                }}
+                onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.currentTarget.style.backgroundColor = '#dc2626';
+                }}
+                onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                  e.currentTarget.style.backgroundColor = '#ef4444';
+                }}
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
     </>
   );
