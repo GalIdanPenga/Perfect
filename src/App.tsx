@@ -34,21 +34,34 @@ import {
 // --- Main Layout ---
 
 export default function App() {
-  // Custom hooks for data fetching
-  const runs = useFlowRuns();
-  const { clientStatus, setClientStatus, activeClient } = useClientStatus();
-  const { availableClients, selectedClientId, setSelectedClientId } = useClientConfigs();
-  const { isStartingClient, handleStartClient, handleStopClient } = useClientActions(setClientStatus);
-
-  // Local UI state
-  const [selectedHistoryRunId, setSelectedHistoryRunId] = useState<string | null>(null);
-  const [closingHistoryRunId, setClosingHistoryRunId] = useState<string | null>(null);
-  const [showAllHistory, setShowAllHistory] = useState(false);
-  const [showStatistics, setShowStatistics] = useState(false);
+  // Local UI state (must be before hooks that use it)
   const [currentSessionStartTime, setCurrentSessionStartTime] = useState<string | null>(() => {
     // Restore session start time from localStorage on initial load
     return localStorage.getItem('currentSessionStartTime');
   });
+
+  // Custom hooks for data fetching
+  const runs = useFlowRuns();
+  const { clientStatus, setClientStatus, activeClient } = useClientStatus();
+  const { availableClients, selectedClientId, setSelectedClientId } = useClientConfigs();
+
+  // Function to set session start time
+  const setSessionStartTime = (time: string | null) => {
+    setCurrentSessionStartTime(time);
+    if (time) {
+      localStorage.setItem('currentSessionStartTime', time);
+    } else {
+      localStorage.removeItem('currentSessionStartTime');
+    }
+  };
+
+  const { isStartingClient, handleStartClient, handleStopClient } = useClientActions(setClientStatus, setSessionStartTime);
+
+  // More local UI state
+  const [selectedHistoryRunId, setSelectedHistoryRunId] = useState<string | null>(null);
+  const [closingHistoryRunId, setClosingHistoryRunId] = useState<string | null>(null);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
@@ -113,18 +126,9 @@ export default function App() {
   // Handler to return to client selection
   const handleReturnToClients = () => {
     setClientStatus('stopped');
-    setCurrentSessionStartTime(null); // Clear session marker
-    localStorage.removeItem('currentSessionStartTime'); // Clear from localStorage
+    setSessionStartTime(null); // Clear session marker and localStorage
   };
 
-  // Track when client starts - mark session start time
-  React.useEffect(() => {
-    if (clientStatus === 'running' && !currentSessionStartTime) {
-      const startTime = new Date().toISOString();
-      setCurrentSessionStartTime(startTime);
-      localStorage.setItem('currentSessionStartTime', startTime);
-    }
-  }, [clientStatus, currentSessionStartTime]);
 
   const handleHistoryClick = (runId: string) => {
     if (runId === selectedHistoryRunId) {
