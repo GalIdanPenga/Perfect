@@ -140,7 +140,18 @@ class FlowExecutor:
 
                 # Check for errors
                 if task_error:
-                    self.client.update_task_state(request.run_id, i, 'FAILED', 0)
+                    # Create error result with exception message as note
+                    error_result = {
+                        'passed': False,
+                        'note': str(task_error),
+                        'table': []
+                    }
+
+                    self.client.update_task_state(
+                        request.run_id, i, 'FAILED', 0,
+                        duration_ms=actual_duration,
+                        result=error_result
+                    )
                     self.client.send_log(request.run_id, f"[Python Client] ❌ Task {task_def.name} failed: {str(task_error)}")
 
                     # Check if this is a crucial task
@@ -176,7 +187,16 @@ class FlowExecutor:
             duration = int((time.time() - start_time) * 1000)
             # Mark the current task as failed if we were executing one
             if current_task_index >= 0:
-                self.client.update_task_state(request.run_id, current_task_index, 'FAILED', 0)
+                # Create error result with exception message as note
+                error_result = {
+                    'passed': False,
+                    'note': str(e),
+                    'table': []
+                }
+                self.client.update_task_state(
+                    request.run_id, current_task_index, 'FAILED', 0,
+                    result=error_result
+                )
             self.client.send_log(request.run_id, f"[Python Client] ❌ Flow execution failed after {duration}ms: {str(e)}")
 
 

@@ -60,7 +60,7 @@ export const TaskRow = ({ task }: TaskRowProps) => {
       )}
 
       {/* Task Result */}
-      {task.result && task.state === TaskState.COMPLETED && (
+      {task.result && (task.state === TaskState.COMPLETED || task.state === TaskState.FAILED) && (
         <div className="mx-4 mb-3">
           {/* Note Section */}
           {task.result.note && (
