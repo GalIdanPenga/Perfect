@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://localhost:3001/api';
+export const API_BASE_URL = 'http://localhost:3000/api';
 
 export const POLLING_INTERVALS = {
   RUNS: 100, // Poll every 100ms for smooth updates
