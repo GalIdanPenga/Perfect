@@ -10,9 +10,9 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
 - 🏷️ **Flow Tagging** - Organize flows with custom tags (version, team, priority, etc.)
 - 🎨 **Modern UI** - Beautiful cyberpunk-themed dashboard
 - 💾 **Persistent Storage** - SQLite database for flows and execution history
-- 🔍 **Advanced Filtering** - Search and filter execution history by status, flow name, or ID
+- 🔍 **Advanced Filtering** - Search and filter execution history by status, flow name, date, or tag values
 - 💓 **Client Heartbeat** - Automatic failure detection when Python client disconnects
-- 📈 **Performance Analytics** - Track task performance with standard deviation and statistical outlier detection
+- 📈 **Performance Analytics** - Track task performance with configurable sensitivity levels for outlier detection
 
 ## Run Locally
 
@@ -188,19 +188,28 @@ Perfect automatically tracks task performance and detects outliers using statist
 
 ### Outlier Detection
 
-Tasks are flagged with performance warnings using three detection methods:
+Tasks are flagged with performance warnings using statistical analysis (z-score based on standard deviations from mean). The system uses **configurable sensitivity levels** that adapt thresholds based on sample size:
 
-1. **Statistical Thresholds** (Priority 1 - Always applies with sufficient data)
-   - **Warning**: 3σ (99.7% confidence) - Task is 3+ standard deviations slower than average
-   - **Critical**: 4σ (99.99% confidence) - Task is 4+ standard deviations slower than average
+#### Sensitivity Levels
 
-2. **Absolute Thresholds** (Priority 3 - Used with small sample sizes)
-   - **Warning**: 2x average duration
-   - **Critical**: 3x average duration
+Configure per-client in `server/clients.json` using the `performanceSensitivity` field:
 
-3. **Practical Significance** (Applied only to absolute thresholds)
-   - Must be >1000ms slower AND >50% slower than average
-   - Prevents false positives on small timing differences
+- **Conservative** (fewer alerts, higher confidence)
+  - Samples < 20: Requires 7σ deviation
+  - Samples ≥ 20: Requires 5σ deviation
+  - Best for: Production environments, stable workflows
+
+- **Normal** (balanced, default)
+  - Samples < 20: Requires 5σ deviation
+  - Samples ≥ 20: Requires 3.3σ deviation
+  - Best for: General use, mixed workloads
+
+- **Aggressive** (more alerts, early detection)
+  - Samples < 20: Requires 3σ deviation
+  - Samples ≥ 20: Requires 2.5σ deviation
+  - Best for: Development, performance testing
+
+**Sample-Size Adaptation**: Higher thresholds for small sample sizes prevent false positives when historical data is limited. As more samples accumulate (≥20), thresholds lower for more reliable detection.
 
 ### Performance Warning Display
 
@@ -213,4 +222,20 @@ Performance warnings appear in multiple locations:
 
 **Real-Time Detection**: Warnings appear during task execution, not just after completion, allowing for proactive monitoring.
 
-**Configuration**: Outlier thresholds can be adjusted in `server/engine/FlowEngine.ts` under the `OUTLIER_THRESHOLDS` constant.
+### Configuration
+
+Configure sensitivity per client in `server/clients.json`:
+
+```json
+{
+  "clients": [
+    {
+      "id": "perfect_example",
+      "name": "Perfect Example Flows",
+      "performanceSensitivity": "normal"
+    }
+  ]
+}
+```
+
+Advanced users can modify thresholds in `server/engine/FlowEngine.ts` under the `SENSITIVITY_THRESHOLDS` constant.

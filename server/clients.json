@@ -7,7 +7,8 @@
       "workingDir": "examples/workflows",
       "command": "python3",
       "args": ["example_flows.py"],
-      "color": "#00D9FF"
+      "color": "#00D9FF",
+      "performanceSensitivity": "normal"
     },
     {
       "id": "custom_python",
@@ -16,7 +17,8 @@
       "workingDir": "examples/workflows",
       "command": "python3",
       "args": ["example_flows.py", "--config", "dev"],
-      "color": "#FF0000"
+      "color": "#FF0000",
+      "performanceSensitivity": "aggressive"
     },
     {
       "id": "python_venv",
@@ -25,7 +27,8 @@
       "workingDir": "examples/workflows",
       "command": ".venv/bin/python",
       "args": ["example_flows.py"],
-      "color": "#00FF94"
+      "color": "#00FF94",
+      "performanceSensitivity": "conservative"
     }
   ]
 }

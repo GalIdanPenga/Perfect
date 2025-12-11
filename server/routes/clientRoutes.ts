@@ -16,6 +16,9 @@ let clientStatus: 'stopped' | 'starting' | 'running' | 'error' = 'stopped';
 let clientLogs: string[] = [];
 let activeClient: ClientConfig | null = null;
 
+// Performance sensitivity levels
+export type PerformanceSensitivity = 'conservative' | 'normal' | 'aggressive';
+
 // Load client configurations
 interface ClientConfig {
   id: string;
@@ -25,6 +28,7 @@ interface ClientConfig {
   command: string;
   args: string[];
   color?: string;
+  performanceSensitivity?: PerformanceSensitivity;
 }
 
 interface ClientsConfig {

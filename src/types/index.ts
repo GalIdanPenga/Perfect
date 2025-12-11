@@ -72,6 +72,8 @@ export interface FlowRun {
 
 export type ViewMode = 'dashboard' | 'flows' | 'runs' | 'docs';
 
+export type PerformanceSensitivity = 'conservative' | 'normal' | 'aggressive';
+
 export interface ClientConfig {
   id: string;
   name: string;
@@ -80,4 +82,5 @@ export interface ClientConfig {
   command: string;
   args: string[];
   color?: string;
+  performanceSensitivity?: PerformanceSensitivity;
 }
