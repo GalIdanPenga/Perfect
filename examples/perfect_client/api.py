@@ -37,7 +37,7 @@ class PerfectAPIClient:
     - WebSocket /ws - Real-time bidirectional communication
     """
 
-    def __init__(self, base_url: str = "http://localhost:3001"):
+    def __init__(self, base_url: str = "http://localhost:3000"):
         """
         Initialize the Perfect API client.
 

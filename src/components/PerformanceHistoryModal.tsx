@@ -34,8 +34,8 @@ export function PerformanceHistoryModal({ type, flowName, taskName, onClose }: P
     try {
       setLoading(true);
       const url = type === 'task'
-        ? `http://localhost:3001/api/statistics/task-history/${encodeURIComponent(flowName)}/${encodeURIComponent(taskName!)}`
-        : `http://localhost:3001/api/statistics/flow-history/${encodeURIComponent(flowName)}`;
+        ? `http://localhost:3000/api/statistics/task-history/${encodeURIComponent(flowName)}/${encodeURIComponent(taskName!)}`
+        : `http://localhost:3000/api/statistics/flow-history/${encodeURIComponent(flowName)}`;
 
       const response = await fetch(url);
       const data = await response.json();

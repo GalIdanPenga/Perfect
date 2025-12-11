@@ -116,7 +116,7 @@ export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }
              )}
              {!isRunning && run.reportPath && (
                <a
-                 href={`http://localhost:3001/${run.reportPath}`}
+                 href={`http://localhost:3000/${run.reportPath}`}
                  target="_blank"
                  rel="noopener noreferrer"
                  className="px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition-all hover:scale-105 active:scale-95 shadow-sm"

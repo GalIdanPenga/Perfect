@@ -142,7 +142,7 @@ client.listen_for_executions()
 ```
 ┌─────────────────┐         HTTP API        ┌──────────────────┐
 │  React Frontend │◄────────────────────────┤ Express Backend  │
-│   (port 3000)   │     GET /api/engine/*   │   (port 3001)    │
+│   (port 5173)   │     GET /api/engine/*   │   (port 3000)    │
 └─────────────────┘                          └──────────────────┘
                                                       │
                                                       │ manages

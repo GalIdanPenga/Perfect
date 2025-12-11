@@ -50,7 +50,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
   const fetchStatistics = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/statistics');
+      const response = await fetch('http://localhost:3000/api/statistics');
       const data = await response.json();
       if (data.success) {
         setStatistics(data.taskStatistics || []);
