@@ -1,70 +1,14 @@
 import {
   FlowDefinition,
   FlowRun,
-  TaskRun,
   TaskState,
   FlowRegistrationPayload,
-  TaskResult,
-  PerformanceWarning
+  TaskResult
 } from '../types';
 import { flowDb, runDb, statsDb } from '../database/db';
 import { generateFlowReport } from '../utils/reportGenerator';
-import { PerformanceSensitivity, getActiveClient } from '../routes/clientRoutes';
-
-/**
- * Performance sensitivity threshold configurations
- * Each sensitivity level has different thresholds for:
- * - Low sample count (<20): Higher threshold to reduce false positives
- * - High sample count (>=20): Lower threshold for more reliable detection
- */
-const SENSITIVITY_THRESHOLDS = {
-  conservative: { lowSamples: 7.0, highSamples: 5.0 },  // Fewer alerts
-  normal: { lowSamples: 5.0, highSamples: 3.3 },        // Balanced (default)
-  aggressive: { lowSamples: 3.0, highSamples: 2.5 }     // More alerts
-};
-
-/**
- * Detect if a task duration is an outlier based on statistical analysis
- * Simple approach: z-score with sample-size-adjusted thresholds
- * Only detects tasks that are SLOWER than expected (not faster)
- */
-function detectOutlier(
-  actualMs: number,
-  avgMs: number,
-  stdDevMs: number,
-  sampleCount: number,
-  sensitivity: PerformanceSensitivity = 'normal'
-): PerformanceWarning | null {
-  // Need at least 2 samples to calculate variance
-  if (sampleCount < 2 || stdDevMs === 0) {
-    return null;
-  }
-
-  // Calculate difference (only care about slower tasks)
-  const diff = actualMs - avgMs;
-
-  // If task is faster or on-time, no warning needed
-  if (diff <= 0) {
-    return null;
-  }
-
-  // Calculate z-score: how many standard deviations SLOWER than mean
-  const zScore = diff / stdDevMs;
-
-  // Get threshold based on sensitivity level and sample count
-  const thresholds = SENSITIVITY_THRESHOLDS[sensitivity];
-  const threshold = sampleCount < 20 ? thresholds.lowSamples : thresholds.highSamples;
-
-  if (zScore > threshold) {
-    return {
-      type: 'slow',
-      severity: 'warning',
-      message: `${(actualMs / 1000).toFixed(1)}s (${zScore.toFixed(1)}σ from ${(avgMs / 1000).toFixed(1)}s avg, n=${sampleCount})`
-    };
-  }
-
-  return null;
-}
+import { getActiveClient } from '../routes/clientRoutes';
+import { PerformanceMonitor } from './services/PerformanceMonitor';
 
 /**
  * FlowEngine - Core workflow orchestration engine
@@ -83,9 +27,11 @@ export class FlowEngine {
   private lastClientHeartbeat: number | null = null;
   private readonly HEARTBEAT_TIMEOUT_MS = 10000; // 10 seconds
   private heartbeatCheckInterval: NodeJS.Timeout;
+  private performanceMonitor: PerformanceMonitor;
 
   constructor(enableSimulation: boolean = false) {
     this.simulationEnabled = enableSimulation;
+    this.performanceMonitor = new PerformanceMonitor();
 
     // Load existing flows and runs from database
     console.log('[FlowEngine] Loading flows and runs from database...');
@@ -227,7 +173,7 @@ export class FlowEngine {
         if (stats) {
           const activeClient = getActiveClient();
           const sensitivity = activeClient?.performanceSensitivity || 'normal';
-          const warning = detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
+          const warning = this.performanceMonitor.detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
 
           // Only log when warning status changes
           const hadWarning = task.performanceWarning !== undefined;
@@ -253,7 +199,7 @@ export class FlowEngine {
         if (stats) {
           const activeClient = getActiveClient();
           const sensitivity = activeClient?.performanceSensitivity || 'normal';
-          const warning = detectOutlier(task.durationMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
+          const warning = this.performanceMonitor.detectOutlier(task.durationMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
           // Always update warning (set or clear) based on final duration
           task.performanceWarning = warning || undefined;
           if (warning) {
@@ -463,7 +409,7 @@ export class FlowEngine {
           if (stats) {
             const activeClient = getActiveClient();
             const sensitivity = activeClient?.performanceSensitivity || 'normal';
-            const warning = detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
+            const warning = this.performanceMonitor.detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
 
             // Only log when warning status changes
             const hadWarning = task.performanceWarning !== undefined;

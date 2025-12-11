@@ -249,7 +249,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
               {statistics.length > 0 && (
                 groupByFlow ? (
             <div className="space-y-6">
-              {Object.entries(groupedStats).map(([flowName, tasks]) => (
+              {Object.entries(groupedStats).map(([flowName, tasks]: [string, TaskStatistic[]]) => (
                 <div key={flowName} className="bg-slate-800/30 rounded-lg border border-slate-700 overflow-hidden">
                   {/* Flow Header */}
                   <div className="bg-slate-800/50 px-4 py-3 border-b border-slate-700">

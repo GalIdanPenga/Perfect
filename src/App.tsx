@@ -13,9 +13,10 @@ import {
   Clock,
   BarChart3
 } from 'lucide-react';
-import { TaskState } from './types';
+import { TaskState, FlowRun } from './types';
+import { DEFAULT_THEME_COLOR } from './constants';
 import { PerfectLogo } from './components/PerfectLogo';
-import { StatusIcon, StatusBadge } from './components/StatusComponents';
+import { StatusIcon } from './components/StatusComponents';
 import { TagBadges } from './components/TagBadges';
 import { ActiveRunCard } from './components/ActiveRunCard';
 import { StatisticsWindow } from './components/StatisticsWindow';
@@ -23,50 +24,40 @@ import { useFlowRuns } from './hooks/useFlowRuns';
 import { useClientStatus } from './hooks/useClientStatus';
 import { useClientConfigs } from './hooks/useClientConfigs';
 import { useClientActions } from './hooks/useClientActions';
-import { getThemeColor } from './utils/themeUtils';
 import {
   getActiveRuns,
   getHistoryRuns,
   applyAllFilters,
   getUniqueFlowNames
 } from './utils/filterUtils';
+import { playCompletionSound } from './utils/audioUtils';
+import { ConfirmDialog } from './components/dialogs/ConfirmDialog';
+import { OverallProgress } from './components/progress/OverallProgress';
+
+// Helper functions
+const calculateOverallProgress = (activeRuns: FlowRun[]): number => {
+  if (activeRuns.length === 0) return 0;
+  const totalProgress = activeRuns.reduce((sum, run) => sum + run.progress, 0);
+  return Math.floor(totalProgress / activeRuns.length);
+};
+
+const calculateTotalTimeRemaining = (activeRuns: FlowRun[]): number => {
+  let maxTimeRemaining = 0;
+  activeRuns.forEach(run => {
+    let runTimeRemaining = 0;
+    run.tasks.forEach(task => {
+      if (task.state === TaskState.PENDING) {
+        runTimeRemaining += task.estimatedTime;
+      } else if (task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) {
+        runTimeRemaining += task.estimatedTime * (1 - task.progress / 100);
+      }
+    });
+    maxTimeRemaining = Math.max(maxTimeRemaining, runTimeRemaining);
+  });
+  return maxTimeRemaining;
+};
 
 // --- Main Layout ---
-
-// Function to play completion notification sound
-const playCompletionSound = () => {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-
-    // Create three tones for a pleasant notification sound
-    const playTone = (frequency: number, startTime: number, duration: number) => {
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      oscillator.frequency.value = frequency;
-      oscillator.type = 'sine';
-
-      // Envelope for smooth sound
-      gainNode.gain.setValueAtTime(0, startTime);
-      gainNode.gain.linearRampToValueAtTime(0.3, startTime + 0.01);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-
-      oscillator.start(startTime);
-      oscillator.stop(startTime + duration);
-    };
-
-    const now = audioContext.currentTime;
-    // Play a cheerful ascending melody: C5, E5, G5
-    playTone(523.25, now, 0.15);        // C5
-    playTone(659.25, now + 0.1, 0.15);  // E5
-    playTone(783.99, now + 0.2, 0.25);  // G5
-  } catch (error) {
-    console.log('Audio notification not supported:', error);
-  }
-};
 
 export default function App() {
   // Local UI state (must be before hooks that use it)
@@ -112,7 +103,7 @@ export default function App() {
 
   // Theme color based on selected client
   const selectedClient = availableClients.find(c => c.id === selectedClientId);
-  const themeColor = getThemeColor(selectedClient, activeClient);
+  const themeColor = selectedClient?.color || activeClient?.color || DEFAULT_THEME_COLOR;
 
   // Separate current session runs from past runs
   const currentSessionRuns = currentSessionStartTime
@@ -164,50 +155,9 @@ export default function App() {
     run => run.state === TaskState.COMPLETED || run.state === TaskState.FAILED
   );
 
-  // Calculate overall progress across all running flows
-  const calculateOverallProgress = () => {
-    if (activeRuns.length === 0) return 0;
-
-    const totalProgress = activeRuns.reduce((sum, run) => sum + run.progress, 0);
-    return Math.floor(totalProgress / activeRuns.length);
-  };
-
-  // Calculate total time remaining for all flows
-  const calculateTotalTimeRemaining = () => {
-    let maxTimeRemaining = 0;
-
-    activeRuns.forEach(run => {
-      let runTimeRemaining = 0;
-
-      run.tasks.forEach(task => {
-        if (task.state === TaskState.PENDING) {
-          runTimeRemaining += task.estimatedTime;
-        } else if (task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) {
-          const progressFraction = task.progress / 100;
-          runTimeRemaining += task.estimatedTime * (1 - progressFraction);
-        }
-      });
-
-      maxTimeRemaining = Math.max(maxTimeRemaining, runTimeRemaining);
-    });
-
-    return maxTimeRemaining;
-  };
-
-  const formatTimeRemaining = (ms: number) => {
-    if (ms < 1000) {
-      return `${Math.round(ms)}ms`;
-    } else if (ms < 60000) {
-      return `${(ms / 1000).toFixed(1)}s`;
-    } else {
-      const minutes = Math.floor(ms / 60000);
-      const seconds = Math.round((ms % 60000) / 1000);
-      return `${minutes}m ${seconds}s`;
-    }
-  };
-
-  const overallProgress = calculateOverallProgress();
-  const totalTimeRemaining = calculateTotalTimeRemaining();
+  // Calculate overall progress and time remaining using utility functions
+  const overallProgress = calculateOverallProgress(activeRuns);
+  const totalTimeRemaining = calculateTotalTimeRemaining(activeRuns);
 
   // Play sound notification when all flows complete
   useEffect(() => {
@@ -609,71 +559,12 @@ export default function App() {
               <>
                 {/* Overall Progress Bar - Show when flows are running */}
                 {!allFlowsFinished && activeRuns.length > 0 && (
-                  <div className="mb-6 mx-auto max-w-4xl">
-                    <div
-                      className="backdrop-blur-md rounded-xl shadow-lg overflow-hidden border-2 transition-all"
-                      style={{
-                        borderColor: `${themeColor}60`,
-                        boxShadow: `0 0 30px ${themeColor}20`,
-                        background: `linear-gradient(135deg, ${themeColor}08 0%, transparent 100%)`
-                      }}
-                    >
-                      <div className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className="text-xs font-bold uppercase tracking-widest text-slate-300 flex items-center gap-2"
-                            >
-                              <Activity
-                                size={16}
-                                className="animate-pulse"
-                                style={{ color: themeColor }}
-                              />
-                              Overall Progress
-                            </div>
-                            <span
-                              className="px-2.5 py-0.5 rounded-full text-xs font-bold border"
-                              style={{
-                                backgroundColor: `${themeColor}15`,
-                                color: themeColor,
-                                borderColor: `${themeColor}40`
-                              }}
-                            >
-                              {activeRuns.length} {activeRuns.length === 1 ? 'Flow' : 'Flows'}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            {totalTimeRemaining > 0 && (
-                              <div className="flex items-center gap-2 text-xs text-slate-300 font-mono">
-                                <Clock size={14} className="text-slate-400" />
-                                <span>~{formatTimeRemaining(totalTimeRemaining)} remaining</span>
-                              </div>
-                            )}
-                            <span
-                              className="text-3xl font-bold font-mono tracking-tight"
-                              style={{ color: themeColor }}
-                            >
-                              {overallProgress}%
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className="h-3 bg-slate-900/60 rounded-full overflow-hidden border border-slate-700/50 relative">
-                          <div
-                            className="h-full transition-all duration-500 ease-out relative"
-                            style={{
-                              width: `${overallProgress}%`,
-                              background: `linear-gradient(90deg, ${themeColor} 0%, ${themeColor}cc 100%)`
-                            }}
-                          >
-                            {/* Animated shimmer effect */}
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <OverallProgress
+                    flowCount={activeRuns.length}
+                    progress={overallProgress}
+                    timeRemaining={totalTimeRemaining}
+                    themeColor={themeColor}
+                  />
                 )}
 
                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 pb-6">
@@ -972,153 +863,31 @@ export default function App() {
         const confirmThemeColor = pendingClient?.color || themeColor;
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div
-              className="bg-slate-800 rounded-xl border-2 shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-selectPulse"
-              style={{
-                borderColor: confirmThemeColor,
-                boxShadow: `0 20px 60px ${confirmThemeColor}40`
-              }}
-            >
-              {/* Header */}
-              <div
-                className="p-4 border-b"
-                style={{
-                  borderBottomColor: `${confirmThemeColor}30`,
-                  background: `linear-gradient(135deg, ${confirmThemeColor}15 0%, ${confirmThemeColor}05 100%)`
-                }}
-              >
-                <h3
-                  className="text-lg font-bold flex items-center gap-2"
-                  style={{ color: confirmThemeColor }}
-                >
-                  <ChevronRight size={20} />
-                  Confirm Client Selection
-                </h3>
-              </div>
-
-              {/* Body */}
-              <div className="p-6">
-                <p className="text-slate-300 text-sm">
-                  Are you sure you want to choose
-                  <span
-                    className="font-bold mx-1.5 px-2 py-0.5 rounded"
-                    style={{
-                      color: confirmThemeColor,
-                      backgroundColor: `${confirmThemeColor}20`
-                    }}
-                  >
-                    {pendingClient?.name}
-                  </span>
-                  ?
-                </p>
-              </div>
-
-              {/* Footer */}
-              <div className="flex gap-3 p-4 bg-slate-900/50 border-t border-slate-700">
-                <button
-                  onClick={handleCancelClientSelection}
-                  className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg font-medium text-sm transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmClientSelection}
-                  className="flex-1 px-4 py-2.5 text-white rounded-lg font-medium text-sm transition-all shadow-lg"
-                  style={{
-                    backgroundColor: confirmThemeColor,
-                    boxShadow: `0 4px 12px ${confirmThemeColor}40`
-                  }}
-                  onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    const r = parseInt(confirmThemeColor.slice(1, 3), 16);
-                    const g = parseInt(confirmThemeColor.slice(3, 5), 16);
-                    const b = parseInt(confirmThemeColor.slice(5, 7), 16);
-                    e.currentTarget.style.backgroundColor = `rgb(${Math.max(0, r-20)}, ${Math.max(0, g-20)}, ${Math.max(0, b-20)})`;
-                  }}
-                  onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-                    e.currentTarget.style.backgroundColor = confirmThemeColor;
-                  }}
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          </div>
+          <ConfirmDialog
+            isOpen={showClientConfirmation}
+            title="Confirm Client Selection"
+            icon={ChevronRight}
+            message="Are you sure you want to choose"
+            highlightText={pendingClient?.name}
+            themeColor={confirmThemeColor}
+            onConfirm={handleConfirmClientSelection}
+            onCancel={handleCancelClientSelection}
+          />
         );
       })()}
 
       {/* Stop Confirmation Dialog */}
-      {showStopConfirmation && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div
-            className="bg-slate-800 rounded-xl border-2 shadow-2xl max-w-md w-full mx-4 overflow-hidden animate-selectPulse"
-            style={{
-              borderColor: '#ef4444',
-              boxShadow: '0 20px 60px rgba(239, 68, 68, 0.4)'
-            }}
-          >
-            {/* Header */}
-            <div
-              className="p-4 border-b"
-              style={{
-                borderBottomColor: 'rgba(239, 68, 68, 0.3)',
-                background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.05) 100%)'
-              }}
-            >
-              <h3
-                className="text-lg font-bold flex items-center gap-2"
-                style={{ color: '#ef4444' }}
-              >
-                <XCircle size={20} />
-                Confirm Stop
-              </h3>
-            </div>
-
-            {/* Body */}
-            <div className="p-6">
-              <p className="text-slate-300 text-sm">
-                Are you sure you want to stop
-                <span
-                  className="font-bold mx-1.5 px-2 py-0.5 rounded"
-                  style={{
-                    color: '#ef4444',
-                    backgroundColor: 'rgba(239, 68, 68, 0.2)'
-                  }}
-                >
-                  {activeClient?.name || 'the client'}
-                </span>
-                ?
-              </p>
-            </div>
-
-            {/* Footer */}
-            <div className="flex gap-3 p-4 bg-slate-900/50 border-t border-slate-700">
-              <button
-                onClick={() => setShowStopConfirmation(false)}
-                className="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white rounded-lg font-medium text-sm transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmStopClient}
-                className="flex-1 px-4 py-2.5 text-white rounded-lg font-medium text-sm transition-all shadow-lg"
-                style={{
-                  backgroundColor: '#ef4444',
-                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)'
-                }}
-                onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.currentTarget.style.backgroundColor = '#dc2626';
-                }}
-                onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-                  e.currentTarget.style.backgroundColor = '#ef4444';
-                }}
-              >
-                Stop
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        isOpen={showStopConfirmation}
+        title="Confirm Stop"
+        icon={XCircle}
+        message="Are you sure you want to stop"
+        highlightText={activeClient?.name || 'the client'}
+        themeColor="#ef4444"
+        confirmLabel="Stop"
+        onConfirm={handleConfirmStopClient}
+        onCancel={() => setShowStopConfirmation(false)}
+      />
     </div>
     </>
   );

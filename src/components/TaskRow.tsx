@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { TaskState, TaskRun } from '../types';
 import { StatusIcon } from './StatusComponents';
 
@@ -6,7 +6,7 @@ interface TaskRowProps {
   task: TaskRun;
 }
 
-export const TaskRow = ({ task }: TaskRowProps) => {
+export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
   const isRunning = task.state === TaskState.RUNNING || task.state === TaskState.RETRYING;
   const logsRef = useRef<HTMLDivElement>(null);
 

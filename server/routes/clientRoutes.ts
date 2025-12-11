@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { flowEngine } from '../engine/FlowEngine';
+import { PerformanceSensitivity } from '../engine/services/PerformanceMonitor';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,8 +17,8 @@ let clientStatus: 'stopped' | 'starting' | 'running' | 'error' = 'stopped';
 let clientLogs: string[] = [];
 let activeClient: ClientConfig | null = null;
 
-// Performance sensitivity levels
-export type PerformanceSensitivity = 'conservative' | 'normal' | 'aggressive';
+// Performance sensitivity levels - imported from PerformanceMonitor service
+export type { PerformanceSensitivity };
 
 // Load client configurations
 interface ClientConfig {
