@@ -33,10 +33,19 @@ export const filterRunsBySearchQuery = (
 ) => {
   if (!searchQuery.trim()) return runs;
   const query = searchQuery.toLowerCase();
-  return runs.filter(r =>
-    r.flowName.toLowerCase().includes(query) ||
-    r.id.toLowerCase().includes(query)
-  );
+  return runs.filter(r => {
+    // Search in flow name and ID
+    if (r.flowName.toLowerCase().includes(query) || r.id.toLowerCase().includes(query)) {
+      return true;
+    }
+    // Search in tag values
+    if (r.tags) {
+      return Object.values(r.tags).some(value =>
+        value.toLowerCase().includes(query)
+      );
+    }
+    return false;
+  });
 };
 
 export const filterRunsByDate = (
