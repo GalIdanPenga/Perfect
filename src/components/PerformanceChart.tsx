@@ -31,8 +31,13 @@ export function PerformanceChart({ data, title }: PerformanceChartProps) {
   const barSpacing = plotWidth / data.length;
 
   const formatDuration = (ms: number) => {
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
+    if (ms >= 60000) {
+      return `${(ms / 60000).toFixed(2)}m`;
+    } else if (ms >= 1000) {
+      return `${(ms / 1000).toFixed(3)}s`;
+    } else {
+      return `${Math.round(ms)}ms`;
+    }
   };
 
   return (
