@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  /* Custom font sizes */
+  --font-size-xs: 0.875rem;
+  --font-size-xs--line-height: 1.5;
+  --font-size-sm: 1rem;
+  --font-size-sm--line-height: 1.6;
+  --font-size-base: 1.125rem;
+  --font-size-base--line-height: 1.6;
+  --font-size-lg: 1.25rem;
+  --font-size-lg--line-height: 1.6;
+  --font-size-xl: 1.5rem;
+  --font-size-xl--line-height: 1.5;
+  --font-size-2xl: 1.875rem;
+  --font-size-2xl--line-height: 1.4;
+
+  /* Custom font families */
+  --font-family-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --font-family-sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Cyber color palette */
+  --color-cyber-black: #0f172a;
+  --color-cyber-dark: #1e293b;
+  --color-cyber-card: #334155;
+  --color-cyber-border: #334155;
+  --color-cyber-text: #ffffff;
+  --color-cyber-muted: #cbd5e1;
+  --color-cyber-primary: #38bdf8;
+  --color-cyber-secondary: #818cf8;
+  --color-cyber-success: #34d399;
+  --color-cyber-danger: #fb7185;
+  --color-cyber-warning: #fbbf24;
+
+  /* Custom shadows */
+  --shadow-neon: 0 0 10px rgba(56, 189, 248, 0.2), 0 0 20px rgba(56, 189, 248, 0.05);
+  --shadow-glass: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+}
+
+body {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+
+/* Custom scrollbar for code blocks and panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.5);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #38bdf8;
+}
+
+/* Subtle grid background */
+.bg-grid-pattern {
+  background-size: 40px 40px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+}

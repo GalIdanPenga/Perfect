@@ -5,7 +5,7 @@
       "name": "Perfect Example Flows",
       "description": "Default example workflows with 4 flows",
       "workingDir": "examples/workflows",
-      "command": "python3",
+      "command": "python",
       "args": ["example_flows.py"],
       "color": "#00D9FF",
       "performanceSensitivity": "normal"
@@ -15,7 +15,7 @@
       "name": "Custom Python Client",
       "description": "Custom Python client with development config",
       "workingDir": "examples/workflows",
-      "command": "python3",
+      "command": "python",
       "args": ["example_flows.py", "--config", "dev"],
       "color": "#FF0000",
       "performanceSensitivity": "aggressive"
