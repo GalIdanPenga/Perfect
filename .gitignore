@@ -25,6 +25,8 @@ dist-ssr
 
 # Python
 *.pyc
+__pycache__/
+examples/venv/
 
 # Database
 server/database/flows.db
