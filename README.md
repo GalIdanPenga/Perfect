@@ -32,7 +32,7 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
 
    This will start:
    - Frontend (React UI): http://localhost:5173
-   - Backend (Express API): http://localhost:3001
+   - Backend (Express API): http://localhost:3000
 
 3. Open http://localhost:5173 in your browser
 

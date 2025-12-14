@@ -105,6 +105,31 @@ export default function App() {
   const selectedClient = availableClients.find(c => c.id === selectedClientId);
   const themeColor = selectedClient?.color || activeClient?.color || DEFAULT_THEME_COLOR;
 
+  // Auto-detect if client is running externally and flows are being registered
+  useEffect(() => {
+    // If there's no session start time but we have recent running/pending flows,
+    // automatically set the session start time to show the live monitor
+    if (!currentSessionStartTime && runs.length > 0) {
+      const recentRunningFlows = runs.filter(run =>
+        run.state === TaskState.RUNNING ||
+        run.state === TaskState.PENDING ||
+        run.state === TaskState.RETRYING
+      );
+
+      if (recentRunningFlows.length > 0) {
+        // Find the earliest start time among running flows
+        const earliestStartTime = recentRunningFlows.reduce((earliest, run) => {
+          const runTime = new Date(run.startTime);
+          return runTime < earliest ? runTime : earliest;
+        }, new Date(recentRunningFlows[0].startTime));
+
+        // Set session start time slightly before the earliest flow (2 seconds buffer)
+        earliestStartTime.setSeconds(earliestStartTime.getSeconds() - 2);
+        setSessionStartTime(earliestStartTime.toISOString());
+      }
+    }
+  }, [runs, currentSessionStartTime, setSessionStartTime]);
+
   // Separate current session runs from past runs
   const currentSessionRuns = currentSessionStartTime
     ? runs.filter(run => new Date(run.startTime) >= new Date(currentSessionStartTime))

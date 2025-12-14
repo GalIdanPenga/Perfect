@@ -27,6 +27,8 @@ dist-ssr
 *.pyc
 __pycache__/
 examples/venv/
+examples/.venv
+examples/wheels/
 
 # Database
 server/database/flows.db
@@ -35,3 +37,7 @@ server/database/flows.db-wal
 
 # Reports
 Reports/
+
+# Offline installation packages
+offline_packages/
+offline_setup/offline_packages/
