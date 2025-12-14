@@ -11,59 +11,112 @@ pip install -r requirements.txt
 
 ## Quick Start
 
-### 1. Define Tasks
-
-Use the `@task` decorator to define individual task functions:
+Here's a complete example - just 2 simple steps:
 
 ```python
-from perfect_client import task
+from perfect_client.sdk import task, flow
+import time
 
-@task(weight=5, estimated_time=3000)
+# 1. Define tasks and flows with decorators
+@task(estimated_time=2000)
 def extract_data():
     """Extract data from database"""
-    # Your task logic here
-    return data
-```
+    print("Extracting data...")
+    return {"records": 1000}
 
-**Parameters:**
-- `weight`: Relative importance for progress calculation (default: 1)
-- `estimated_time`: Expected duration in milliseconds (default: 1000)
-
-### 2. Define Flows
-
-Use the `@flow` decorator to compose tasks into workflows:
-
-```python
-from perfect_client import flow, CronSchedule
+@task(estimated_time=3000)
+def transform_data(data):
+    """Clean and transform data"""
+    print(f"Transforming {data['records']} records...")
+    return {"clean_records": 950}
 
 @flow(
-    name="Daily ETL Pipeline",
+    name="My ETL Pipeline",
     description="Extract, transform, and load daily data",
-    schedule=CronSchedule("0 0 * * *")
+    tags={"version": "v1.0", "team": "data-eng"}
 )
-def daily_etl():
+def my_etl():
     """Main ETL workflow"""
-    conn = connect_to_db()
-    data = extract_data(conn)
-    cleaned = transform_data(data)
-    load_data(cleaned)
+    data = extract_data()
+    clean_data = transform_data(data)
+    return clean_data
+
+# 2. Call your flows - that's it!
+if __name__ == "__main__":
+    my_etl()  # SDK auto-connects, registers, and starts listening!
+
+    # Keep script running
+    while True:
+        time.sleep(1)
+```
+
+**That's it!** Just 2 steps:
+- ✅ **Define tasks and flows** using decorators
+- ✅ **Call flows** - SDK automatically handles everything (connection, registration, listening, execution)
+
+**Zero Configuration**: The SDK automatically:
+- Connects to the backend when you call a flow
+- Registers the flow with Perfect
+- Starts listening for execution requests in background
+- Handles execution and graceful shutdown
+
+### Task Decorator Parameters
+
+```python
+@task(estimated_time=3000, crucial_pass=True)
 ```
 
 **Parameters:**
-- `name`: Human-readable flow name
-- `description`: What the flow does
-- `schedule`: Optional scheduling (CronSchedule or IntervalSchedule)
+- `estimated_time`: Expected duration in milliseconds (default: 1000)
+  - Used for weight-based progress calculation
+- `crucial_pass`: If True, task failure fails the entire flow (default: True)
+  - Set to False for optional tasks that shouldn't stop the flow
 
-### 3. Run the Example
+### Flow Decorator Parameters
 
-```bash
-python client_example.py
+```python
+@flow(
+    name="My Flow",
+    description="What this flow does",
+    tags={"version": "v1.0", "team": "data-eng"}
+)
 ```
 
-This will:
-1. Register all defined flows with the Perfect engine
-2. Display flow metadata and task information
-3. Make flows available in the Perfect UI for monitoring
+**Parameters:**
+- `name`: Human-readable flow name (required)
+- `description`: What the flow does (optional)
+- `tags`: Dictionary of metadata tags for organization (optional)
+  - Example: `{"version": "v1.0", "team": "ml-ops", "priority": "high"}`
+
+### Configuration (Optional)
+
+By default, the SDK auto-connects to `http://localhost:3000` with client ID `perfect_example`.
+
+To customize, use `configure()`:
+
+```python
+from perfect_client.sdk import configure
+
+configure(
+    backend_url="http://localhost:3000",  # Perfect backend URL
+    client_id="my_custom_client",         # Unique client identifier
+    mock=False                             # Set to True for testing without backend
+)
+```
+
+Call `configure()` before calling any flows if you need custom settings.
+
+### Listen Function
+
+```python
+listen()  # Start listening for execution requests
+```
+
+Call `listen()` after you've called all the flows you want to register. It:
+- Ensures the client is connected (auto-connects if needed)
+- Starts listening for execution requests from the Perfect UI
+- Blocks until interrupted (Ctrl+C)
+- Automatically shuts down gracefully
 
 ## Example Flows
 

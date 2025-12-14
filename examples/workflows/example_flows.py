@@ -2,31 +2,27 @@
 """
 Perfect Python Client - Flow Definitions
 
-This file contains the workflow definitions using Perfect's Python SDK.
-It defines all flows and tasks, registers them with Perfect, and handles execution.
+This file demonstrates Perfect's fully automatic Python SDK.
+Just define tasks/flows with decorators and call them. That's it!
 
 To run:
     python examples/workflows/example_flows.py
 
-The client will:
-1. Register all defined flows with Perfect
-2. Flows are automatically triggered upon registration
-3. Listen for execution requests from Perfect
-4. Execute flows when triggered
-5. Send logs back to Perfect in real-time
+How it works:
+1. Calling a flow auto-connects to Perfect and registers it
+2. SDK automatically starts listening for execution requests in background
+3. Flows execute and report progress in real-time
+4. No manual setup, connection, or listener management needed!
 """
 
 import sys
 import os
 import time
-import threading
 
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from perfect_client.sdk import task, flow, get_registry, TaskResult
-from perfect_client.api import create_client
-from perfect_client.executor import create_execution_handler
+from perfect_client.sdk import task, flow, TaskResult
 
 
 # ==========================================
@@ -351,52 +347,21 @@ def weekly_report():
 
 
 # ==========================================
-# Client Setup
+# Register Flows with Perfect
 # ==========================================
 
-
-def main():
-    """Main entry point for the Perfect Python client"""
-    print("\n" + "=" * 60)
-    print("Perfect Python Client")
-    print("=" * 60)
-
-    # Create API client and connect to Perfect backend
-    client = create_client(mock=False)
-
-    try:
-        # Set client on registry - this automatically registers all flows
-        registry = get_registry()
-        registry.set_client(client)
-
-        # Track completion for auto-shutdown
-        total_flows = len(registry.get_flows())
-        completed_count = {'value': 0}
-        execution_lock = threading.Lock()
-
-        def on_flow_complete(flow_name: str):
-            """Called when a flow completes execution"""
-            with execution_lock:
-                completed_count['value'] += 1
-                print(f"\n[Perfect Client] Completed {completed_count['value']}/{total_flows} flows")
-
-                # Auto-shutdown after all flows complete
-                if completed_count['value'] >= total_flows:
-                    print("[Perfect Client] All flows completed. Shutting down...")
-                    client.stop_listening()
-
-        # Create execution handler using the executor module
-        execution_handler = create_execution_handler(client, on_flow_complete)
-
-        # Register the handler and start listening for execution requests
-        client.on_execution_request(execution_handler)
-        client.listen_for_executions()
-
-    except KeyboardInterrupt:
-        print("\n\n[Perfect Client] Shutting down...")
-    finally:
-        client.close()
-
-
 if __name__ == "__main__":
-    main()
+    # Just call the flows you want to register - SDK handles the rest!
+    daily_sales_etl()
+    churn_model_retraining()
+    infra_health_check()
+    weekly_report()
+
+    # That's it! SDK auto-connects, registers, and listens in background.
+    # Keep the script running to handle execution requests.
+    import time
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\n[Perfect] Shutting down...")

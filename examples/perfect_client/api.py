@@ -83,10 +83,10 @@ class PerfectAPIClient:
             response.raise_for_status()
 
             trigger_msg = f" (auto-triggering with config: {configuration})" if auto_trigger else ""
-            print(f"✓ Registered flow: {flow_definition['name']}{trigger_msg}")
+            print(f"[OK] Registered flow: {flow_definition['name']}{trigger_msg}")
             return True
         except requests.exceptions.RequestException as e:
-            print(f"✗ Failed to register flow {flow_definition['name']}: {e}")
+            print(f"[ERROR] Failed to register flow {flow_definition['name']}: {e}")
             return False
 
     def send_log(self, run_id: str, log_message: str) -> bool:
@@ -109,7 +109,7 @@ class PerfectAPIClient:
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException as e:
-            print(f"✗ Failed to send log: {e}")
+            print(f"[ERROR] Failed to send log: {e}")
             return False
 
     def update_task_state(self, run_id: str, task_index: int, state: str, progress: int = None, duration_ms: int = None, result: Dict = None) -> bool:
@@ -144,7 +144,7 @@ class PerfectAPIClient:
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException as e:
-            print(f"✗ Failed to update task state: {e}")
+            print(f"[ERROR] Failed to update task state: {e}")
             return False
 
     def send_heartbeat(self) -> bool:
@@ -280,7 +280,7 @@ class MockPerfectClient(PerfectAPIClient):
         """Mock flow registration - stores locally"""
         self._registered_flows.append(flow_definition)
         trigger_msg = f" (auto-triggering with config: {configuration})" if auto_trigger else ""
-        print(f"[Mock] ✓ Registered flow: {flow_definition['name']}{trigger_msg}")
+        print(f"[Mock] [OK] Registered flow: {flow_definition['name']}{trigger_msg}")
         return True
 
     def send_log(self, run_id: str, log_message: str) -> bool:

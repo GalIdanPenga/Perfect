@@ -90,7 +90,8 @@ perfect/
 Define workflows using the Perfect Python SDK:
 
 ```python
-from perfect_client import task, flow
+from perfect_client.sdk import task, flow
+import time
 
 @task(estimated_time=3000)
 def extract_data():
@@ -120,6 +121,14 @@ def daily_etl():
     data = extract_data()
     cleaned = transform_data(data)
     load_data(cleaned)
+
+# Just call your flows - SDK does the rest!
+if __name__ == "__main__":
+    daily_etl()  # SDK auto-handles everything
+
+    # Keep running
+    while True:
+        time.sleep(1)
 ```
 
 See [PYTHON_CLIENT.md](./examples/perfect_client/PYTHON_CLIENT.md) for detailed Python SDK documentation.
@@ -127,14 +136,14 @@ See [PYTHON_CLIENT.md](./examples/perfect_client/PYTHON_CLIENT.md) for detailed 
 ## How It Works
 
 1. **Define Flows** - Write Python workflows using `@task` and `@flow` decorators
-2. **Register Flows** - Python client registers flows with the backend via REST API
-3. **Trigger Execution** - Click trigger button in the UI to execute flows
-4. **Long Polling** - Python client continuously polls the backend for execution requests
-5. **Execute & Report** - Client executes tasks and sends progress updates back to the server
-6. **Real-Time Updates** - UI displays live execution progress with weighted progress bars
-7. **Persistent History** - All flows and runs are stored in SQLite database
-8. **Heartbeat Monitoring** - Client sends heartbeats; flows marked failed if client disconnects
-9. **Auto Shutdown** - Client automatically stops after all registered flows complete
+2. **Call Flows** - Flows are registered with Perfect only when you call them (lazy registration)
+3. **Register Flows** - Python client registers flows with the backend via REST API on first call
+4. **Trigger Execution** - Click trigger button in the UI to execute flows
+5. **Long Polling** - Python client continuously polls the backend for execution requests
+6. **Execute & Report** - Client executes tasks and sends progress updates back to the server
+7. **Real-Time Updates** - UI displays live execution progress with weighted progress bars
+8. **Persistent History** - All flows and runs are stored in SQLite database
+9. **Heartbeat Monitoring** - Client sends heartbeats; flows marked failed if client disconnects
 
 ## Architecture
 
