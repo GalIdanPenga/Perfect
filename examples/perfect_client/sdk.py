@@ -279,6 +279,7 @@ class WorkflowRegistry:
 
     def task(
         self,
+        name: Optional[str] = None,
         estimated_time: int = 1000,
         crucial_pass: bool = True
     ) -> Callable:
@@ -286,11 +287,12 @@ class WorkflowRegistry:
         Decorator to register a function as a task.
 
         Args:
+            name: Human-readable task name (optional, defaults to function name)
             estimated_time: Expected duration in milliseconds (default: 1000)
             crucial_pass: If True, task failure fails the flow (default: True)
 
         Example:
-            @task(estimated_time=3000)
+            @task(name="Extract Data", estimated_time=3000)
             def my_task():
                 return "result"
         """
@@ -298,9 +300,12 @@ class WorkflowRegistry:
             # Extract description from docstring
             description = (func.__doc__ or "").strip().split('\n')[0]
 
+            # Use provided name or fall back to function name
+            task_name = name or func.__name__
+
             # Create task definition
             task_def = TaskDefinition(
-                name=func.__name__,
+                name=task_name,
                 func=func,
                 description=description,
                 weight=estimated_time,
@@ -312,7 +317,7 @@ class WorkflowRegistry:
 
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                print(f"[Task] Executing {func.__name__}...")
+                print(f"[Task] Executing {task_name}...")
                 return func(*args, **kwargs)
 
             return wrapper
