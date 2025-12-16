@@ -10,7 +10,6 @@ export interface TaskDefinition {
   id: string;
   name: string;
   description: string;
-  weight: number;
   estimatedTime: number;
   crucialPass: boolean;
 }
@@ -77,7 +76,6 @@ export interface FlowRegistrationPayload {
   tasks: {
     name: string;
     description?: string;
-    weight?: number;
     estimatedTime?: number;
     crucialPass?: boolean;
   }[];

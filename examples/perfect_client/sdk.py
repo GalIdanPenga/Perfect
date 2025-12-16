@@ -28,6 +28,7 @@ import functools
 import sys
 import threading
 import atexit
+import time
 from typing import Callable, Optional, Any, List, Dict
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -71,7 +72,6 @@ class TaskDefinition:
     name: str
     func: Callable
     description: str = ""
-    weight: int = 1
     estimated_time: int = 1000  # milliseconds
     crucial_pass: bool = True
 
@@ -206,10 +206,10 @@ class WorkflowRegistry:
             # Convert to API format
             payload = self._flow_to_dict(analyzed_flow)
 
-            # Register with backend
+            # Register with backend (auto_trigger=False to prevent server execution requests)
             self._client.register_flow(
                 payload,
-                auto_trigger=flow_def.auto_trigger,
+                auto_trigger=False,
                 configuration=flow_def.auto_trigger_config
             )
         except Exception as e:
@@ -308,7 +308,6 @@ class WorkflowRegistry:
                 name=task_name,
                 func=func,
                 description=description,
-                weight=estimated_time,
                 estimated_time=estimated_time,
                 crucial_pass=crucial_pass
             )
@@ -375,12 +374,72 @@ class WorkflowRegistry:
 
                     registered['value'] = True
 
-                    # Start background listener
-                    self._auto_start_listener()
-
-                # Execute flow
+                # Execute flow with backend tracking for UI visibility
                 print(f"[Flow] Starting {name}...")
-                result = func(*args, **kwargs)
+
+                if self._client:
+                    # Trigger flow on backend to create a run (for UI tracking)
+                    try:
+                        import requests
+                        # Get flow ID from backend
+                        print(f"[Flow] DEBUG: Getting flow list from {self._client.base_url}/api/engine/flows")
+                        response = requests.get(f"{self._client.base_url}/api/engine/flows", timeout=2)
+                        flow_id = None
+                        if response.ok:
+                            flows = response.json()
+                            print(f"[Flow] DEBUG: Found {len(flows)} flows in backend")
+                            for backend_flow in flows:
+                                print(f"[Flow] DEBUG: Backend flow: {backend_flow.get('name')} (ID: {backend_flow.get('id')})")
+                                if backend_flow['name'] == name:
+                                    flow_id = backend_flow['id']
+                                    print(f"[Flow] DEBUG: Matched flow ID: {flow_id}")
+                                    break
+
+                        if flow_id:
+                            # Create run for client-initiated execution (doesn't send execution request)
+                            print(f"[Flow] DEBUG: Creating run for flow {flow_id}")
+                            response = requests.post(
+                                f"{self._client.base_url}/api/engine/run/{flow_id}",
+                                json={"configuration": "development"},
+                                timeout=2
+                            )
+                            print(f"[Flow] DEBUG: Create run response status: {response.status_code}")
+                            if response.ok:
+                                run_id = response.json().get('runId')
+                                print(f"[Flow] DEBUG: Created run: {run_id}")
+
+                                # Execute with tracking synchronously (blocking)
+                                from perfect_client.executor import FlowExecutor
+                                from perfect_client.api import ExecutionRequest
+
+                                request = ExecutionRequest(
+                                    run_id=run_id,
+                                    flow_name=name,
+                                    configuration="development"
+                                )
+                                executor = FlowExecutor(self._client)
+                                print(f"[Flow] DEBUG: Starting executor for run {run_id}")
+                                executor.handle_execution_request(request)
+                                print(f"[Flow] DEBUG: Execution completed")
+                                result = None
+                            else:
+                                print(f"[Flow] DEBUG: Create run failed, falling back to direct execution")
+                                # Fallback to direct execution
+                                result = func(*args, **kwargs)
+                        else:
+                            print(f"[Flow] DEBUG: Flow ID not found, falling back to direct execution")
+                            # Fallback to direct execution
+                            result = func(*args, **kwargs)
+                    except Exception as e:
+                        print(f"[Flow] Warning: Backend tracking failed: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        # Fallback to direct execution
+                        result = func(*args, **kwargs)
+                else:
+                    # No client, execute directly
+                    result = func(*args, **kwargs)
+
                 print(f"[Flow] Completed {name}")
                 return result
 
@@ -424,7 +483,6 @@ class WorkflowRegistry:
                 {
                     "name": task.name,
                     "description": task.description,
-                    "weight": task.weight,
                     "estimatedTime": task.estimated_time,
                     "crucialPass": task.crucial_pass
                 }

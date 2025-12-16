@@ -60,13 +60,17 @@ app.post('/api/flows', (req, res) => {
     const { autoTrigger, autoTriggerConfig, ...flowData } = req.body;
     const flow = flowEngine.registerFlow(flowData);
 
-    // Automatically trigger all flows immediately after registration
-    const config = autoTriggerConfig || 'development';
-    const activeClient = getActiveClient();
-    const clientColor = activeClient?.color;
-    const clientName = activeClient?.name;
-    console.log(`[Server] Auto-triggering flow '${flow.name}' with config: ${config}${clientColor ? ` and client color: ${clientColor}` : ''}${clientName ? ` for client: ${clientName}` : ''}`);
-    flowEngine.triggerFlow(flow.id, config, clientColor, clientName);
+    // Only auto-trigger if autoTrigger flag is explicitly true
+    if (autoTrigger === true) {
+      const config = autoTriggerConfig || 'development';
+      const activeClient = getActiveClient();
+      const clientColor = activeClient?.color;
+      const clientName = activeClient?.name;
+      console.log(`[Server] Auto-triggering flow '${flow.name}' with config: ${config}${clientColor ? ` and client color: ${clientColor}` : ''}${clientName ? ` for client: ${clientName}` : ''}`);
+      flowEngine.triggerFlow(flow.id, config, clientColor, clientName);
+    } else {
+      console.log(`[Server] Registered flow '${flow.name}' without auto-triggering (autoTrigger=${autoTrigger})`);
+    }
 
     res.json({ success: true, flow });
   } catch (error: any) {

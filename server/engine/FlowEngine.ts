@@ -192,23 +192,19 @@ export class FlowEngine {
       task.endTime = new Date().toISOString();
       task.progress = stateStr === 'COMPLETED' ? 100 : task.progress;
 
-      // Check for performance outliers on completion
+      // Check for performance outliers and update statistics on completion
       if (stateStr === 'COMPLETED' && task.durationMs !== undefined) {
         const stats = statsDb.getTaskStats(run.flowName, task.taskName);
+        const activeClient = getActiveClient();
+        const sensitivity = activeClient?.performanceSensitivity || 'normal';
 
         if (stats) {
-          const activeClient = getActiveClient();
-          const sensitivity = activeClient?.performanceSensitivity || 'normal';
           const warning = this.performanceMonitor.detectOutlier(task.durationMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
-          // Always update warning (set or clear) based on final duration
           task.performanceWarning = warning || undefined;
           if (warning) {
             console.log(`[FlowEngine] ⚠️  Performance warning: ${run.flowName}/${task.taskName} - ${warning.message} (excluded from statistics)`);
-          }
-
-          // Update statistics ONLY if this is not an outlier
-          // Outliers should not corrupt the average and standard deviation
-          if (!warning) {
+          } else {
+            // Update statistics only if not an outlier
             try {
               statsDb.updateTaskStats(run.flowName, task.taskName, task.durationMs);
               console.log(`[FlowEngine] Updated statistics for ${run.flowName}/${task.taskName}: ${task.durationMs}ms`);
@@ -236,6 +232,7 @@ export class FlowEngine {
       run.state = TaskState.COMPLETED;
       run.progress = 100;
       run.endTime = new Date().toISOString();
+
       // Generate report on successful completion
       run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
 
@@ -342,11 +339,11 @@ export class FlowEngine {
   }
 
   /**
-   * Trigger a flow execution
+   * Create a run for a flow without notifying clients (for client-initiated execution)
    */
-  triggerFlow(flowId: string, configuration: string = 'development', clientColor?: string, clientName?: string): void {
+  createRun(flowId: string, configuration: string = 'development', clientColor?: string, clientName?: string): string | undefined {
     const flow = this.flows.find(f => f.id === flowId);
-    if (!flow) return;
+    if (!flow) return undefined;
 
     const timestamp = new Date().toISOString();
 
@@ -359,16 +356,67 @@ export class FlowEngine {
       configuration: configuration,
       tags: flow.tags,
       logs: [],
-      tasks: flow.tasks.map(t => ({
-        id: `tr-${this.generateId()}`,
-        taskId: t.id,
-        taskName: t.name,
-        state: TaskState.PENDING,
-        logs: [],
-        weight: t.weight,
-        estimatedTime: t.estimatedTime,
-        progress: 0
-      })),
+      tasks: flow.tasks.map(t => {
+        return {
+          id: `tr-${this.generateId()}`,
+          taskId: t.id,
+          taskName: t.name,
+          state: TaskState.PENDING,
+          logs: [],
+          weight: 1 / flow.tasks.length,  // Equal distribution
+          estimatedTime: t.estimatedTime,
+          progress: 0
+        };
+      }),
+      progress: 0,
+      clientColor: clientColor,
+      clientName: clientName
+    };
+
+    this.runs.unshift(newRun);
+
+    // Remove the flow from the library immediately
+    this.removeFlow(flowId);
+
+    // Save the new run to the database
+    runDb.saveRun(newRun);
+
+    this.notifyStateChange();
+
+    // Don't notify clients - this is client-initiated execution
+    return newRun.id;
+  }
+
+  /**
+   * Trigger a flow execution (server-initiated, notifies clients)
+   */
+  triggerFlow(flowId: string, configuration: string = 'development', clientColor?: string, clientName?: string): string | undefined {
+    const flow = this.flows.find(f => f.id === flowId);
+    if (!flow) return undefined;
+
+    const timestamp = new Date().toISOString();
+
+    const newRun: FlowRun = {
+      id: `run-${this.generateId()}`,
+      flowId: flow.id,
+      flowName: flow.name,
+      state: TaskState.RUNNING,
+      startTime: timestamp,
+      configuration: configuration,
+      tags: flow.tags,
+      logs: [],
+      tasks: flow.tasks.map(t => {
+        return {
+          id: `tr-${this.generateId()}`,
+          taskId: t.id,
+          taskName: t.name,
+          state: TaskState.PENDING,
+          logs: [],
+          weight: 1 / flow.tasks.length,  // Equal distribution
+          estimatedTime: t.estimatedTime,
+          progress: 0
+        };
+      }),
       progress: 0,
       clientColor: clientColor,
       clientName: clientName
@@ -386,6 +434,8 @@ export class FlowEngine {
 
     // Notify clients that a flow has been triggered
     this.notifyFlowTrigger(newRun.id, flow.name, configuration);
+
+    return newRun.id;
   }
 
   /**

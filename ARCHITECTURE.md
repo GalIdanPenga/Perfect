@@ -119,7 +119,7 @@ export class FlowEngine {
 
 #### SDK (`examples/perfect_client/sdk.py`)
 ```python
-@task(weight=5, estimated_time=3000)
+@task(estimated_time=3000)
 def extract_data():
     # Task implementation
     pass
@@ -294,7 +294,7 @@ export default router;
 
 **tasks** - Task definitions within flows
 - `id` (PRIMARY KEY), `flow_id` (FOREIGN KEY)
-- `name`, `weight`, `estimated_time`
+- `name`, `estimated_time`
 
 **task_runs** - Task execution history
 - `id` (PRIMARY KEY), `run_id` (FOREIGN KEY)
@@ -307,7 +307,7 @@ export default router;
 **task_statistics** - Historical task performance
 - `id` (PRIMARY KEY)
 - `flow_name`, `task_name`
-- `avg_duration_ms` - Rolling average
+- `avg_duration_ms` - Rolling average duration
 - `m2` - Sum of squared differences (Welford's algorithm)
 - `sample_count` - Number of executions
 - `last_updated` - Timestamp

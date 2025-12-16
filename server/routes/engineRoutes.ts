@@ -31,14 +31,29 @@ router.get('/runs', (req, res) => {
 
 /**
  * POST /api/engine/trigger/:flowId
- * Trigger a flow execution
+ * Trigger a flow execution (server-initiated, sends execution request to clients)
  */
 router.post('/trigger/:flowId', (req, res) => {
   try {
     const { flowId } = req.params;
     const { configuration } = req.body;
-    flowEngine.triggerFlow(flowId, configuration || 'development');
-    res.json({ success: true });
+    const runId = flowEngine.triggerFlow(flowId, configuration || 'development');
+    res.json({ success: true, runId });
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * POST /api/engine/run/:flowId
+ * Create a run for client-initiated execution (no execution request sent)
+ */
+router.post('/run/:flowId', (req, res) => {
+  try {
+    const { flowId } = req.params;
+    const { configuration } = req.body;
+    const runId = flowEngine.createRun(flowId, configuration || 'development');
+    res.json({ success: true, runId });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
   }

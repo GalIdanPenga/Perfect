@@ -33,7 +33,7 @@ function initializeDatabase() {
       flow_id TEXT NOT NULL,
       name TEXT NOT NULL,
       description TEXT,
-      weight INTEGER NOT NULL,
+      weight INTEGER NOT NULL DEFAULT 1,
       estimated_time INTEGER NOT NULL,
       crucial_pass INTEGER NOT NULL DEFAULT 1,
       FOREIGN KEY (flow_id) REFERENCES flows(id) ON DELETE CASCADE
@@ -235,8 +235,8 @@ export const flowDb = {
 
     // Insert tasks
     const taskStmt = db.prepare(`
-      INSERT INTO tasks (id, flow_id, name, description, weight, estimated_time, crucial_pass)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, flow_id, name, description, estimated_time, crucial_pass)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     for (const task of flow.tasks) {
@@ -245,7 +245,6 @@ export const flowDb = {
         flow.id,
         task.name,
         task.description,
-        task.weight,
         task.estimatedTime,
         task.crucialPass ? 1 : 0
       );
@@ -270,7 +269,6 @@ export const flowDb = {
           id: task.id,
           name: task.name,
           description: task.description,
-          weight: task.weight,
           estimatedTime: task.estimated_time,
           crucialPass: task.crucial_pass === 1
         }))
@@ -297,7 +295,6 @@ export const flowDb = {
         id: task.id,
         name: task.name,
         description: task.description,
-        weight: task.weight,
         estimatedTime: task.estimated_time,
         crucialPass: task.crucial_pass === 1
       }))

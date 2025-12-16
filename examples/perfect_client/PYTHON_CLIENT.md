@@ -153,8 +153,13 @@ The `client_example.py` includes 4 production-ready workflow examples:
 
 ### Decorators
 
-#### `@task(weight=1, estimated_time=1000)`
+#### `@task(name=None, estimated_time=1000, crucial_pass=True)`
 Registers a function as a task.
+
+**Parameters:**
+- `name`: Human-readable task name (optional, defaults to function name)
+- `estimated_time`: Expected duration in milliseconds (default: 1000)
+- `crucial_pass`: If True, task failure fails the flow (default: True)
 
 #### `@flow(name, description, schedule=None)`
 Registers a function as a flow.
