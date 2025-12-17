@@ -38,13 +38,17 @@ export const useClientActions = (
     }
   };
 
-  const handleStopClient = async () => {
+  const handleStopClient = async (clearSession: boolean = false) => {
     try {
       await fetch(`${API_BASE_URL}/client/stop`, {
         method: 'POST'
       });
       setClientStatus('stopped');
-      setSessionStartTime(null);  // Clear session when stopping
+
+      // Only clear session when explicitly requested (e.g., returning to client selection)
+      if (clearSession) {
+        setSessionStartTime(null);
+      }
 
       // Wait for the flows to be failed (100ms + small buffer), then refresh
       if (refreshRuns) {

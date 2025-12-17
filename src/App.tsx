@@ -195,9 +195,9 @@ export default function App() {
   }, [allFlowsFinished]);
 
   // Handler to return to client selection
-  const handleReturnToClients = () => {
-    setClientStatus('stopped');
-    setSessionStartTime(null); // Clear session marker and localStorage
+  const handleReturnToClients = async () => {
+    // Stop client on server side and clear session to move flows to history
+    await handleStopClient(true);
   };
 
   // Handler to show confirmation dialog when switching clients
