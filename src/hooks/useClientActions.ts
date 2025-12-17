@@ -44,6 +44,7 @@ export const useClientActions = (
         method: 'POST'
       });
       setClientStatus('stopped');
+      setSessionStartTime(null);  // Clear session when stopping
 
       // Wait for the flows to be failed (100ms + small buffer), then refresh
       if (refreshRuns) {

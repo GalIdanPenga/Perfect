@@ -363,7 +363,7 @@ export class FlowEngine {
           taskName: t.name,
           state: TaskState.PENDING,
           logs: [],
-          weight: 1 / flow.tasks.length,  // Equal distribution
+          weight: t.weight,  // Use weight calculated from estimated times during registration
           estimatedTime: t.estimatedTime,
           progress: 0
         };
@@ -412,7 +412,7 @@ export class FlowEngine {
           taskName: t.name,
           state: TaskState.PENDING,
           logs: [],
-          weight: 1 / flow.tasks.length,  // Equal distribution
+          weight: t.weight,  // Use weight calculated from estimated times during registration
           estimatedTime: t.estimatedTime,
           progress: 0
         };

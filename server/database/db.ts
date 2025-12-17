@@ -235,8 +235,8 @@ export const flowDb = {
 
     // Insert tasks
     const taskStmt = db.prepare(`
-      INSERT INTO tasks (id, flow_id, name, description, estimated_time, crucial_pass)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO tasks (id, flow_id, name, description, weight, estimated_time, crucial_pass)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const task of flow.tasks) {
@@ -245,6 +245,7 @@ export const flowDb = {
         flow.id,
         task.name,
         task.description,
+        task.weight,
         task.estimatedTime,
         task.crucialPass ? 1 : 0
       );
@@ -269,6 +270,7 @@ export const flowDb = {
           id: task.id,
           name: task.name,
           description: task.description,
+          weight: task.weight,
           estimatedTime: task.estimated_time,
           crucialPass: task.crucial_pass === 1
         }))
@@ -295,6 +297,7 @@ export const flowDb = {
         id: task.id,
         name: task.name,
         description: task.description,
+        weight: task.weight,
         estimatedTime: task.estimated_time,
         crucialPass: task.crucial_pass === 1
       }))

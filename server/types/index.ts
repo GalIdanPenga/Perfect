@@ -10,6 +10,7 @@ export interface TaskDefinition {
   id: string;
   name: string;
   description: string;
+  weight: number;  // Calculated from estimated times during registration
   estimatedTime: number;
   crucialPass: boolean;
 }

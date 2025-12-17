@@ -177,9 +177,13 @@ router.post('/start', (req, res) => {
  */
 router.post('/stop', (req, res) => {
   if (!pythonProcess) {
+    // Even if process is not running, ensure we clean up state
+    clientStatus = 'stopped';
+    activeClient = null;
+    flowEngine.failAllRunningFlows();
     return res.json({
-      success: false,
-      message: 'Client is not running',
+      success: true,
+      message: 'Client already stopped',
       status: clientStatus
     });
   }
@@ -187,20 +191,25 @@ router.post('/stop', (req, res) => {
   try {
     clientLogs.push('[Server] Stopping Python client...');
 
+    // Store reference to current process before killing
+    const processToKill = pythonProcess;
+
     // Kill the process first to stop it from sending more updates
-    pythonProcess.kill('SIGTERM');
+    processToKill.kill('SIGTERM');
 
     // Force kill after 5 seconds if still running
     setTimeout(() => {
-      if (pythonProcess) {
-        pythonProcess.kill('SIGKILL');
+      try {
+        if (processToKill && !processToKill.killed) {
+          processToKill.kill('SIGKILL');
+        }
+      } catch (e) {
+        // Process already dead, ignore
       }
     }, 5000);
 
-    // Wait a brief moment for the process to stop sending updates, then fail all running flows
-    setTimeout(() => {
-      flowEngine.failAllRunningFlows();
-    }, 100);
+    // Fail all running flows immediately
+    flowEngine.failAllRunningFlows();
 
     res.json({
       success: true,
