@@ -14,7 +14,7 @@ pip install -r requirements.txt
 Here's a complete example - just 2 simple steps:
 
 ```python
-from perfect_client.sdk import task, flow
+from perfect.sdk import task, flow
 import time
 
 # 1. Define tasks and flows with decorators
@@ -97,7 +97,7 @@ By default, the SDK auto-connects to `http://localhost:3000` with client ID `per
 To customize, use `configure()`:
 
 ```python
-from perfect_client.sdk import configure
+from perfect.sdk import configure
 
 configure(
     backend_url="http://localhost:3000",  # Perfect backend URL
@@ -188,7 +188,7 @@ IntervalSchedule("*/5 * * * *")  # Every 5 minutes
 
 ```
 perfect/
-├── perfect_client/sdk.py              # Python SDK (decorators, engine)
+├── perfect/sdk.py                     # Python SDK (decorators, engine)
 ├── client_example.py      # Example workflows
 ├── requirements.txt       # Python dependencies
 └── PYTHON_CLIENT.md      # This file
@@ -203,13 +203,13 @@ pytest tests/
 ### Type Checking
 
 ```bash
-mypy perfect_client/sdk.py client_example.py
+mypy perfect/sdk.py client_example.py
 ```
 
 ### Code Formatting
 
 ```bash
-black perfect_client/sdk.py client_example.py
+black perfect/sdk.py client_example.py
 ```
 
 ## Dynamic Task Execution

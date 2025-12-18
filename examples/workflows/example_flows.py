@@ -22,7 +22,7 @@ import time
 # Add parent directory to path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from perfect_client.sdk import task, flow, TaskResult
+from perfect.sdk import task, flow, TaskResult
 
 
 # ==========================================

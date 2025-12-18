@@ -147,7 +147,7 @@ class FlowDefinition:
 
 **Example:**
 ```python
-from perfect_client import task, flow, TaskResult
+from perfect import task, flow, TaskResult
 
 @task(estimated_time=3000)
 def my_task():
@@ -291,12 +291,14 @@ Multiple flows can run concurrently:
 
 ```
 examples/perfect_client/
-├── __init__.py           # Package exports
-├── api.py               # Transport layer
-├── sdk.py               # SDK layer
-├── executor.py          # Executor layer
+├── perfect/              # Python SDK package
+│   ├── __init__.py       # Package exports
+│   ├── api.py            # Transport layer
+│   ├── sdk.py            # SDK layer
+│   └── executor.py       # Executor layer
+├── pyproject.toml        # Package configuration
 ├── CLIENT_ARCHITECTURE.md  # This file
-└── PYTHON_CLIENT.md     # Python-specific docs
+└── PYTHON_CLIENT.md      # Python-specific docs
 
 examples/workflows/
 └── example_flows.py     # Application layer (user's flows)

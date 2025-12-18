@@ -5,7 +5,7 @@ A minimal workflow orchestration framework for Python with automatic
 connection, registration, and execution handling.
 
 Usage:
-    from perfect_client.sdk import task, flow
+    from perfect.sdk import task, flow
 
     @task(estimated_time=2000)
     def my_task():
@@ -197,7 +197,7 @@ class WorkflowRegistry:
             return
 
         print("\n[Perfect SDK] Auto-connecting to backend...")
-        from perfect_client.api import create_client, PerfectAPIClient
+        from perfect.api import create_client, PerfectAPIClient
 
         if self._mock:
             self._client = create_client(mock=True)
@@ -251,7 +251,7 @@ class WorkflowRegistry:
 
         def run_listener():
             """Background listener thread"""
-            from perfect_client.executor import create_execution_handler
+            from perfect.executor import create_execution_handler
 
             if not self._client:
                 return
@@ -665,7 +665,7 @@ def listen():
         my_flow()  # Registers and auto-starts listener
         listen()   # Optional: blocks until interrupted
     """
-    from perfect_client.executor import create_execution_handler
+    from perfect.executor import create_execution_handler
 
     # Ensure client is initialized
     _default_registry._ensure_client()
