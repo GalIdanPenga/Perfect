@@ -352,11 +352,17 @@ def weekly_report():
 # ==========================================
 
 if __name__ == "__main__":
-    # Just call the flows you want to register - SDK handles the rest!
-    daily_sales_etl()
-    churn_model_retraining()
-    infra_health_check()
-    weekly_report()
+    # make a thread for each flow to register them concurrently
+    print("[Perfect] Registering flows with Perfect platform...")
+    import threading
+    threads = []
+    for flow_func in [daily_sales_etl, churn_model_retraining, infra_health_check, weekly_report]:
+        t = threading.Thread(target=flow_func)
+        t.start()
+        threads.append(t)
+
+    for t in threads:
+        t.join()
 
     # That's it! SDK auto-connects, registers, and listens in background.
     # Keep the script running to handle execution requests.

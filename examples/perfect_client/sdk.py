@@ -149,9 +149,28 @@ class WorkflowRegistry:
         self._listener_started = False
         self._listening = False
 
-        # Execution context (for tracking task execution during flow)
-        self._current_run_id: Optional[str] = None
-        self._current_task_index: int = 0
+        # Execution context (thread-local for parallel flow support)
+        self._execution_context = threading.local()
+
+    # ------------------------------------------------------------------------
+    # Thread-local execution context helpers
+    # ------------------------------------------------------------------------
+
+    @property
+    def _current_run_id(self) -> Optional[str]:
+        return getattr(self._execution_context, 'run_id', None)
+
+    @_current_run_id.setter
+    def _current_run_id(self, value: Optional[str]):
+        self._execution_context.run_id = value
+
+    @property
+    def _current_task_index(self) -> int:
+        return getattr(self._execution_context, 'task_index', 0)
+
+    @_current_task_index.setter
+    def _current_task_index(self, value: int):
+        self._execution_context.task_index = value
 
     # ------------------------------------------------------------------------
     # Configuration
