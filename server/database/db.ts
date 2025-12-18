@@ -196,6 +196,18 @@ function initializeDatabase() {
     }
   }
 
+  // Create flow_task_structure table for storing learned task structures from actual execution
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS flow_task_structure (
+      flow_name TEXT NOT NULL,
+      task_index INTEGER NOT NULL,
+      task_name TEXT NOT NULL,
+      estimated_time INTEGER NOT NULL DEFAULT 1000,
+      last_updated TEXT NOT NULL,
+      PRIMARY KEY (flow_name, task_index)
+    )
+  `);
+
   // Create indices for better performance
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_tasks_flow_id ON tasks(flow_id);
@@ -204,6 +216,7 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_logs_run_id ON logs(run_id);
     CREATE INDEX IF NOT EXISTS idx_task_logs_run_id ON task_logs(run_id);
     CREATE INDEX IF NOT EXISTS idx_task_logs_task_run_id ON task_logs(task_run_id);
+    CREATE INDEX IF NOT EXISTS idx_flow_task_structure_flow_name ON flow_task_structure(flow_name);
   `);
 
   console.log('Database initialized successfully at:', dbPath);
@@ -714,6 +727,45 @@ export const statsDb = {
       runId: row.run_id,
       timestamp: row.timestamp,
       durationMs: row.duration_ms
+    }));
+  },
+
+  // Save learned task structure from a completed flow run
+  saveFlowTaskStructure(flowName: string, tasks: Array<{ taskName: string; estimatedTime: number }>) {
+    const timestamp = new Date().toISOString();
+
+    // Delete existing structure for this flow
+    db.prepare('DELETE FROM flow_task_structure WHERE flow_name = ?').run(flowName);
+
+    // Insert new structure
+    const stmt = db.prepare(`
+      INSERT INTO flow_task_structure (flow_name, task_index, task_name, estimated_time, last_updated)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    tasks.forEach((task, index) => {
+      stmt.run(flowName, index, task.taskName, task.estimatedTime, timestamp);
+    });
+
+    console.log(`[Database] Saved task structure for ${flowName}: ${tasks.length} tasks`);
+  },
+
+  // Get learned task structure for a flow
+  getFlowTaskStructure(flowName: string): Array<{ taskName: string; estimatedTime: number }> | null {
+    const rows = db.prepare(`
+      SELECT task_name, estimated_time
+      FROM flow_task_structure
+      WHERE flow_name = ?
+      ORDER BY task_index ASC
+    `).all(flowName) as any[];
+
+    if (rows.length === 0) {
+      return null;
+    }
+
+    return rows.map(row => ({
+      taskName: row.task_name,
+      estimatedTime: row.estimated_time
     }));
   }
 };

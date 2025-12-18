@@ -129,13 +129,82 @@ export class FlowEngine {
   /**
    * Update task state for a running flow
    */
-  updateTaskState(runId: string, taskIndex: number, state: TaskState | string, progress?: number, durationMs?: number, result?: TaskResult): boolean {
+  updateTaskState(runId: string, taskIndex: number, state: TaskState | string, progress?: number, durationMs?: number, result?: TaskResult, taskName?: string, clientEstimatedTime?: number): boolean {
     const run = this.runs.find(r => r.id === runId);
-    if (!run || !run.tasks[taskIndex]) {
+    if (!run) {
       return false;
     }
 
+    // Dynamically add task if it doesn't exist (for dynamic task execution)
+    if (!run.tasks[taskIndex]) {
+      const actualTaskName = taskName || `Task ${taskIndex + 1}`;
+
+      // Look up statistics for this task to get estimated time
+      // Priority: statistics > client-provided > default 1000ms
+      const taskStats = statsDb.getTaskStats(run.flowName, actualTaskName);
+      const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : (clientEstimatedTime || 1000);
+
+      if (taskStats) {
+        console.log(`[FlowEngine] Using statistics for new dynamic task ${actualTaskName}: ${estimatedTime}ms`);
+      } else if (clientEstimatedTime) {
+        console.log(`[FlowEngine] Using client-provided estimated time for ${actualTaskName}: ${estimatedTime}ms`);
+      }
+
+      // Create a new task entry
+      const newTask: TaskRun = {
+        id: `tr-${this.generateId()}`,
+        taskId: `dynamic-task-${taskIndex}`,
+        taskName: actualTaskName,
+        state: TaskState.PENDING,
+        logs: [],
+        weight: 1,  // Will be recalculated
+        estimatedTime: estimatedTime,
+        progress: 0
+      };
+
+      // Ensure array is large enough
+      while (run.tasks.length <= taskIndex) {
+        run.tasks.push(newTask);
+      }
+      run.tasks[taskIndex] = newTask;
+
+      // Recalculate weights for all tasks based on estimated times
+      const totalEstimatedTime = run.tasks.reduce((sum, t) => sum + t.estimatedTime, 0);
+      if (totalEstimatedTime > 0) {
+        run.tasks.forEach(t => {
+          t.weight = t.estimatedTime / totalEstimatedTime;
+        });
+      }
+
+      console.log(`[FlowEngine] Dynamically added task ${taskIndex}: ${actualTaskName} (estimated: ${estimatedTime}ms)`);
+    }
+
     const task = run.tasks[taskIndex];
+
+    // Update task name if provided (for dynamic tasks or when name doesn't match)
+    if (taskName && task.taskName !== taskName) {
+      console.log(`[FlowEngine] Task ${taskIndex} name changed: ${task.taskName} -> ${taskName}`);
+      task.taskName = taskName;
+
+      // Look up statistics for this task to get better estimated time
+      // Priority: statistics > client-provided > keep existing
+      const taskStats = statsDb.getTaskStats(run.flowName, taskName);
+      if (taskStats) {
+        task.estimatedTime = Math.round(taskStats.avgDurationMs);
+        console.log(`[FlowEngine] Updated estimated time for ${taskName} from statistics: ${task.estimatedTime}ms`);
+      } else if (clientEstimatedTime) {
+        task.estimatedTime = clientEstimatedTime;
+        console.log(`[FlowEngine] Updated estimated time for ${taskName} from client: ${task.estimatedTime}ms`);
+      }
+
+      // Recalculate weights for all tasks based on estimated times
+      const totalEstimatedTime = run.tasks.reduce((sum, t) => sum + t.estimatedTime, 0);
+      if (totalEstimatedTime > 0) {
+        run.tasks.forEach(t => {
+          t.weight = t.estimatedTime / totalEstimatedTime;
+        });
+      }
+    }
 
     // Don't allow updates to tasks that are already in a terminal state (COMPLETED or FAILED)
     // This prevents the Python client from overwriting FAILED states after Stop is clicked
@@ -224,37 +293,85 @@ export class FlowEngine {
       }
     }
 
-    // Update run state if all tasks complete or any failed
+    // Check if any task failed - mark flow as failed immediately
+    const anyFailed = run.tasks.some(t => t.state === TaskState.FAILED);
+
+    if (anyFailed) {
+      run.state = TaskState.FAILED;
+      run.endTime = new Date().toISOString();
+      // Generate report on failure
+      run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+    } else {
+      // Update weighted progress (don't mark as completed - wait for client to signal completion)
+      this.updateRunProgress(run);
+    }
+
+    runDb.saveRun(run);
+    this.notifyStateChange();
+    return true;
+  }
+
+  /**
+   * Complete a flow from client side - removes any predefined tasks that weren't executed
+   */
+  completeFlow(runId: string, actualTaskCount: number): boolean {
+    const run = this.runs.find(r => r.id === runId);
+    if (!run) {
+      return false;
+    }
+
+    // If the run has more tasks than were actually executed, remove the extras
+    if (run.tasks.length > actualTaskCount) {
+      const removedTasks = run.tasks.slice(actualTaskCount);
+      console.log(`[FlowEngine] Removing ${removedTasks.length} unused tasks from run ${runId}: ${removedTasks.map(t => t.taskName).join(', ')}`);
+      run.tasks = run.tasks.slice(0, actualTaskCount);
+
+      // Recalculate weights for remaining tasks
+      const totalEstimatedTime = run.tasks.reduce((sum, t) => sum + t.estimatedTime, 0);
+      if (totalEstimatedTime > 0) {
+        run.tasks.forEach(t => {
+          t.weight = t.estimatedTime / totalEstimatedTime;
+        });
+      }
+    }
+
+    // Mark all remaining tasks as completed if they're still running/pending
+    // (this handles edge cases where the last task update might not have been received)
     const allCompleted = run.tasks.every(t => t.state === TaskState.COMPLETED);
     const anyFailed = run.tasks.some(t => t.state === TaskState.FAILED);
 
     if (allCompleted && !anyFailed) {
       run.state = TaskState.COMPLETED;
       run.progress = 100;
-      run.endTime = new Date().toISOString();
+      if (!run.endTime) {
+        run.endTime = new Date().toISOString();
+      }
 
       // Generate report on successful completion
-      run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+      if (!run.reportPath) {
+        run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+      }
+
+      // Save the learned task structure for future runs
+      const taskStructure = run.tasks.map(t => ({
+        taskName: t.taskName,
+        estimatedTime: t.durationMs || t.estimatedTime
+      }));
+      statsDb.saveFlowTaskStructure(run.flowName, taskStructure);
 
       // Update flow statistics (only for successful runs WITHOUT warnings)
-      // If any task had a performance warning, the whole flow is considered an outlier
       const flowDuration = new Date(run.endTime).getTime() - new Date(run.startTime).getTime();
       const hasAnyWarnings = run.tasks.some(t => t.performanceWarning);
 
       if (!hasAnyWarnings) {
         statsDb.updateFlowStats(run.flowName, flowDuration);
         console.log(`[FlowEngine] Updated flow statistics for ${run.flowName}: ${flowDuration}ms`);
-      } else {
-        console.log(`[FlowEngine] Flow ${run.flowName} had performance warnings - excluded from statistics`);
       }
     } else if (anyFailed) {
       run.state = TaskState.FAILED;
-      run.endTime = new Date().toISOString();
-      // Generate report on failure
-      run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
-    } else {
-      // Update weighted progress
-      this.updateRunProgress(run);
+      if (!run.endTime) {
+        run.endTime = new Date().toISOString();
+      }
     }
 
     runDb.saveRun(run);
@@ -347,6 +464,54 @@ export class FlowEngine {
 
     const timestamp = new Date().toISOString();
 
+    // Check for learned task structure from previous runs
+    const learnedStructure = statsDb.getFlowTaskStructure(flow.name);
+    let tasks: TaskRun[];
+
+    if (learnedStructure && learnedStructure.length > 0) {
+      // Use learned task structure from previous executions
+      // But look up fresh statistics for estimated times
+      console.log(`[FlowEngine] Using learned task structure for ${flow.name}: ${learnedStructure.length} tasks`);
+
+      // First pass: get estimated times from statistics (or use saved value as fallback)
+      const tasksWithEstimates = learnedStructure.map(t => {
+        const taskStats = statsDb.getTaskStats(flow.name, t.taskName);
+        const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
+        return { taskName: t.taskName, estimatedTime };
+      });
+
+      const totalEstimatedTime = tasksWithEstimates.reduce((sum, t) => sum + t.estimatedTime, 0);
+
+      tasks = tasksWithEstimates.map((t, index) => {
+        const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : 1 / learnedStructure.length;
+        return {
+          id: `tr-${this.generateId()}`,
+          taskId: `learned-task-${index}`,
+          taskName: t.taskName,
+          state: TaskState.PENDING,
+          logs: [],
+          weight: weight,
+          estimatedTime: t.estimatedTime,
+          progress: 0
+        };
+      });
+    } else {
+      // Use tasks from flow registration (static analysis)
+      console.log(`[FlowEngine] Using static task structure for ${flow.name}: ${flow.tasks.length} tasks`);
+      tasks = flow.tasks.map(t => {
+        return {
+          id: `tr-${this.generateId()}`,
+          taskId: t.id,
+          taskName: t.name,
+          state: TaskState.PENDING,
+          logs: [],
+          weight: t.weight,
+          estimatedTime: t.estimatedTime,
+          progress: 0
+        };
+      });
+    }
+
     const newRun: FlowRun = {
       id: `run-${this.generateId()}`,
       flowId: flow.id,
@@ -356,18 +521,7 @@ export class FlowEngine {
       configuration: configuration,
       tags: flow.tags,
       logs: [],
-      tasks: flow.tasks.map(t => {
-        return {
-          id: `tr-${this.generateId()}`,
-          taskId: t.id,
-          taskName: t.name,
-          state: TaskState.PENDING,
-          logs: [],
-          weight: t.weight,  // Use weight calculated from estimated times during registration
-          estimatedTime: t.estimatedTime,
-          progress: 0
-        };
-      }),
+      tasks: tasks,
       progress: 0,
       clientColor: clientColor,
       clientName: clientName
@@ -396,6 +550,54 @@ export class FlowEngine {
 
     const timestamp = new Date().toISOString();
 
+    // Check for learned task structure from previous runs
+    const learnedStructure = statsDb.getFlowTaskStructure(flow.name);
+    let tasks: TaskRun[];
+
+    if (learnedStructure && learnedStructure.length > 0) {
+      // Use learned task structure from previous executions
+      // But look up fresh statistics for estimated times
+      console.log(`[FlowEngine] Using learned task structure for ${flow.name}: ${learnedStructure.length} tasks`);
+
+      // First pass: get estimated times from statistics (or use saved value as fallback)
+      const tasksWithEstimates = learnedStructure.map(t => {
+        const taskStats = statsDb.getTaskStats(flow.name, t.taskName);
+        const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
+        return { taskName: t.taskName, estimatedTime };
+      });
+
+      const totalEstimatedTime = tasksWithEstimates.reduce((sum, t) => sum + t.estimatedTime, 0);
+
+      tasks = tasksWithEstimates.map((t, index) => {
+        const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : 1 / learnedStructure.length;
+        return {
+          id: `tr-${this.generateId()}`,
+          taskId: `learned-task-${index}`,
+          taskName: t.taskName,
+          state: TaskState.PENDING,
+          logs: [],
+          weight: weight,
+          estimatedTime: t.estimatedTime,
+          progress: 0
+        };
+      });
+    } else {
+      // Use tasks from flow registration (static analysis)
+      console.log(`[FlowEngine] Using static task structure for ${flow.name}: ${flow.tasks.length} tasks`);
+      tasks = flow.tasks.map(t => {
+        return {
+          id: `tr-${this.generateId()}`,
+          taskId: t.id,
+          taskName: t.name,
+          state: TaskState.PENDING,
+          logs: [],
+          weight: t.weight,
+          estimatedTime: t.estimatedTime,
+          progress: 0
+        };
+      });
+    }
+
     const newRun: FlowRun = {
       id: `run-${this.generateId()}`,
       flowId: flow.id,
@@ -405,18 +607,7 @@ export class FlowEngine {
       configuration: configuration,
       tags: flow.tags,
       logs: [],
-      tasks: flow.tasks.map(t => {
-        return {
-          id: `tr-${this.generateId()}`,
-          taskId: t.id,
-          taskName: t.name,
-          state: TaskState.PENDING,
-          logs: [],
-          weight: t.weight,  // Use weight calculated from estimated times during registration
-          estimatedTime: t.estimatedTime,
-          progress: 0
-        };
-      }),
+      tasks: tasks,
       progress: 0,
       clientColor: clientColor,
       clientName: clientName

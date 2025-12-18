@@ -93,14 +93,32 @@ app.post('/api/flows/:runId/logs', (req, res) => {
 app.post('/api/runs/:runId/tasks/:taskIndex/state', (req, res) => {
   try {
     const { runId, taskIndex } = req.params;
-    const { state, progress, durationMs, result } = req.body;
+    const { state, progress, durationMs, result, taskName, estimatedTime } = req.body;
 
-    const success = flowEngine.updateTaskState(runId, parseInt(taskIndex), state, progress, durationMs, result);
+    const success = flowEngine.updateTaskState(runId, parseInt(taskIndex), state, progress, durationMs, result, taskName, estimatedTime);
 
     if (success) {
       res.json({ success: true });
     } else {
       res.status(404).json({ success: false, error: 'Run or task not found' });
+    }
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+// Flow completion endpoint - signals that client finished executing a flow
+app.post('/api/runs/:runId/complete', (req, res) => {
+  try {
+    const { runId } = req.params;
+    const { taskCount } = req.body;
+
+    const success = flowEngine.completeFlow(runId, taskCount);
+
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ success: false, error: 'Run not found' });
     }
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });

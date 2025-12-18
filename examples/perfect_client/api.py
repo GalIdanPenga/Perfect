@@ -112,7 +112,7 @@ class PerfectAPIClient:
             print(f"[ERROR] Failed to send log: {e}")
             return False
 
-    def update_task_state(self, run_id: str, task_index: int, state: str, progress: int = None, duration_ms: int = None, result: Dict = None) -> bool:
+    def update_task_state(self, run_id: str, task_index: int, state: str, progress: int = None, duration_ms: int = None, result: Dict = None, task_name: str = None, estimated_time: int = None) -> bool:
         """
         Update the state of a task in a flow run.
 
@@ -123,6 +123,8 @@ class PerfectAPIClient:
             progress: Optional progress percentage (0-100)
             duration_ms: Optional actual duration in milliseconds
             result: Optional task result (TaskResult.to_dict())
+            task_name: Optional task name (for dynamic task creation)
+            estimated_time: Optional estimated time in ms (for dynamic task creation)
 
         Returns:
             True if update successful, False otherwise
@@ -135,6 +137,10 @@ class PerfectAPIClient:
                 payload["durationMs"] = duration_ms
             if result is not None:
                 payload["result"] = result
+            if task_name is not None:
+                payload["taskName"] = task_name
+            if estimated_time is not None:
+                payload["estimatedTime"] = estimated_time
 
             response = self.session.post(
                 f"{self.base_url}/api/runs/{run_id}/tasks/{task_index}/state",
@@ -145,6 +151,30 @@ class PerfectAPIClient:
             return True
         except requests.exceptions.RequestException as e:
             print(f"[ERROR] Failed to update task state: {e}")
+            return False
+
+    def complete_flow(self, run_id: str, task_count: int) -> bool:
+        """
+        Signal that the flow has completed execution from the client side.
+        This allows the server to remove any predefined tasks that weren't executed.
+
+        Args:
+            run_id: The ID of the flow run
+            task_count: The actual number of tasks that were executed
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            response = self.session.post(
+                f"{self.base_url}/api/runs/{run_id}/complete",
+                json={"taskCount": task_count},
+                timeout=5
+            )
+            response.raise_for_status()
+            return True
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Failed to signal flow completion: {e}")
             return False
 
     def send_heartbeat(self) -> bool:

@@ -149,6 +149,10 @@ class WorkflowRegistry:
         self._listener_started = False
         self._listening = False
 
+        # Execution context (for tracking task execution during flow)
+        self._current_run_id: Optional[str] = None
+        self._current_task_index: int = 0
+
     # ------------------------------------------------------------------------
     # Configuration
     # ------------------------------------------------------------------------
@@ -316,11 +320,94 @@ class WorkflowRegistry:
 
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                print(f"[Task] Executing {task_name}...")
-                return func(*args, **kwargs)
+                # Check if we're in a tracked flow execution
+                if self._current_run_id and self._client:
+                    return self._execute_tracked_task(task_def, func, args, kwargs)
+                else:
+                    # Direct execution without tracking
+                    print(f"[Task] Executing {task_name}...")
+                    return func(*args, **kwargs)
 
             return wrapper
         return decorator
+
+    def _execute_tracked_task(self, task_def: TaskDefinition, func: Callable, args: tuple, kwargs: dict) -> Any:
+        """Execute a task with server tracking"""
+        import time as time_module
+        import threading
+
+        run_id = self._current_run_id
+        task_index = self._current_task_index
+        self._current_task_index += 1
+
+        print(f"[Task] Executing {task_def.name} (task {task_index})...")
+
+        # Mark task as running (include task name and estimated time for dynamic task creation)
+        self._client.update_task_state(run_id, task_index, 'RUNNING', 0, task_name=task_def.name, estimated_time=task_def.estimated_time)
+
+        task_start = time_module.time()
+        estimated_ms = task_def.estimated_time
+        task_result = None
+        task_error = None
+
+        # Execute task in background thread for progress updates
+        def execute_task():
+            nonlocal task_result, task_error
+            try:
+                task_result = func(*args, **kwargs)
+            except Exception as e:
+                task_error = e
+
+        task_thread = threading.Thread(target=execute_task, daemon=True)
+        task_thread.start()
+
+        # Update progress while task is running
+        last_progress = 0
+        while task_thread.is_alive():
+            time_module.sleep(0.01)  # 10ms update interval
+            elapsed_ms = (time_module.time() - task_start) * 1000
+            progress = min(99, int((elapsed_ms / estimated_ms) * 100))
+
+            if progress > last_progress:
+                self._client.update_task_state(run_id, task_index, 'RUNNING', progress)
+                last_progress = progress
+
+        task_thread.join()
+
+        # Calculate actual duration
+        actual_duration = int((time_module.time() - task_start) * 1000)
+
+        if task_error:
+            # Task failed
+            error_result = {
+                'passed': False,
+                'note': str(task_error),
+                'table': []
+            }
+            self._client.update_task_state(
+                run_id, task_index, 'FAILED', 0,
+                duration_ms=actual_duration,
+                result=error_result
+            )
+            print(f"[Task] {task_def.name} failed: {task_error}")
+
+            if task_def.crucial_pass:
+                raise task_error
+            return None
+
+        # Task completed successfully
+        result_dict = None
+        if task_result and hasattr(task_result, 'to_dict'):
+            result_dict = task_result.to_dict()
+
+        self._client.update_task_state(
+            run_id, task_index, 'COMPLETED', 100,
+            duration_ms=actual_duration,
+            result=result_dict
+        )
+        print(f"[Task] {task_def.name} completed in {actual_duration}ms")
+
+        return task_result
 
     def flow(
         self,
@@ -378,63 +465,61 @@ class WorkflowRegistry:
                 print(f"[Flow] Starting {name}...")
 
                 if self._client:
-                    # Trigger flow on backend to create a run (for UI tracking)
+                    # Create a run on the server for UI tracking
                     try:
                         import requests
                         # Get flow ID from backend
-                        print(f"[Flow] DEBUG: Getting flow list from {self._client.base_url}/api/engine/flows")
                         response = requests.get(f"{self._client.base_url}/api/engine/flows", timeout=2)
                         flow_id = None
                         if response.ok:
                             flows = response.json()
-                            print(f"[Flow] DEBUG: Found {len(flows)} flows in backend")
                             for backend_flow in flows:
-                                print(f"[Flow] DEBUG: Backend flow: {backend_flow.get('name')} (ID: {backend_flow.get('id')})")
                                 if backend_flow['name'] == name:
                                     flow_id = backend_flow['id']
-                                    print(f"[Flow] DEBUG: Matched flow ID: {flow_id}")
                                     break
 
                         if flow_id:
-                            # Create run for client-initiated execution (doesn't send execution request)
-                            print(f"[Flow] DEBUG: Creating run for flow {flow_id}")
+                            # Create run for client-initiated execution
                             response = requests.post(
                                 f"{self._client.base_url}/api/engine/run/{flow_id}",
                                 json={"configuration": "development"},
                                 timeout=2
                             )
-                            print(f"[Flow] DEBUG: Create run response status: {response.status_code}")
                             if response.ok:
                                 run_id = response.json().get('runId')
-                                print(f"[Flow] DEBUG: Created run: {run_id}")
+                                print(f"[Flow] Created run: {run_id}")
 
-                                # Execute with tracking synchronously (blocking)
-                                from perfect_client.executor import FlowExecutor
-                                from perfect_client.api import ExecutionRequest
+                                # Set execution context for task tracking
+                                self._current_run_id = run_id
+                                self._current_task_index = 0
 
-                                request = ExecutionRequest(
-                                    run_id=run_id,
-                                    flow_name=name,
-                                    configuration="development"
-                                )
-                                executor = FlowExecutor(self._client)
-                                print(f"[Flow] DEBUG: Starting executor for run {run_id}")
-                                executor.handle_execution_request(request)
-                                print(f"[Flow] DEBUG: Execution completed")
-                                result = None
+                                try:
+                                    # Execute the actual flow function
+                                    result = func(*args, **kwargs)
+
+                                    # Signal flow completion with actual task count
+                                    actual_task_count = self._current_task_index
+                                    self._client.complete_flow(run_id, actual_task_count)
+                                    print(f"[Flow] Completed {name} with {actual_task_count} tasks")
+                                    return result
+                                except Exception as e:
+                                    print(f"[Flow] Flow {name} failed: {e}")
+                                    raise
+                                finally:
+                                    # Clear execution context
+                                    self._current_run_id = None
+                                    self._current_task_index = 0
                             else:
-                                print(f"[Flow] DEBUG: Create run failed, falling back to direct execution")
-                                # Fallback to direct execution
+                                print(f"[Flow] Warning: Create run failed, executing without tracking")
                                 result = func(*args, **kwargs)
                         else:
-                            print(f"[Flow] DEBUG: Flow ID not found, falling back to direct execution")
-                            # Fallback to direct execution
+                            print(f"[Flow] Warning: Flow not found on server, executing without tracking")
                             result = func(*args, **kwargs)
                     except Exception as e:
                         print(f"[Flow] Warning: Backend tracking failed: {e}")
-                        import traceback
-                        traceback.print_exc()
                         # Fallback to direct execution
+                        self._current_run_id = None
+                        self._current_task_index = 0
                         result = func(*args, **kwargs)
                 else:
                     # No client, execute directly

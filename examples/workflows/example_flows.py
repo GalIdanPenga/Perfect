@@ -95,7 +95,8 @@ def load_to_warehouse(df=None):
 )
 def daily_sales_etl():
     """Daily ETL pipeline for sales data"""
-    conn = fetch_db_connection()
+    for i in range(2):
+        conn = fetch_db_connection()
     data = extract_sales_data(conn)
     clean = clean_dataframe(data)
     load_to_warehouse(clean)
