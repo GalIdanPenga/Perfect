@@ -131,6 +131,22 @@ app.post('/api/heartbeat', (req, res) => {
   res.json({ success: true });
 });
 
+// Delete a run from history
+app.delete('/api/runs/:runId', (req, res) => {
+  try {
+    const { runId } = req.params;
+    const success = flowEngine.deleteRun(runId);
+
+    if (success) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ success: false, error: 'Run not found or is currently running' });
+    }
+  } catch (error: any) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
 // Get statistics endpoint
 app.get('/api/statistics', (req, res) => {
   try {
@@ -163,6 +179,16 @@ app.get('/api/statistics/flow-history/:flowName', (req, res) => {
     const history = statsDb.getFlowHistory(decodeURIComponent(flowName), limit);
     const stats = statsDb.getAllFlowStats().find(s => s.flowName === decodeURIComponent(flowName));
     res.json({ success: true, history, stats });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Delete all statistics
+app.delete('/api/statistics', (req, res) => {
+  try {
+    flowEngine.deleteAllStats();
+    res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }

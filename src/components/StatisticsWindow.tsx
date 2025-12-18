@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { X, BarChart3, TrendingUp, Clock, LineChart } from 'lucide-react';
+import { X, BarChart3, TrendingUp, Clock, LineChart, Trash2 } from 'lucide-react';
 import { PerformanceHistoryModal } from './PerformanceHistoryModal';
+import { ConfirmDialog } from './dialogs/ConfirmDialog';
+import { API_BASE_URL } from '../constants';
 
 interface TaskStatistic {
   flowName: string;
@@ -31,6 +33,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
   const [isClosing, setIsClosing] = useState(false);
   const [isOpening, setIsOpening] = useState(true);
   const [selectedChart, setSelectedChart] = useState<{ type: 'task' | 'flow'; flowName: string; taskName?: string } | null>(null);
+  const [showClearConfirmation, setShowClearConfirmation] = useState(false);
 
   useEffect(() => {
     fetchStatistics();
@@ -50,7 +53,7 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
   const fetchStatistics = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3000/api/statistics');
+      const response = await fetch(`${API_BASE_URL}/statistics`);
       const data = await response.json();
       if (data.success) {
         setStatistics(data.taskStatistics || []);
@@ -61,6 +64,21 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClearAllStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/statistics`, {
+        method: 'DELETE'
+      });
+      if (response.ok) {
+        setStatistics([]);
+        setFlowStatistics([]);
+      }
+    } catch (error) {
+      console.error('Failed to clear statistics:', error);
+    }
+    setShowClearConfirmation(false);
   };
 
   const formatDuration = (ms: number) => {
@@ -150,12 +168,23 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
 
         {/* Controls */}
         <div className="px-6 py-3 border-b border-slate-700 flex items-center justify-between">
-          <button
-            onClick={() => setGroupByFlow(!groupByFlow)}
-            className="text-sm px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
-          >
-            {groupByFlow ? 'Ungroup' : 'Group by Flow'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setGroupByFlow(!groupByFlow)}
+              className="text-sm px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-600 text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+            >
+              {groupByFlow ? 'Ungroup' : 'Group by Flow'}
+            </button>
+            {(statistics.length > 0 || flowStatistics.length > 0) && (
+              <button
+                onClick={() => setShowClearConfirmation(true)}
+                className="text-sm px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 hover:bg-rose-500/20 transition-colors flex items-center gap-1.5"
+              >
+                <Trash2 size={14} />
+                Clear All
+              </button>
+            )}
+          </div>
           <button
             onClick={fetchStatistics}
             className="text-sm px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 hover:bg-sky-500/20 transition-colors"
@@ -391,6 +420,18 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
           onClose={() => setSelectedChart(null)}
         />
       )}
+
+      {/* Clear Statistics Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showClearConfirmation}
+        title="Clear All Statistics"
+        icon={Trash2}
+        message="Are you sure you want to clear all statistics? This will remove all historical performance data and cannot be undone."
+        themeColor="#ef4444"
+        confirmLabel="Clear All"
+        onConfirm={handleClearAllStats}
+        onCancel={() => setShowClearConfirmation(false)}
+      />
     </div>
   );
 }

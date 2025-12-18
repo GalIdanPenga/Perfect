@@ -11,10 +11,11 @@ import {
   ChevronRight,
   XCircle,
   Clock,
-  BarChart3
+  BarChart3,
+  Trash2
 } from 'lucide-react';
 import { TaskState, FlowRun } from './types';
-import { DEFAULT_THEME_COLOR } from './constants';
+import { DEFAULT_THEME_COLOR, API_BASE_URL } from './constants';
 import { PerfectLogo } from './components/PerfectLogo';
 import { StatusIcon } from './components/StatusComponents';
 import { TagBadges } from './components/TagBadges';
@@ -94,6 +95,10 @@ export default function App() {
   const [showClientConfirmation, setShowClientConfirmation] = useState(false);
   const [pendingClientId, setPendingClientId] = useState<string | null>(null);
   const [showStopConfirmation, setShowStopConfirmation] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [pendingDeleteRunId, setPendingDeleteRunId] = useState<string | null>(null);
+  const [selectedRunIds, setSelectedRunIds] = useState<Set<string>>(new Set());
+  const [showBulkDeleteConfirmation, setShowBulkDeleteConfirmation] = useState(false);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
@@ -236,6 +241,106 @@ export default function App() {
     handleStopClient();
   };
 
+  // Handler to show delete confirmation dialog
+  const handleDeleteRunClick = (e: React.MouseEvent, runId: string) => {
+    e.stopPropagation(); // Prevent triggering the row click
+    setPendingDeleteRunId(runId);
+    setShowDeleteConfirmation(true);
+  };
+
+  // Handler to confirm and delete run
+  const handleConfirmDeleteRun = async () => {
+    if (pendingDeleteRunId) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/runs/${pendingDeleteRunId}`, {
+          method: 'DELETE'
+        });
+        if (response.ok) {
+          // If the deleted run was selected, deselect it
+          if (selectedHistoryRunId === pendingDeleteRunId) {
+            setSelectedHistoryRunId(null);
+          }
+          // Refresh runs to update the list
+          if (refreshRuns) {
+            await refreshRuns();
+          }
+        }
+      } catch (error) {
+        console.error('Failed to delete run:', error);
+      }
+    }
+    setShowDeleteConfirmation(false);
+    setPendingDeleteRunId(null);
+  };
+
+  // Handler to cancel delete
+  const handleCancelDeleteRun = () => {
+    setShowDeleteConfirmation(false);
+    setPendingDeleteRunId(null);
+  };
+
+  // Handler to toggle run selection for bulk delete
+  const handleToggleRunSelection = (e: React.MouseEvent, runId: string) => {
+    e.stopPropagation();
+    setSelectedRunIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(runId)) {
+        newSet.delete(runId);
+      } else {
+        newSet.add(runId);
+      }
+      return newSet;
+    });
+  };
+
+  // Handler to select/deselect all visible runs
+  const handleSelectAllRuns = (historyRunsList: FlowRun[]) => {
+    if (selectedRunIds.size === historyRunsList.length) {
+      // Deselect all
+      setSelectedRunIds(new Set());
+    } else {
+      // Select all
+      setSelectedRunIds(new Set(historyRunsList.map(r => r.id)));
+    }
+  };
+
+  // Handler to show bulk delete confirmation
+  const handleBulkDeleteClick = () => {
+    if (selectedRunIds.size > 0) {
+      setShowBulkDeleteConfirmation(true);
+    }
+  };
+
+  // Handler to confirm bulk delete
+  const handleConfirmBulkDelete = async () => {
+    try {
+      const deletePromises = Array.from(selectedRunIds).map(runId =>
+        fetch(`${API_BASE_URL}/runs/${runId}`, { method: 'DELETE' })
+      );
+      await Promise.all(deletePromises);
+
+      // Clear selection
+      setSelectedRunIds(new Set());
+
+      // If any deleted run was the selected history run, deselect it
+      if (selectedHistoryRunId && selectedRunIds.has(selectedHistoryRunId)) {
+        setSelectedHistoryRunId(null);
+      }
+
+      // Refresh runs
+      if (refreshRuns) {
+        await refreshRuns();
+      }
+    } catch (error) {
+      console.error('Failed to delete runs:', error);
+    }
+    setShowBulkDeleteConfirmation(false);
+  };
+
+  // Handler to cancel bulk delete
+  const handleCancelBulkDelete = () => {
+    setShowBulkDeleteConfirmation(false);
+  };
 
   const handleHistoryClick = (runId: string) => {
     if (runId === selectedHistoryRunId) {
@@ -682,15 +787,36 @@ export default function App() {
                        {historyRuns.length}
                      </span>
                    </h3>
-                   {hasActiveFilters && (
-                     <button
-                       onClick={clearFilters}
-                       className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-xs font-bold text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all shadow-sm group"
-                     >
-                       <X size={12} className="group-hover:text-rose-400" />
-                       Clear Filters
-                     </button>
-                   )}
+                   <div className="flex items-center gap-2">
+                     {/* Bulk Delete Button - Show when items are selected */}
+                     {selectedRunIds.size > 0 && (
+                       <button
+                         onClick={handleBulkDeleteClick}
+                         className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-500/20 border border-rose-500/50 rounded-md text-xs font-bold text-rose-400 hover:bg-rose-500/30 transition-all shadow-sm"
+                       >
+                         <Trash2 size={12} />
+                         Delete ({selectedRunIds.size})
+                       </button>
+                     )}
+                     {/* Select All Checkbox */}
+                     {historyRuns.length > 0 && (
+                       <button
+                         onClick={() => handleSelectAllRuns(historyRuns)}
+                         className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-xs font-bold text-slate-400 hover:text-slate-300 hover:border-slate-600 transition-all shadow-sm"
+                       >
+                         {selectedRunIds.size === historyRuns.length && historyRuns.length > 0 ? 'Deselect All' : 'Select All'}
+                       </button>
+                     )}
+                     {hasActiveFilters && (
+                       <button
+                         onClick={clearFilters}
+                         className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 border border-slate-700 rounded-md text-xs font-bold text-slate-400 hover:text-rose-400 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all shadow-sm group"
+                       >
+                         <X size={12} className="group-hover:text-rose-400" />
+                         Clear Filters
+                       </button>
+                     )}
+                   </div>
                  </div>
 
                  {/* Filter Controls */}
@@ -773,14 +899,35 @@ export default function App() {
                           <React.Fragment key={run.id}>
                             <div
                               onClick={() => handleHistoryClick(run.id)}
-                              className={`bg-slate-800/40 p-2.5 rounded-lg border transition-all cursor-pointer hover:bg-slate-800/60 ${isSelected ? 'animate-selectPulse' : ''}`}
+                              className={`group bg-slate-800/40 p-2.5 rounded-lg border transition-all cursor-pointer hover:bg-slate-800/60 ${isSelected ? 'animate-selectPulse' : ''} relative overflow-hidden`}
                               style={{
-                                borderColor: isSelected ? runColor : '#475569',
-                                backgroundColor: isSelected ? `${runColor}15` : 'rgba(30, 41, 59, 0.4)',
+                                borderColor: isSelected ? runColor : selectedRunIds.has(run.id) ? '#94a3b8' : '#475569',
+                                backgroundColor: isSelected ? `${runColor}15` : selectedRunIds.has(run.id) ? 'rgba(148, 163, 184, 0.1)' : 'rgba(30, 41, 59, 0.4)',
                                 boxShadow: isSelected ? `0 0 20px ${runColor}30` : 'none'
                               }}
                             >
-                              <div className="flex items-center justify-between gap-4">
+                              {/* Left edge hover zone with sliding checkbox */}
+                              <div
+                                className="absolute left-0 top-0 bottom-0 w-10 flex items-center justify-center z-10"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  onClick={(e) => handleToggleRunSelection(e, run.id)}
+                                  className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all duration-200 ${
+                                    selectedRunIds.has(run.id)
+                                      ? 'bg-sky-500 border-sky-500 text-white translate-x-0 opacity-100'
+                                      : 'border-slate-500 bg-slate-800 -translate-x-8 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 hover:border-sky-400'
+                                  }`}
+                                >
+                                  {selectedRunIds.has(run.id) && (
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </button>
+                              </div>
+
+                              <div className={`flex items-center justify-between gap-4 transition-all duration-200 ${selectedRunIds.has(run.id) ? 'ml-8' : 'group-hover:ml-8'}`}>
                                 {/* Flow Name and Status */}
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
                                   <StatusIcon state={run.state} size={16} />
@@ -815,6 +962,15 @@ export default function App() {
                                 >
                                   {run.progress}%
                                 </span>
+
+                                {/* Delete Button */}
+                                <button
+                                  onClick={(e) => handleDeleteRunClick(e, run.id)}
+                                  className="p-1.5 rounded-md text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all opacity-0 group-hover:opacity-100"
+                                  title="Delete run"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
                               </div>
                             </div>
 
@@ -912,6 +1068,36 @@ export default function App() {
         confirmLabel="Stop"
         onConfirm={handleConfirmStopClient}
         onCancel={() => setShowStopConfirmation(false)}
+      />
+
+      {/* Delete Run Confirmation Dialog */}
+      {showDeleteConfirmation && pendingDeleteRunId && (() => {
+        const runToDelete = runs.find(r => r.id === pendingDeleteRunId);
+        return (
+          <ConfirmDialog
+            isOpen={showDeleteConfirmation}
+            title="Delete Run"
+            icon={Trash2}
+            message="Are you sure you want to delete"
+            highlightText={runToDelete?.flowName || 'this run'}
+            themeColor="#ef4444"
+            confirmLabel="Delete"
+            onConfirm={handleConfirmDeleteRun}
+            onCancel={handleCancelDeleteRun}
+          />
+        );
+      })()}
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showBulkDeleteConfirmation}
+        title="Delete Multiple Runs"
+        icon={Trash2}
+        message={`Are you sure you want to delete ${selectedRunIds.size} selected runs? This action cannot be undone.`}
+        themeColor="#ef4444"
+        confirmLabel={`Delete ${selectedRunIds.size} Runs`}
+        onConfirm={handleConfirmBulkDelete}
+        onCancel={handleCancelBulkDelete}
       />
     </div>
     </>

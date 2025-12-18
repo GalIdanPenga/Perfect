@@ -926,6 +926,53 @@ export class FlowEngine {
   }
 
   /**
+   * Delete a run from history
+   */
+  deleteRun(runId: string): boolean {
+    const runIndex = this.runs.findIndex(r => r.id === runId);
+    if (runIndex === -1) {
+      return false;
+    }
+
+    // Don't allow deleting running flows
+    const run = this.runs[runIndex];
+    if (run.state === TaskState.RUNNING || run.state === TaskState.PENDING) {
+      console.log(`[FlowEngine] Cannot delete running flow: ${runId}`);
+      return false;
+    }
+
+    const flowName = run.flowName;
+
+    // Remove from memory
+    this.runs.splice(runIndex, 1);
+
+    // Remove from database
+    runDb.deleteRun(runId);
+
+    // Check if there are any remaining runs for this flow
+    const remainingRuns = this.runs.filter(r => r.flowName === flowName);
+    if (remainingRuns.length === 0) {
+      // No more runs for this flow, clean up statistics
+      statsDb.deleteFlowStats(flowName);
+      console.log(`[FlowEngine] Deleted run and statistics for flow: ${flowName}`);
+    } else {
+      console.log(`[FlowEngine] Deleted run: ${runId} (${remainingRuns.length} runs remaining for ${flowName})`);
+    }
+
+    this.notifyStateChange();
+    return true;
+  }
+
+  /**
+   * Delete all statistics
+   */
+  deleteAllStats(): void {
+    statsDb.deleteAllStats();
+    console.log(`[FlowEngine] Deleted all statistics`);
+    this.notifyStateChange();
+  }
+
+  /**
    * Cleanup on shutdown
    */
   destroy(): void {

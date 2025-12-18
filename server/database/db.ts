@@ -767,6 +767,22 @@ export const statsDb = {
       taskName: row.task_name,
       estimatedTime: row.estimated_time
     }));
+  },
+
+  // Delete all statistics for a specific flow
+  deleteFlowStats(flowName: string) {
+    db.prepare('DELETE FROM task_statistics WHERE flow_name = ?').run(flowName);
+    db.prepare('DELETE FROM flow_statistics WHERE flow_name = ?').run(flowName);
+    db.prepare('DELETE FROM flow_task_structure WHERE flow_name = ?').run(flowName);
+    console.log(`[Database] Deleted all statistics for flow: ${flowName}`);
+  },
+
+  // Delete all statistics
+  deleteAllStats() {
+    db.prepare('DELETE FROM task_statistics').run();
+    db.prepare('DELETE FROM flow_statistics').run();
+    db.prepare('DELETE FROM flow_task_structure').run();
+    console.log('[Database] Deleted all statistics');
   }
 };
 
