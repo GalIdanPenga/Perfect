@@ -6,12 +6,12 @@ This package provides the Python SDK for building workflows with Perfect.
 Package Structure:
 - api: Low-level HTTP communication with Perfect backend
 - sdk: Decorators, data structures, and workflow registry
-- executor: Flow execution orchestration and progress tracking
+- executor: Handles execution requests from the backend
 """
 
 from .sdk import task, flow, get_registry, TaskResult, TaskState, LogCapture
 from .api import create_client, ExecutionRequest, PerfectAPIClient
-from .executor import FlowExecutor, create_execution_handler
+from .executor import create_execution_handler
 
 __all__ = [
     # SDK - User-facing decorators and data structures
@@ -27,7 +27,6 @@ __all__ = [
     'ExecutionRequest',
     'PerfectAPIClient',
 
-    # Executor - Flow execution logic
-    'FlowExecutor',
+    # Executor - Execution request handling
     'create_execution_handler',
 ]

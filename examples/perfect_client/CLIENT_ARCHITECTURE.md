@@ -47,7 +47,9 @@ The Perfect client is organized into three clean layers:
 ```python
 register_flow(flow_definition: Dict) -> bool
 send_log(run_id: str, log_message: str) -> bool
-update_task_state(run_id: str, task_index: int, state: str, progress: int, ...) -> bool
+update_task_state(run_id: str, task_index: int, state: str, progress: int,
+                  duration_ms: int, result: Dict, task_name: str, estimated_time: int) -> bool
+complete_flow(run_id: str, task_count: int) -> bool  # Signal flow completion
 send_heartbeat() -> bool
 listen_for_executions(poll_interval: float) -> None
 ```
@@ -55,7 +57,8 @@ listen_for_executions(poll_interval: float) -> None
 **Backend Endpoints:**
 - `POST /api/flows` - Register a flow
 - `POST /api/flows/{run_id}/logs` - Send log message
-- `POST /api/runs/{run_id}/tasks/{task_index}/state` - Update task state
+- `POST /api/runs/{run_id}/tasks/{task_index}/state` - Update task state (supports dynamic task creation)
+- `POST /api/runs/{run_id}/complete` - Signal flow completion from client
 - `POST /api/heartbeat` - Send keepalive signal
 - `GET /api/execution-requests` - Poll for execution requests (long-polling)
 
@@ -99,25 +102,44 @@ class FlowDefinition:
 
 ### 3. Executor Layer (`executor.py`)
 
-**Responsibility:** Flow execution orchestration and progress tracking
+**Responsibility:** Handle execution requests from the Perfect backend (UI-triggered flows)
 
 **Key Components:**
-- `FlowExecutor` - Orchestrates flow execution
-- `create_execution_handler()` - Creates threaded execution handlers
+- `create_execution_handler()` - Creates threaded execution handlers for backend requests
 
 **Execution Flow:**
-1. Receive execution request from backend
-2. Look up flow definition in registry
-3. Execute tasks sequentially
-4. For each task:
-   - Send "RUNNING" state update
-   - Capture stdout/stderr
-   - Execute task function in background thread
-   - Send progress updates (0-99%)
-   - Handle errors (crucial vs non-crucial tasks)
-   - Send task result
-   - Mark as "COMPLETED" or "FAILED"
-5. Send final flow completion/failure log
+1. Backend sends execution request (user clicked "Run" in UI)
+2. Executor looks up flow by name
+3. Executor calls the flow function directly
+4. SDK's `@flow` and `@task` decorators handle all tracking automatically
+5. Completion callback is invoked
+
+**Note:** The executor is minimal - it just looks up and calls the flow function. All task tracking, progress updates, and completion signaling is handled by the SDK decorators.
+
+**SDK-based Task Tracking:**
+1. User calls flow function directly (or triggered via execution request)
+2. SDK creates a run on the server
+3. Flow function executes normally
+4. Each `@task` decorated function:
+   - Sends "RUNNING" state with task name and estimated time
+   - Executes task function in background thread
+   - Sends progress updates (0-99%) based on elapsed/estimated time
+   - Handles errors (crucial vs non-crucial tasks)
+   - Sends task result and duration
+   - Marks as "COMPLETED" or "FAILED"
+5. SDK calls `complete_flow()` with actual task count
+6. Server removes unused predefined tasks and finalizes the run
+
+**Dynamic Task Support:**
+- Tasks can be added dynamically during execution (e.g., in loops)
+- Tasks can be skipped (e.g., conditionals) - server removes unused tasks
+- Task names and estimated times are sent with each task update
+- Server uses statistics or client-provided estimates for progress calculation
+
+**Parallel Flow Support:**
+- Multiple flows can run in parallel threads
+- Execution context (run_id, task_index) is thread-local
+- Each flow maintains its own task counter
 
 ### 4. Application Layer (`example_flows.py`)
 
@@ -207,6 +229,36 @@ Tasks send progress updates during execution:
 - Updates sent every 10ms
 - Final 100% sent only on completion
 
+### Estimated Time Resolution
+
+The server determines estimated time for each task using this priority:
+1. **Statistics** - Historical average from previous runs (most accurate)
+2. **Client-provided** - Sent with task state update (for new/dynamic tasks)
+3. **Default** - 1000ms fallback
+
+### Weight Calculation
+
+Task weights for progress calculation:
+- Weights are calculated from estimated times: `weight = task_estimated_time / total_estimated_time`
+- Recalculated when tasks are added or removed dynamically
+- Used for overall flow progress: `flow_progress = sum(task_weight * task_progress)`
+
+### Dynamic Task Execution
+
+Flows can have dynamic task structures:
+- Tasks in loops are tracked individually (each call = separate task)
+- Conditional tasks that don't run are removed on flow completion
+- Server learns task structure from completed runs
+- Learned structure is used to predict tasks for future runs
+
+### Flow Completion
+
+Flow completion is controlled by the client:
+- Client calls `complete_flow(run_id, actual_task_count)` when done
+- Server removes any predefined tasks beyond `actual_task_count`
+- Flow is only marked COMPLETED after this call (not when last task finishes)
+- This prevents premature completion when more tasks might be added
+
 ### Stdout/Stderr Capture
 
 All print statements are captured and sent as logs:
@@ -226,6 +278,14 @@ Tasks have a `crucial_pass` flag:
 Client sends heartbeat every 3 seconds:
 - Backend fails flows if no heartbeat for 10 seconds
 - Prevents stuck flows when client crashes
+
+### Parallel Flow Execution
+
+Multiple flows can run concurrently:
+- Use `threading.Thread` to run flows in parallel
+- SDK uses thread-local storage for execution context
+- Each thread has isolated `run_id` and `task_index`
+- No interference between parallel flows
 
 ## File Structure
 

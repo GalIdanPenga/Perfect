@@ -59,6 +59,8 @@ if __name__ == "__main__":
 - Registers the flow with Perfect
 - Starts listening for execution requests in background
 - Handles execution and graceful shutdown
+- Tracks task execution dynamically (supports loops, conditionals)
+- Signals flow completion to the server
 
 ### Task Decorator Parameters
 
@@ -210,6 +212,50 @@ mypy perfect_client/sdk.py client_example.py
 black perfect_client/sdk.py client_example.py
 ```
 
+## Dynamic Task Execution
+
+Flows can have dynamic task structures based on runtime conditions:
+
+```python
+@flow(name="Dynamic ETL")
+def dynamic_etl():
+    # Tasks in loops - each iteration is tracked separately
+    for source in ["sales", "inventory", "customers"]:
+        extract_data(source)  # Creates 3 separate task instances
+
+    # Conditional tasks - skipped tasks are removed from the run
+    if needs_cleanup:
+        cleanup_data()
+
+    # Always runs
+    load_to_warehouse()
+```
+
+The SDK:
+- Tracks each task call as a separate task instance
+- Sends task name and estimated time to the server
+- Signals flow completion with actual task count
+- Server removes any predefined tasks that weren't executed
+
+## Parallel Flow Execution
+
+Multiple flows can run in parallel using threads:
+
+```python
+import threading
+
+threads = []
+for flow_func in [flow1, flow2, flow3]:
+    t = threading.Thread(target=flow_func)
+    t.start()
+    threads.append(t)
+
+for t in threads:
+    t.join()
+```
+
+Each flow runs with its own isolated execution context (thread-local storage).
+
 ## Integration with Perfect UI
 
 Once flows are registered, they appear in the Perfect web dashboard where you can:
@@ -219,6 +265,7 @@ Once flows are registered, they appear in the Perfect web dashboard where you ca
 - 📊 Monitor real-time execution progress
 - 📝 View live task logs and metrics
 - 📈 Track execution history and performance
+- 📉 View task statistics (avg duration, std deviation, sample count)
 
 ## Next Steps
 
