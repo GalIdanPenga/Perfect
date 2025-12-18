@@ -117,6 +117,17 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
                             </span>
                           ) : typeof value === 'number' ? (
                             <span className="text-sky-400">{value.toLocaleString()}</span>
+                          ) : typeof value === 'object' && value !== null ? (
+                            <span className="inline-flex flex-wrap gap-1">
+                              {Object.entries(value).map(([k, v], i) => (
+                                <span key={i} className="inline-flex items-center bg-slate-700/50 rounded px-1.5 py-0.5">
+                                  <span className="text-slate-400">{k}:</span>
+                                  <span className={`ml-1 ${typeof v === 'number' ? 'text-sky-400' : 'text-violet-400'}`}>
+                                    {typeof v === 'number' ? v.toLocaleString() : String(v)}
+                                  </span>
+                                </span>
+                              ))}
+                            </span>
                           ) : (
                             <span>{String(value)}</span>
                           )}

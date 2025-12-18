@@ -280,9 +280,9 @@ def compute_kpis():
         passed=True,
         note="KPIs computed successfully for current period",
         table=[
-            {"metric": "revenue", "value": 1250000, "vs_target": 105, "unit": "USD"},
-            {"metric": "users", "value": 45000, "vs_target": 98, "unit": "count"},
-            {"metric": "conversion_rate", "value": 3.4, "vs_target": 102, "unit": "percent"}
+            {"metric": "revenue", "value": 1250000, "vs_target": 105, "breakdown": {"q1": 280000, "q2": 310000, "q3": 320000, "q4": 340000}},
+            {"metric": "users", "value": 45000, "vs_target": 98, "breakdown": {"new": 12000, "returning": 33000}},
+            {"metric": "conversion_rate", "value": 3.4, "vs_target": 102, "breakdown": {"mobile": 2.8, "desktop": 4.1}}
         ]
     )
 

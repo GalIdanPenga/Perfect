@@ -477,7 +477,23 @@ function generateTaskHTML(task: TaskRun): string {
               <tbody>
                 ${task.result.table.map(row => `
                   <tr>
-                    ${Object.values(row).map(value => `<td>${value}</td>`).join('')}
+                    ${Object.values(row).map(value => {
+                      if (typeof value === 'boolean') {
+                        return `<td style="color: ${value ? '#10b981' : '#ef4444'};">${value ? '✓' : '✗'}</td>`;
+                      } else if (typeof value === 'number') {
+                        return `<td style="color: #38bdf8;">${value.toLocaleString()}</td>`;
+                      } else if (typeof value === 'object' && value !== null) {
+                        const tags = Object.entries(value).map(([k, v]) =>
+                          `<span style="display: inline-flex; align-items: center; background: rgba(51, 65, 85, 0.5); border-radius: 4px; padding: 2px 6px; margin: 2px;">
+                            <span style="color: #94a3b8;">${k}:</span>
+                            <span style="margin-left: 4px; color: ${typeof v === 'number' ? '#38bdf8' : '#a78bfa'};">${typeof v === 'number' ? (v as number).toLocaleString() : v}</span>
+                          </span>`
+                        ).join('');
+                        return `<td style="white-space: normal;">${tags}</td>`;
+                      } else {
+                        return `<td>${value}</td>`;
+                      }
+                    }).join('')}
                   </tr>
                 `).join('')}
               </tbody>
