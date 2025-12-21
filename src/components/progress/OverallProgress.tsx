@@ -147,15 +147,30 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
           {/* Progress Bar */}
           <div className="h-3 bg-slate-900/60 rounded-full overflow-hidden border border-slate-700/50 relative">
             <div
-              className="h-full relative"
+              className="h-full"
               style={{
                 width: `${localProgress}%`,
                 background: `linear-gradient(90deg, ${themeColor} 0%, ${themeColor}cc 100%)`
               }}
-            >
-              {/* Animated shimmer effect */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"></div>
-            </div>
+            />
+            {/* Animated shimmer effect */}
+            {(() => {
+              const shimmerWidth = Math.max(10, localProgress * 0.5);
+              // Keep constant visual speed: duration based on container width / shimmer width
+              // translateX(1000%) means shimmer travels 10x its own width
+              // To maintain constant speed, we need same time to cross 100% of container
+              const duration = 3;
+              return (
+                <div
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
+                  style={{
+                    width: `${shimmerWidth}%`,
+                    animation: `shimmer ${duration}s infinite linear`,
+                    animationTimingFunction: 'linear'
+                  }}
+                />
+              );
+            })()}
           </div>
         </div>
       </div>

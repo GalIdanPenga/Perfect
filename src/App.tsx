@@ -386,8 +386,8 @@ export default function App() {
         }
 
         @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
+          0% { left: -50%; }
+          100% { left: 100%; }
         }
 
         .animate-selectPulse {
@@ -395,7 +395,7 @@ export default function App() {
         }
 
         .animate-shimmer {
-          animation: shimmer 2s infinite;
+          animation: shimmer 3s infinite;
         }
       `}</style>
       <div
