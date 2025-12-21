@@ -3,6 +3,7 @@ import { X, BarChart3, TrendingUp, Clock, LineChart, Trash2 } from 'lucide-react
 import { PerformanceHistoryModal } from './PerformanceHistoryModal';
 import { ConfirmDialog } from './dialogs/ConfirmDialog';
 import { API_BASE_URL } from '../constants';
+import { formatDuration } from '../utils/formatUtils';
 
 interface TaskStatistic {
   flowName: string;
@@ -79,16 +80,6 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
       console.error('Failed to clear statistics:', error);
     }
     setShowClearConfirmation(false);
-  };
-
-  const formatDuration = (ms: number) => {
-    if (ms >= 60000) {
-      return `${(ms / 60000).toFixed(2)}m`;
-    } else if (ms >= 1000) {
-      return `${(ms / 1000).toFixed(3)}s`;
-    } else {
-      return `${Math.round(ms)}ms`;
-    }
   };
 
   const formatDate = (dateStr: string) => {

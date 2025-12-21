@@ -185,25 +185,6 @@ export class FlowEngine {
     if (taskName && task.taskName !== taskName) {
       console.log(`[FlowEngine] Task ${taskIndex} name changed: ${task.taskName} -> ${taskName}`);
       task.taskName = taskName;
-
-      // Look up statistics for this task to get better estimated time
-      // Priority: statistics > client-provided > keep existing
-      const taskStats = statsDb.getTaskStats(run.flowName, taskName);
-      if (taskStats) {
-        task.estimatedTime = Math.round(taskStats.avgDurationMs);
-        console.log(`[FlowEngine] Updated estimated time for ${taskName} from statistics: ${task.estimatedTime}ms`);
-      } else if (clientEstimatedTime) {
-        task.estimatedTime = clientEstimatedTime;
-        console.log(`[FlowEngine] Updated estimated time for ${taskName} from client: ${task.estimatedTime}ms`);
-      }
-
-      // Recalculate weights for all tasks based on estimated times
-      const totalEstimatedTime = run.tasks.reduce((sum, t) => sum + t.estimatedTime, 0);
-      if (totalEstimatedTime > 0) {
-        run.tasks.forEach(t => {
-          t.weight = t.estimatedTime / totalEstimatedTime;
-        });
-      }
     }
 
     // Don't allow updates to tasks that are already in a terminal state (COMPLETED or FAILED)
@@ -217,10 +198,6 @@ export class FlowEngine {
     const stateStr = typeof state === 'string' ? state.toUpperCase() : state;
     task.state = stateStr as TaskState;
 
-    if (progress !== undefined) {
-      task.progress = progress;
-    }
-
     if (durationMs !== undefined) {
       task.durationMs = durationMs;
     }
@@ -232,6 +209,17 @@ export class FlowEngine {
     if (stateStr === 'RUNNING') {
       if (!task.startTime) {
         task.startTime = new Date().toISOString();
+      }
+
+      // Calculate progress server-side using the server's estimated time (from statistics)
+      // This ensures accurate progress even when client has different estimates
+      if (task.startTime) {
+        const elapsedMs = Date.now() - new Date(task.startTime).getTime();
+        // Use server's estimated time for progress calculation
+        task.progress = Math.min(99, Math.round((elapsedMs / task.estimatedTime) * 100));
+      } else if (progress !== undefined) {
+        // Fallback to client progress if no start time yet
+        task.progress = progress;
       }
 
       // Real-time outlier detection for running tasks (check on EVERY update)
@@ -497,15 +485,30 @@ export class FlowEngine {
       });
     } else {
       // Use tasks from flow registration (static analysis)
+      // But check statistics for better estimated times
       console.log(`[FlowEngine] Using static task structure for ${flow.name}: ${flow.tasks.length} tasks`);
-      tasks = flow.tasks.map(t => {
+
+      // First pass: get estimated times from statistics (or use registration value as fallback)
+      const tasksWithEstimates = flow.tasks.map(t => {
+        const taskStats = statsDb.getTaskStats(flow.name, t.name);
+        const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
+        if (taskStats) {
+          console.log(`[FlowEngine] Using statistics for ${t.name}: ${estimatedTime}ms (vs client: ${t.estimatedTime}ms)`);
+        }
+        return { ...t, estimatedTime };
+      });
+
+      const totalEstimatedTime = tasksWithEstimates.reduce((sum, t) => sum + t.estimatedTime, 0);
+
+      tasks = tasksWithEstimates.map(t => {
+        const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : t.weight;
         return {
           id: `tr-${this.generateId()}`,
           taskId: t.id,
           taskName: t.name,
           state: TaskState.PENDING,
           logs: [],
-          weight: t.weight,
+          weight: weight,
           estimatedTime: t.estimatedTime,
           progress: 0
         };
@@ -583,15 +586,30 @@ export class FlowEngine {
       });
     } else {
       // Use tasks from flow registration (static analysis)
+      // But check statistics for better estimated times
       console.log(`[FlowEngine] Using static task structure for ${flow.name}: ${flow.tasks.length} tasks`);
-      tasks = flow.tasks.map(t => {
+
+      // First pass: get estimated times from statistics (or use registration value as fallback)
+      const tasksWithEstimates = flow.tasks.map(t => {
+        const taskStats = statsDb.getTaskStats(flow.name, t.name);
+        const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
+        if (taskStats) {
+          console.log(`[FlowEngine] Using statistics for ${t.name}: ${estimatedTime}ms (vs client: ${t.estimatedTime}ms)`);
+        }
+        return { ...t, estimatedTime };
+      });
+
+      const totalEstimatedTime = tasksWithEstimates.reduce((sum, t) => sum + t.estimatedTime, 0);
+
+      tasks = tasksWithEstimates.map(t => {
+        const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : t.weight;
         return {
           id: `tr-${this.generateId()}`,
           taskId: t.id,
           taskName: t.name,
           state: TaskState.PENDING,
           logs: [],
-          weight: t.weight,
+          weight: weight,
           estimatedTime: t.estimatedTime,
           progress: 0
         };

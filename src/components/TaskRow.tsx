@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { TaskState, TaskRun } from '../types';
 import { StatusIcon } from './StatusComponents';
+import { formatDuration } from '../utils/formatUtils';
 
 interface TaskRowProps {
   task: TaskRun;
@@ -48,11 +49,11 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
             <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-0.5">
               <span>W: {(task.weight * 100).toFixed(1)}%</span>
               <span className="text-slate-600">•</span>
-              <span>EST: {task.estimatedTime}ms</span>
+              <span>EST: {formatDuration(task.estimatedTime)}</span>
               {task.durationMs && (
                 <>
                   <span className="text-slate-600">•</span>
-                  <span className="text-slate-300">TOOK: {task.durationMs}ms</span>
+                  <span className="text-slate-300">TOOK: {formatDuration(task.durationMs)}</span>
                 </>
               )}
             </div>
