@@ -457,15 +457,15 @@ class WorkflowRegistry:
         task_thread.start()
 
         # Update progress while task is running
-        last_progress = 0
+        # Send updates every 100ms to let the server calculate progress using its statistics
+        last_update_time = time_module.time()
         while task_thread.is_alive():
-            time_module.sleep(0.01)  # 10ms update interval
-            elapsed_ms = (time_module.time() - task_start) * 1000
-            progress = min(99, int((elapsed_ms / estimated_ms) * 100))
-
-            if progress > last_progress:
-                self._client.update_task_state(run_id, task_index, 'RUNNING', progress)
-                last_progress = progress
+            time_module.sleep(0.01)  # 10ms sleep interval
+            now = time_module.time()
+            # Send update every 100ms (server calculates actual progress from its estimatedTime)
+            if now - last_update_time >= 0.1:
+                self._client.update_task_state(run_id, task_index, 'RUNNING')
+                last_update_time = now
 
         task_thread.join()
 

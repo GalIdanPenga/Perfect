@@ -36,12 +36,6 @@ import { ConfirmDialog } from './components/dialogs/ConfirmDialog';
 import { OverallProgress } from './components/progress/OverallProgress';
 
 // Helper functions
-const calculateOverallProgress = (activeRuns: FlowRun[]): number => {
-  if (activeRuns.length === 0) return 0;
-  const totalProgress = activeRuns.reduce((sum, run) => sum + run.progress, 0);
-  return Math.floor(totalProgress / activeRuns.length);
-};
-
 const calculateTotalTimeRemaining = (activeRuns: FlowRun[]): number => {
   let maxTimeRemaining = 0;
   activeRuns.forEach(run => {
@@ -185,8 +179,7 @@ export default function App() {
     run => run.state === TaskState.COMPLETED || run.state === TaskState.FAILED
   );
 
-  // Calculate overall progress and time remaining using utility functions
-  const overallProgress = calculateOverallProgress(activeRuns);
+  // Calculate time remaining using utility function
   const totalTimeRemaining = calculateTotalTimeRemaining(activeRuns);
 
   // Play sound notification when all flows complete
@@ -691,7 +684,7 @@ export default function App() {
                 {!allFlowsFinished && activeRuns.length > 0 && (
                   <OverallProgress
                     flowCount={activeRuns.length}
-                    progress={overallProgress}
+                    activeRuns={activeRuns}
                     timeRemaining={totalTimeRemaining}
                     themeColor={themeColor}
                   />

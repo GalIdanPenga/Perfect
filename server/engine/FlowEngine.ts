@@ -186,6 +186,22 @@ export class FlowEngine {
     if (taskName && task.taskName !== taskName) {
       console.log(`[FlowEngine] Task ${taskIndex} name changed: ${task.taskName} -> ${taskName}`);
       task.taskName = taskName;
+
+      // Look up statistics for the NEW task name and update estimatedTime
+      const taskStats = statsDb.getTaskStats(run.flowName, taskName);
+      if (taskStats) {
+        const newEstimatedTime = Math.round(taskStats.avgDurationMs);
+        console.log(`[FlowEngine] Updating estimatedTime for ${taskName}: ${task.estimatedTime}ms -> ${newEstimatedTime}ms (from statistics)`);
+        task.estimatedTime = newEstimatedTime;
+
+        // Recalculate weights for all tasks based on new estimated times
+        const totalEstimatedTime = run.tasks.reduce((sum, t) => sum + t.estimatedTime, 0);
+        if (totalEstimatedTime > 0) {
+          run.tasks.forEach(t => {
+            t.weight = t.estimatedTime / totalEstimatedTime;
+          });
+        }
+      }
     }
 
     // Update crucialPass if provided

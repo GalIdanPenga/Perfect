@@ -13,11 +13,36 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
   const isRunning = task.state === TaskState.RUNNING || task.state === TaskState.RETRYING;
   const logsRef = useRef<HTMLDivElement>(null);
   const [showTableModal, setShowTableModal] = useState(false);
+  const [localProgress, setLocalProgress] = useState(task.progress);
 
   // Check if table has complex values (objects/arrays) - only these need truncation
   const hasComplexTable = task.result?.table?.some((row: Record<string, any>) =>
     Object.values(row).some(v => typeof v === 'object' && v !== null)
   );
+
+  // Calculate progress locally for smooth updates
+  useEffect(() => {
+    if (!isRunning || !task.startTime) {
+      setLocalProgress(task.progress);
+      return;
+    }
+
+    let animationFrameId: number;
+    const startTime = new Date(task.startTime).getTime();
+
+    const updateProgress = () => {
+      const elapsedMs = Date.now() - startTime;
+      // Use precise decimal for smooth animation, cap at 99%
+      const progress = Math.min(99, (elapsedMs / task.estimatedTime) * 100);
+      setLocalProgress(progress);
+      animationFrameId = requestAnimationFrame(updateProgress);
+    };
+
+    // Start the animation loop
+    animationFrameId = requestAnimationFrame(updateProgress);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isRunning, task.startTime, task.estimatedTime, task.progress]);
 
   useEffect(() => {
     if (isRunning && logsRef.current) {
@@ -35,7 +60,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
               {task.taskName}
               {isRunning && (
                 <span className="text-xs bg-sky-500/20 text-sky-300 px-1.5 rounded-md border border-sky-500/30 font-mono">
-                  {Math.floor(task.progress)}%
+                  {Math.floor(localProgress)}%
                 </span>
               )}
               {task.performanceWarning && (

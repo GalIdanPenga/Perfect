@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Activity, Clock } from 'lucide-react';
+import { FlowRun, TaskState } from '../../types';
 
 const formatTimeRemaining = (ms: number): string => {
   if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -16,9 +17,9 @@ interface OverallProgressProps {
   flowCount: number;
 
   /**
-   * Overall progress percentage (0-100)
+   * Active flow runs for smooth progress calculation
    */
-  progress: number;
+  activeRuns: FlowRun[];
 
   /**
    * Total estimated time remaining in milliseconds
@@ -32,6 +33,25 @@ interface OverallProgressProps {
 }
 
 /**
+ * Calculate smooth progress for a single flow run
+ */
+const calculateFlowProgress = (run: FlowRun): number => {
+  let totalWeightedProgress = 0;
+
+  for (const task of run.tasks) {
+    if (task.state === TaskState.COMPLETED || task.state === TaskState.FAILED) {
+      totalWeightedProgress += task.weight * 100;
+    } else if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
+      const elapsedMs = Date.now() - new Date(task.startTime).getTime();
+      const taskProgress = Math.min(99, (elapsedMs / task.estimatedTime) * 100);
+      totalWeightedProgress += task.weight * taskProgress;
+    }
+  }
+
+  return Math.min(99, totalWeightedProgress);
+};
+
+/**
  * Overall Progress Display Component
  *
  * Displays a progress bar showing the combined progress of all active flows,
@@ -41,7 +61,7 @@ interface OverallProgressProps {
  * ```tsx
  * <OverallProgress
  *   flowCount={3}
- *   progress={45}
+ *   activeRuns={runs}
  *   timeRemaining={120000}
  *   themeColor="#0ea5e9"
  * />
@@ -49,10 +69,33 @@ interface OverallProgressProps {
  */
 export const OverallProgress: React.FC<OverallProgressProps> = ({
   flowCount,
-  progress,
+  activeRuns,
   timeRemaining,
   themeColor
 }) => {
+  const [localProgress, setLocalProgress] = useState(0);
+
+  // Calculate overall progress locally for smooth updates
+  useEffect(() => {
+    if (activeRuns.length === 0) {
+      setLocalProgress(0);
+      return;
+    }
+
+    let animationFrameId: number;
+
+    const updateProgress = () => {
+      const totalProgress = activeRuns.reduce((sum, run) => sum + calculateFlowProgress(run), 0);
+      const avgProgress = totalProgress / activeRuns.length;
+      setLocalProgress(avgProgress);
+      animationFrameId = requestAnimationFrame(updateProgress);
+    };
+
+    animationFrameId = requestAnimationFrame(updateProgress);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [activeRuns]);
+
   return (
     <div className="mb-6 mx-auto max-w-4xl">
       <div
@@ -96,7 +139,7 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
                 className="text-3xl font-bold font-mono tracking-tight"
                 style={{ color: themeColor }}
               >
-                {progress}%
+                {Math.floor(localProgress)}%
               </span>
             </div>
           </div>
@@ -104,9 +147,9 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
           {/* Progress Bar */}
           <div className="h-3 bg-slate-900/60 rounded-full overflow-hidden border border-slate-700/50 relative">
             <div
-              className="h-full transition-all duration-500 ease-out relative"
+              className="h-full relative"
               style={{
-                width: `${progress}%`,
+                width: `${localProgress}%`,
                 background: `linear-gradient(90deg, ${themeColor} 0%, ${themeColor}cc 100%)`
               }}
             >

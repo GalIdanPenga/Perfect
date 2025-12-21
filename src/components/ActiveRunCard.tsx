@@ -13,7 +13,45 @@ interface ActiveRunCardProps {
 export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }) => {
   const flowLogsRef = useRef<HTMLDivElement>(null);
   const [logsExpanded, setLogsExpanded] = useState(false);
+  const [localProgress, setLocalProgress] = useState(run.progress);
   const isRunning = run.state === TaskState.RUNNING || run.state === TaskState.PENDING || run.state === TaskState.RETRYING;
+
+  // Calculate flow progress locally for smooth updates
+  useEffect(() => {
+    if (!isRunning) {
+      setLocalProgress(run.progress);
+      return;
+    }
+
+    let animationFrameId: number;
+
+    const updateProgress = () => {
+      // Calculate weighted progress based on each task's local progress
+      let totalWeightedProgress = 0;
+
+      for (const task of run.tasks) {
+        if (task.state === TaskState.COMPLETED) {
+          totalWeightedProgress += task.weight * 100;
+        } else if (task.state === TaskState.FAILED) {
+          // Failed tasks count as complete for progress calculation
+          totalWeightedProgress += task.weight * 100;
+        } else if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
+          // Calculate local progress for running task
+          const elapsedMs = Date.now() - new Date(task.startTime).getTime();
+          const taskProgress = Math.min(99, (elapsedMs / task.estimatedTime) * 100);
+          totalWeightedProgress += task.weight * taskProgress;
+        }
+        // Pending tasks contribute 0
+      }
+
+      setLocalProgress(Math.min(99, totalWeightedProgress));
+      animationFrameId = requestAnimationFrame(updateProgress);
+    };
+
+    animationFrameId = requestAnimationFrame(updateProgress);
+
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isRunning, run.tasks, run.progress]);
 
   // Calculate estimated time remaining
   const calculateTimeRemaining = () => {
@@ -107,7 +145,7 @@ export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }
         <div className="text-right">
            <div className="flex flex-col items-end gap-2">
              <span className={`text-2xl font-bold font-mono tracking-tight ${run.state === TaskState.FAILED ? 'text-rose-400' : 'text-sky-400'}`}>
-               {run.progress}%
+               {Math.floor(localProgress)}%
              </span>
              {isRunning && timeRemaining > 0 && (
                <div className="flex items-center gap-1.5 text-xs text-slate-300 font-mono">
@@ -137,9 +175,9 @@ export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }
       {/* Smooth Progress Bar */}
       <div className="h-1 bg-slate-800 w-full relative">
         <div
-          className="h-full transition-all duration-300 ease-out relative"
+          className="h-full relative"
           style={{
-            width: `${run.progress}%`,
+            width: `${localProgress}%`,
             background: run.state === TaskState.FAILED
               ? '#ef4444' // rose-500
               : clientColor
