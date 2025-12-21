@@ -295,6 +295,47 @@ function generateReportHTML(run: FlowRun, clientName: string): string {
     .result-table td {
       color: #e2e8f0;
       font-size: 0.875rem;
+      vertical-align: top;
+    }
+
+    .nested-object {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .nested-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 4px 8px;
+      background: rgba(30, 41, 59, 0.5);
+      border-radius: 4px;
+      border-left: 2px solid #475569;
+    }
+
+    .nested-key {
+      color: #94a3b8;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .nested-value {
+      color: #e2e8f0;
+    }
+
+    .nested-value.number {
+      color: #38bdf8;
+    }
+
+    .nested-value.string {
+      color: #a78bfa;
+    }
+
+    .deep-nested {
+      margin-left: 12px;
+      padding-left: 8px;
+      border-left: 1px solid #475569;
     }
 
     .tag-badge {
@@ -422,6 +463,55 @@ function generateReportHTML(run: FlowRun, clientName: string): string {
 }
 
 /**
+ * Recursively render a value for the report table
+ */
+function renderValue(value: any, depth: number = 0): string {
+  if (value === null || value === undefined) {
+    return '<span style="color: #64748b; font-style: italic;">null</span>';
+  }
+
+  if (typeof value === 'boolean') {
+    return `<span style="color: ${value ? '#10b981' : '#ef4444'};">${value ? '✓ true' : '✗ false'}</span>`;
+  }
+
+  if (typeof value === 'number') {
+    return `<span class="nested-value number">${value.toLocaleString()}</span>`;
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    const entries = Object.entries(value);
+    if (entries.length === 0) {
+      return '<span style="color: #64748b; font-style: italic;">{}</span>';
+    }
+
+    const rows = entries.map(([k, v]) => {
+      const renderedValue = renderValue(v, depth + 1);
+      return `
+        <div class="nested-row">
+          <span class="nested-key">${k}:</span>
+          <span>${renderedValue}</span>
+        </div>
+      `;
+    }).join('');
+
+    return `<div class="nested-object${depth > 0 ? ' deep-nested' : ''}">${rows}</div>`;
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return '<span style="color: #64748b; font-style: italic;">[]</span>';
+    }
+    const items = value.map((item, i) => {
+      const renderedItem = renderValue(item, depth + 1);
+      return `<div class="nested-row"><span class="nested-key">[${i}]</span><span>${renderedItem}</span></div>`;
+    }).join('');
+    return `<div class="nested-object${depth > 0 ? ' deep-nested' : ''}">${items}</div>`;
+  }
+
+  return `<span class="nested-value string">${String(value)}</span>`;
+}
+
+/**
  * Generate HTML for a single task
  */
 function generateTaskHTML(task: TaskRun): string {
@@ -477,23 +567,7 @@ function generateTaskHTML(task: TaskRun): string {
               <tbody>
                 ${task.result.table.map(row => `
                   <tr>
-                    ${Object.values(row).map(value => {
-                      if (typeof value === 'boolean') {
-                        return `<td style="color: ${value ? '#10b981' : '#ef4444'};">${value ? '✓' : '✗'}</td>`;
-                      } else if (typeof value === 'number') {
-                        return `<td style="color: #38bdf8;">${value.toLocaleString()}</td>`;
-                      } else if (typeof value === 'object' && value !== null) {
-                        const tags = Object.entries(value).map(([k, v]) =>
-                          `<span style="display: inline-flex; align-items: center; background: rgba(51, 65, 85, 0.5); border-radius: 4px; padding: 2px 6px; margin: 2px;">
-                            <span style="color: #94a3b8;">${k}:</span>
-                            <span style="margin-left: 4px; color: ${typeof v === 'number' ? '#38bdf8' : '#a78bfa'};">${typeof v === 'number' ? (v as number).toLocaleString() : v}</span>
-                          </span>`
-                        ).join('');
-                        return `<td style="white-space: normal;">${tags}</td>`;
-                      } else {
-                        return `<td>${value}</td>`;
-                      }
-                    }).join('')}
+                    ${Object.values(row).map(value => `<td>${renderValue(value)}</td>`).join('')}
                   </tr>
                 `).join('')}
               </tbody>
