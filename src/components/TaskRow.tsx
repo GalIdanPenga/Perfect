@@ -14,10 +14,10 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
   const logsRef = useRef<HTMLDivElement>(null);
   const [showTableModal, setShowTableModal] = useState(false);
 
-  // Check if table has complex values (objects/arrays) or is large
+  // Check if table has complex values (objects/arrays) - only these need truncation
   const hasComplexTable = task.result?.table?.some((row: Record<string, any>) =>
     Object.values(row).some(v => typeof v === 'object' && v !== null)
-  ) || (task.result?.table?.length ?? 0) > 3;
+  );
 
   useEffect(() => {
     if (isRunning && logsRef.current) {
@@ -127,35 +127,37 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Only show first row in the card */}
-                  <tr className="border-b border-slate-800 last:border-0 hover:bg-slate-800/30">
-                    {Object.values(task.result.table[0]).map((value, j) => (
-                      <td key={j} className="px-2 py-1.5 text-slate-200">
-                        {typeof value === 'boolean' ? (
-                          <span className={value ? 'text-emerald-400' : 'text-rose-400'}>
-                            {value ? '✓' : '✗'}
-                          </span>
-                        ) : typeof value === 'number' ? (
-                          <span className="text-sky-400">{value.toLocaleString()}</span>
-                        ) : typeof value === 'object' && value !== null ? (
-                          <span className="inline-flex flex-wrap gap-1">
-                            {Object.entries(value).map(([k, v], i) => (
-                              <span key={i} className="inline-flex items-center bg-slate-700/50 rounded px-1.5 py-0.5">
-                                <span className="text-slate-400">{k}:</span>
-                                <span className={`ml-1 ${typeof v === 'number' ? 'text-sky-400' : 'text-violet-400'}`}>
-                                  {typeof v === 'number' ? v.toLocaleString() : String(v)}
+                  {/* Show all rows for simple tables, only first row for complex tables */}
+                  {(hasComplexTable ? [task.result.table[0]] : task.result.table).map((row, i) => (
+                    <tr key={i} className="border-b border-slate-800 last:border-0 hover:bg-slate-800/30">
+                      {Object.values(row).map((value, j) => (
+                        <td key={j} className="px-2 py-1.5 text-slate-200">
+                          {typeof value === 'boolean' ? (
+                            <span className={value ? 'text-emerald-400' : 'text-rose-400'}>
+                              {value ? '✓' : '✗'}
+                            </span>
+                          ) : typeof value === 'number' ? (
+                            <span className="text-sky-400">{value.toLocaleString()}</span>
+                          ) : typeof value === 'object' && value !== null ? (
+                            <span className="inline-flex flex-wrap gap-1">
+                              {Object.entries(value).map(([k, v], idx) => (
+                                <span key={idx} className="inline-flex items-center bg-slate-700/50 rounded px-1.5 py-0.5">
+                                  <span className="text-slate-400">{k}:</span>
+                                  <span className={`ml-1 ${typeof v === 'number' ? 'text-sky-400' : 'text-violet-400'}`}>
+                                    {typeof v === 'number' ? v.toLocaleString() : String(v)}
+                                  </span>
                                 </span>
-                              </span>
-                            ))}
-                          </span>
-                        ) : (
-                          <span>{String(value)}</span>
-                        )}
-                      </td>
-                    ))}
-                  </tr>
-                  {/* Show row count if more rows exist */}
-                  {task.result.table.length > 1 && (
+                              ))}
+                            </span>
+                          ) : (
+                            <span>{String(value)}</span>
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                  {/* Show row count if more rows exist (only for complex tables) */}
+                  {hasComplexTable && task.result.table.length > 1 && (
                     <tr>
                       <td colSpan={Object.keys(task.result.table[0]).length} className="px-2 py-1 text-slate-500 text-center italic">
                         +{task.result.table.length - 1} more row{task.result.table.length > 2 ? 's' : ''}

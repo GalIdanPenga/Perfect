@@ -272,15 +272,18 @@ function generateReportHTML(run: FlowRun, clientName: string): string {
 
     .result-table {
       width: 100%;
-      border-collapse: collapse;
+      border-collapse: separate;
+      border-spacing: 0;
       margin-top: 0.75rem;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #334155;
     }
 
     .result-table th,
     .result-table td {
-      padding: 0.75rem;
+      padding: 1rem 1.25rem;
       text-align: left;
-      border-bottom: 1px solid #334155;
     }
 
     .result-table th {
@@ -290,12 +293,30 @@ function generateReportHTML(run: FlowRun, clientName: string): string {
       font-size: 0.75rem;
       text-transform: uppercase;
       letter-spacing: 0.05em;
+      border-bottom: 2px solid #475569;
     }
 
     .result-table td {
       color: #e2e8f0;
       font-size: 0.875rem;
       vertical-align: top;
+      border-bottom: 2px solid #334155;
+    }
+
+    .result-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .result-table tbody tr:nth-child(odd) {
+      background: rgba(15, 23, 42, 0.3);
+    }
+
+    .result-table tbody tr:nth-child(even) {
+      background: rgba(30, 41, 59, 0.3);
+    }
+
+    .result-table tbody tr:hover {
+      background: rgba(56, 189, 248, 0.1);
     }
 
     .nested-object {

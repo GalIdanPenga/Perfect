@@ -33,39 +33,47 @@ export function TableModal({ taskName, table, onClose }: TableModalProps) {
 
     if (typeof value === 'boolean') {
       return (
-        <span className={value ? 'text-emerald-400' : 'text-rose-400'}>
-          {value ? '✓ true' : '✗ false'}
+        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
+          value
+            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+            : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+        }`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${value ? 'bg-emerald-400' : 'bg-rose-400'}`}></span>
+          {value ? 'true' : 'false'}
         </span>
       );
     }
 
     if (typeof value === 'number') {
-      return <span className="text-sky-400">{value.toLocaleString()}</span>;
+      return (
+        <span className="text-sky-300 bg-sky-500/10 px-2 py-0.5 rounded font-medium">
+          {value.toLocaleString()}
+        </span>
+      );
     }
 
     if (typeof value === 'object' && !Array.isArray(value)) {
       return (
-        <div className={`${depth > 0 ? 'pl-3 border-l-2 border-slate-700' : ''}`}>
-          <table className="w-full">
-            <tbody>
-              {Object.entries(value).map(([k, v], i) => (
-                <tr key={i} className="border-b border-slate-800/50 last:border-0">
-                  <td className="text-slate-400 pr-3 py-1 font-medium whitespace-nowrap align-top">{k}:</td>
-                  <td className="py-1">{renderValue(v, depth + 1)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className={`rounded-lg ${depth === 0 ? 'bg-slate-800/50 p-3 border border-slate-700/50' : 'pl-3 border-l-2 border-slate-600/50 ml-1'}`}>
+          <div className="space-y-1.5">
+            {Object.entries(value).map(([k, v], i) => (
+              <div key={i} className="flex items-start gap-2">
+                <span className="text-slate-400 font-medium text-xs uppercase tracking-wide min-w-[80px] pt-0.5">{k}</span>
+                <span className="text-slate-600">→</span>
+                <div className="flex-1">{renderValue(v, depth + 1)}</div>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
 
     if (Array.isArray(value)) {
       return (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-wrap gap-1.5">
           {value.map((item, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <span className="text-slate-600 text-xs">[{i}]</span>
+            <div key={i} className="inline-flex items-center gap-1 bg-slate-700/50 rounded px-2 py-0.5">
+              <span className="text-slate-500 text-xs">{i}:</span>
               {renderValue(item, depth + 1)}
             </div>
           ))}
@@ -73,74 +81,94 @@ export function TableModal({ taskName, table, onClose }: TableModalProps) {
       );
     }
 
-    return <span className="text-violet-400">{String(value)}</span>;
+    return <span className="text-violet-300">{String(value)}</span>;
   };
 
   const columns = table.length > 0 ? Object.keys(table[0]) : [];
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm transition-opacity duration-200 ${
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md transition-opacity duration-200 ${
         isClosing || isOpening ? 'opacity-0' : 'opacity-100'
       }`}
       onClick={handleClose}
     >
       <div
-        className={`bg-slate-900 rounded-xl border border-slate-700 shadow-2xl w-[95vw] max-w-[1200px] max-h-[90vh] flex flex-col transition-all duration-200 ${
+        className={`bg-gradient-to-b from-slate-900 to-slate-950 rounded-2xl border border-slate-700/80 shadow-2xl shadow-black/50 w-[95vw] max-w-[1400px] max-h-[90vh] flex flex-col transition-all duration-200 ${
           isClosing || isOpening ? 'scale-95 opacity-0' : 'scale-100 opacity-100'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-700">
-          <div className="flex items-center gap-3">
-            <Table className="text-sky-400" size={24} />
+        <div className="flex items-center justify-between p-5 border-b border-slate-700/80 bg-slate-800/30">
+          <div className="flex items-center gap-4">
+            <div className="p-2.5 bg-sky-500/20 rounded-xl border border-sky-500/30">
+              <Table className="text-sky-400" size={22} />
+            </div>
             <div>
-              <h2 className="text-xl font-bold text-white">Task Result Table</h2>
-              <p className="text-sm text-slate-400 font-mono mt-1">{taskName}</p>
+              <h2 className="text-lg font-semibold text-white">Task Result</h2>
+              <p className="text-sm text-slate-400 font-mono">{taskName}</p>
             </div>
           </div>
           <button
             onClick={handleClose}
-            className="text-slate-400 hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-800"
+            className="text-slate-400 hover:text-white transition-colors p-2 rounded-xl hover:bg-slate-700/50 border border-transparent hover:border-slate-600"
           >
             <X size={20} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
-          <table className="w-full text-sm font-mono">
-            <thead>
-              <tr className="border-b-2 border-slate-600">
-                {columns.map((key) => (
-                  <th key={key} className="text-left px-4 py-3 text-slate-200 font-bold uppercase tracking-wider bg-slate-800/50">
-                    {key}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {table.map((row, i) => (
-                <tr key={i} className="border-b border-slate-800 last:border-0 hover:bg-slate-800/30 transition-colors">
-                  {columns.map((key, j) => (
-                    <td key={j} className="px-4 py-3 text-slate-200 align-top">
-                      {renderValue(row[key])}
-                    </td>
+        <div className="flex-1 overflow-auto p-5">
+          <div className="rounded-xl border border-slate-700/60 overflow-hidden">
+            <table className="w-full text-sm font-mono">
+              <thead>
+                <tr className="bg-slate-800/80">
+                  {columns.map((key, i) => (
+                    <th key={key} className={`text-left px-5 py-3.5 text-slate-300 font-semibold uppercase tracking-wider text-xs ${
+                      i === 0 ? 'rounded-tl-lg' : ''
+                    } ${i === columns.length - 1 ? 'rounded-tr-lg' : ''}`}>
+                      {key}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {table.map((row, i) => (
+                  <tr
+                    key={i}
+                    className={`transition-colors hover:bg-sky-500/10 border-b-2 border-slate-700/80 last:border-b-0 ${
+                      i % 2 === 0 ? 'bg-slate-900/20' : 'bg-slate-800/30'
+                    }`}
+                  >
+                    {columns.map((key, j) => (
+                      <td key={j} className="px-5 py-5 text-slate-200 align-top">
+                        {renderValue(row[key])}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-700 bg-slate-800/30">
-          <div className="flex items-center justify-between text-sm text-slate-400">
-            <span>{table.length} row{table.length !== 1 ? 's' : ''} × {columns.length} column{columns.length !== 1 ? 's' : ''}</span>
+        <div className="px-5 py-4 border-t border-slate-700/80 bg-slate-800/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4 text-sm">
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                <span className="text-slate-500">Rows</span>
+                <span className="text-sky-400 font-medium">{table.length}</span>
+              </span>
+              <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-800/60 rounded-lg border border-slate-700/50">
+                <span className="text-slate-500">Columns</span>
+                <span className="text-violet-400 font-medium">{columns.length}</span>
+              </span>
+            </div>
             <button
               onClick={handleClose}
-              className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors"
+              className="px-5 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors font-medium border border-slate-600 hover:border-slate-500"
             >
               Close
             </button>
