@@ -92,6 +92,40 @@ class FlowDefinition:
 # Log Capture (for flow execution)
 # ============================================================================
 
+# Thread-local storage for tracking which thread is running which flow
+_thread_local = threading.local()
+
+
+class ThreadAwareStdout:
+    """
+    A stdout wrapper that captures output only from threads running flows.
+    Other threads' output goes directly to the real stdout.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+
+    def write(self, text: str):
+        """Write text - capture if thread is running a flow, otherwise pass through"""
+        # Check if current thread has an active log capture
+        log_capture = getattr(_thread_local, 'log_capture', None)
+
+        if log_capture is not None:
+            # This thread is running a flow - capture the log
+            log_capture.write(text)
+        else:
+            # Normal thread - write directly to real stdout
+            sys.__stdout__.write(text)
+            sys.__stdout__.flush()
+
+    def flush(self):
+        """Flush the stream"""
+        log_capture = getattr(_thread_local, 'log_capture', None)
+        if log_capture is not None:
+            log_capture.flush()
+        sys.__stdout__.flush()
+
+
 class LogCapture:
     """Captures stdout during flow execution and sends to Perfect backend"""
 
@@ -99,26 +133,53 @@ class LogCapture:
         self.client = client
         self.run_id = run_id
         self.buffer = ""
+        self._lock = threading.Lock()
 
     def write(self, text: str):
         """Write text to stdout and buffer for transmission"""
+        # Always write to real stdout
         sys.__stdout__.write(text)
         sys.__stdout__.flush()
 
-        self.buffer += text
+        with self._lock:
+            self.buffer += text
 
-        # Send complete lines as logs to the flow
-        while '\n' in self.buffer:
-            line, self.buffer = self.buffer.split('\n', 1)
-            if line.strip():
-                self.client.send_log(self.run_id, line)
+            # Send complete lines as logs to the flow
+            while '\n' in self.buffer:
+                line, self.buffer = self.buffer.split('\n', 1)
+                if line.strip():
+                    self.client.send_log(self.run_id, line)
 
     def flush(self):
         """Flush remaining buffered content"""
         sys.__stdout__.flush()
-        if self.buffer.strip():
-            self.client.send_log(self.run_id, self.buffer)
-            self.buffer = ""
+        with self._lock:
+            if self.buffer.strip():
+                self.client.send_log(self.run_id, self.buffer)
+                self.buffer = ""
+
+    def start_capture(self):
+        """Start capturing logs for the current thread"""
+        _thread_local.log_capture = self
+
+    def stop_capture(self):
+        """Stop capturing logs for the current thread"""
+        self.flush()
+        _thread_local.log_capture = None
+
+
+# Global thread-aware stdout - installed once
+_thread_aware_stdout = None
+_stdout_installed = False
+
+
+def _ensure_thread_aware_stdout():
+    """Install the thread-aware stdout wrapper if not already installed"""
+    global _thread_aware_stdout, _stdout_installed
+    if not _stdout_installed:
+        _thread_aware_stdout = ThreadAwareStdout()
+        sys.stdout = _thread_aware_stdout
+        _stdout_installed = True
 
 
 # ============================================================================
@@ -531,10 +592,12 @@ class WorkflowRegistry:
                                 self._current_run_id = run_id
                                 self._current_task_index = 0
 
-                                # Capture stdout during flow execution
+                                # Install thread-aware stdout if not already done
+                                _ensure_thread_aware_stdout()
+
+                                # Create log capture for this flow and start capturing for this thread
                                 log_capture = LogCapture(self._client, run_id)
-                                old_stdout = sys.stdout
-                                sys.stdout = log_capture
+                                log_capture.start_capture()
 
                                 try:
                                     # Execute the actual flow function
@@ -549,9 +612,8 @@ class WorkflowRegistry:
                                     print(f"[Flow] Flow {name} failed: {e}")
                                     raise
                                 finally:
-                                    # Restore stdout and flush any remaining logs
-                                    sys.stdout = old_stdout
-                                    log_capture.flush()
+                                    # Stop capturing logs for this thread
+                                    log_capture.stop_capture()
                                     # Clear execution context
                                     self._current_run_id = None
                                     self._current_task_index = 0
