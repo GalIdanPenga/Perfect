@@ -621,7 +621,8 @@ class WorkflowRegistry:
                         else:
                             print(f"[Flow] Warning: Create run failed, executing without tracking")
                             result = func(*args, **kwargs)
-                    except Exception as e:
+                    except requests.exceptions.RequestException as e:
+                        # Only catch network/connection errors - not flow execution errors
                         print(f"[Flow] Warning: Backend tracking failed: {e}")
                         # Fallback to direct execution
                         self._current_run_id = None
