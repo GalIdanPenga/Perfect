@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Clock } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Clock, ChevronLeft } from 'lucide-react';
 import { FlowRun, TaskState } from '../types';
 import { StatusBadge } from './StatusComponents';
 import { TagBadges } from './TagBadges';
@@ -12,6 +12,7 @@ interface ActiveRunCardProps {
 
 export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }) => {
   const flowLogsRef = useRef<HTMLDivElement>(null);
+  const [logsExpanded, setLogsExpanded] = useState(false);
   const isRunning = run.state === TaskState.RUNNING || run.state === TaskState.PENDING || run.state === TaskState.RETRYING;
 
   // Calculate estimated time remaining
@@ -152,22 +153,46 @@ export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }
         </div>
       </div>
 
-      {/* Flow Logs */}
-      {run.logs && run.logs.length > 0 && (
-        <div ref={flowLogsRef} className="mx-3 mt-2 p-2 bg-slate-950/70 border border-slate-800 rounded-lg text-xs font-mono max-h-20 overflow-y-auto custom-scrollbar shadow-inner">
-          {run.logs.map((log, i) => (
-            <div key={i} className="text-slate-200 mb-0.5 leading-relaxed">
-              {log}
-            </div>
+      {/* Tasks and Logs Container */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Tasks List */}
+        <div className={`flex-1 overflow-y-auto max-h-[260px] custom-scrollbar bg-slate-900/20 ${run.logs && run.logs.length > 0 ? 'border-r border-slate-700/50' : ''}`}>
+          {run.tasks.map(task => (
+            <TaskRow key={task.id} task={task} />
           ))}
         </div>
-      )}
 
-      {/* Tasks List */}
-      <div className="flex-1 overflow-y-auto max-h-[260px] custom-scrollbar bg-slate-900/20">
-        {run.tasks.map(task => (
-          <TaskRow key={task.id} task={task} />
-        ))}
+        {/* Flow Logs - Right Side (Collapsible) */}
+        {run.logs && run.logs.length > 0 && (
+          <div className="flex relative">
+            {/* Toggle Button - Small circle */}
+            <button
+              onClick={() => setLogsExpanded(!logsExpanded)}
+              className="absolute -left-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-slate-700 hover:bg-slate-600 flex items-center justify-center transition-colors z-10 shadow-md border border-slate-600"
+              title={logsExpanded ? "Collapse logs" : `Expand logs (${run.logs.length})`}
+            >
+              <ChevronLeft
+                size={10}
+                className={`text-slate-300 transition-transform duration-200 ${logsExpanded ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {/* Logs Panel */}
+            <div
+              ref={flowLogsRef}
+              className={`bg-slate-950/70 text-xs font-mono max-h-[260px] overflow-y-auto custom-scrollbar border-l border-slate-700/50 transition-all duration-200 ease-out ${
+                logsExpanded ? 'w-64 p-2 opacity-100' : 'w-0 p-0 opacity-0 overflow-hidden'
+              }`}
+            >
+              <div className="text-slate-500 text-[10px] uppercase tracking-wider mb-2 font-semibold whitespace-nowrap">Logs ({run.logs.length})</div>
+              {run.logs.map((log, i) => (
+                <div key={i} className="text-slate-300 py-1 px-1.5 mb-1 bg-slate-800/50 rounded border-l-2 border-slate-600 break-words">
+                  {log}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -89,11 +89,11 @@ class FlowDefinition:
 
 
 # ============================================================================
-# Log Capture (for task execution)
+# Log Capture (for flow execution)
 # ============================================================================
 
 class LogCapture:
-    """Captures stdout during task execution and sends to Perfect backend"""
+    """Captures stdout during flow execution and sends to Perfect backend"""
 
     def __init__(self, client, run_id: str):
         self.client = client
@@ -107,17 +107,17 @@ class LogCapture:
 
         self.buffer += text
 
-        # Send complete lines as logs
+        # Send complete lines as logs to the flow
         while '\n' in self.buffer:
             line, self.buffer = self.buffer.split('\n', 1)
             if line.strip():
-                self.client.send_log(self.run_id, f"[Task Output] {line}")
+                self.client.send_log(self.run_id, line)
 
     def flush(self):
         """Flush remaining buffered content"""
         sys.__stdout__.flush()
         if self.buffer.strip():
-            self.client.send_log(self.run_id, f"[Task Output] {self.buffer}")
+            self.client.send_log(self.run_id, self.buffer)
             self.buffer = ""
 
 
@@ -531,6 +531,11 @@ class WorkflowRegistry:
                                 self._current_run_id = run_id
                                 self._current_task_index = 0
 
+                                # Capture stdout during flow execution
+                                log_capture = LogCapture(self._client, run_id)
+                                old_stdout = sys.stdout
+                                sys.stdout = log_capture
+
                                 try:
                                     # Execute the actual flow function
                                     result = func(*args, **kwargs)
@@ -544,6 +549,9 @@ class WorkflowRegistry:
                                     print(f"[Flow] Flow {name} failed: {e}")
                                     raise
                                 finally:
+                                    # Restore stdout and flush any remaining logs
+                                    sys.stdout = old_stdout
+                                    log_capture.flush()
                                     # Clear execution context
                                     self._current_run_id = None
                                     self._current_task_index = 0
