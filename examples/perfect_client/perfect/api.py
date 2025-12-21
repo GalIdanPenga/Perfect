@@ -51,7 +51,7 @@ class PerfectAPIClient:
         self._heartbeat_thread = None
         self._listening = False
 
-    def register_flow(self, flow_definition: Dict, auto_trigger: bool = False, configuration: str = "development") -> bool:
+    def register_flow(self, flow_definition: Dict, auto_trigger: bool = False, configuration: str = "development") -> Optional[Dict]:
         """
         Register a flow with Perfect.
 
@@ -65,7 +65,7 @@ class PerfectAPIClient:
             configuration: Configuration to use when auto-triggering (default: "development")
 
         Returns:
-            True if registration successful, False otherwise
+            The registered flow object (including 'id') if successful, None otherwise
         """
         try:
             # Add auto_trigger flag to the payload
@@ -82,12 +82,15 @@ class PerfectAPIClient:
             )
             response.raise_for_status()
 
+            result = response.json()
+            flow = result.get('flow')
+
             trigger_msg = f" (auto-triggering with config: {configuration})" if auto_trigger else ""
             print(f"[OK] Registered flow: {flow_definition['name']}{trigger_msg}")
-            return True
+            return flow
         except requests.exceptions.RequestException as e:
             print(f"[ERROR] Failed to register flow {flow_definition['name']}: {e}")
-            return False
+            return None
 
     def send_log(self, run_id: str, log_message: str) -> bool:
         """

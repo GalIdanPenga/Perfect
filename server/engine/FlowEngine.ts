@@ -391,10 +391,8 @@ export class FlowEngine {
    * Register a new flow definition (typically called by Python clients)
    */
   registerFlow(payload: FlowRegistrationPayload): FlowDefinition {
-    // Prevent duplicate registration
-    if (this.flows.some(f => f.name === payload.name)) {
-      return this.flows.find(f => f.name === payload.name)!;
-    }
+    // Allow multiple registrations of the same flow name - each becomes a separate instance
+    // This supports parallel execution of the same flow
 
     // Get statistics for this flow
     const flowStats = statsDb.getFlowStats(payload.name);

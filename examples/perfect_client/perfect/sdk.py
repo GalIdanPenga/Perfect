@@ -278,10 +278,10 @@ class WorkflowRegistry:
         self._pending_flows.clear()
         print(f"[Perfect SDK] All flows registered\n")
 
-    def _register_flow_with_backend(self, flow_def: FlowDefinition):
-        """Register a single flow with the backend"""
+    def _register_flow_with_backend(self, flow_def: FlowDefinition) -> Optional[str]:
+        """Register a single flow with the backend and return the flow ID"""
         if not self._client:
-            return
+            return None
 
         try:
             # Analyze flow to get task information
@@ -291,13 +291,19 @@ class WorkflowRegistry:
             payload = self._flow_to_dict(analyzed_flow)
 
             # Register with backend (auto_trigger=False to prevent server execution requests)
-            self._client.register_flow(
+            # Returns the flow object including 'id'
+            flow = self._client.register_flow(
                 payload,
                 auto_trigger=False,
                 configuration=flow_def.auto_trigger_config
             )
+
+            if flow and 'id' in flow:
+                return flow['id']
+            return None
         except Exception as e:
             print(f"[Perfect SDK] Warning: Failed to register flow '{flow_def.name}': {e}")
+            return None
 
     # ------------------------------------------------------------------------
     # Auto Listener (Background Thread)
@@ -552,85 +558,68 @@ class WorkflowRegistry:
             )
 
             self._flows[func.__name__] = flow_def
-            registered = {'value': False}
 
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                # Lazy registration on first call
-                if not registered['value']:
-                    # Auto-connect to backend
-                    self._ensure_client()
+                # Auto-connect to backend
+                self._ensure_client()
 
-                    # Register flow
-                    if self._client:
-                        self._register_flow_with_backend(flow_def)
-                    else:
-                        self._pending_flows.append(flow_def)
-
-                    registered['value'] = True
+                # Register flow for THIS execution and get the flow ID directly
+                # This avoids race conditions when multiple threads run the same flow
+                flow_id = None
+                if self._client:
+                    flow_id = self._register_flow_with_backend(flow_def)
+                else:
+                    self._pending_flows.append(flow_def)
 
                 # Execute flow with backend tracking for UI visibility
                 print(f"[Flow] Starting {name}...")
 
-                if self._client:
+                if self._client and flow_id:
                     # Create a run on the server for UI tracking
                     try:
                         import requests
-                        # Get flow ID from backend
-                        response = requests.get(f"{self._client.base_url}/api/engine/flows", timeout=2)
-                        flow_id = None
+                        # Create run for client-initiated execution
+                        response = requests.post(
+                            f"{self._client.base_url}/api/engine/run/{flow_id}",
+                            json={"configuration": "development"},
+                            timeout=2
+                        )
                         if response.ok:
-                            flows = response.json()
-                            for backend_flow in flows:
-                                if backend_flow['name'] == name:
-                                    flow_id = backend_flow['id']
-                                    break
+                            run_id = response.json().get('runId')
+                            print(f"[Flow] Created run: {run_id}")
 
-                        if flow_id:
-                            # Create run for client-initiated execution
-                            response = requests.post(
-                                f"{self._client.base_url}/api/engine/run/{flow_id}",
-                                json={"configuration": "development"},
-                                timeout=2
-                            )
-                            if response.ok:
-                                run_id = response.json().get('runId')
-                                print(f"[Flow] Created run: {run_id}")
+                            # Set execution context for task tracking
+                            self._current_run_id = run_id
+                            self._current_task_index = 0
 
-                                # Set execution context for task tracking
-                                self._current_run_id = run_id
-                                self._current_task_index = 0
+                            # Install thread-aware stdout if not already done
+                            _ensure_thread_aware_stdout()
 
-                                # Install thread-aware stdout if not already done
-                                _ensure_thread_aware_stdout()
+                            # Create log capture for this flow and start capturing for this thread
+                            log_capture = LogCapture(self._client, run_id)
+                            log_capture.start_capture()
 
-                                # Create log capture for this flow and start capturing for this thread
-                                log_capture = LogCapture(self._client, run_id)
-                                log_capture.start_capture()
-
-                                try:
-                                    # Execute the actual flow function
-                                    result = func(*args, **kwargs)
-
-                                    # Signal flow completion with actual task count
-                                    actual_task_count = self._current_task_index
-                                    self._client.complete_flow(run_id, actual_task_count)
-                                    print(f"[Flow] Completed {name} with {actual_task_count} tasks")
-                                    return result
-                                except Exception as e:
-                                    print(f"[Flow] Flow {name} failed: {e}")
-                                    raise
-                                finally:
-                                    # Stop capturing logs for this thread
-                                    log_capture.stop_capture()
-                                    # Clear execution context
-                                    self._current_run_id = None
-                                    self._current_task_index = 0
-                            else:
-                                print(f"[Flow] Warning: Create run failed, executing without tracking")
+                            try:
+                                # Execute the actual flow function
                                 result = func(*args, **kwargs)
+
+                                # Signal flow completion with actual task count
+                                actual_task_count = self._current_task_index
+                                self._client.complete_flow(run_id, actual_task_count)
+                                print(f"[Flow] Completed {name} with {actual_task_count} tasks")
+                                return result
+                            except Exception as e:
+                                print(f"[Flow] Flow {name} failed: {e}")
+                                raise
+                            finally:
+                                # Stop capturing logs for this thread
+                                log_capture.stop_capture()
+                                # Clear execution context
+                                self._current_run_id = None
+                                self._current_task_index = 0
                         else:
-                            print(f"[Flow] Warning: Flow not found on server, executing without tracking")
+                            print(f"[Flow] Warning: Create run failed, executing without tracking")
                             result = func(*args, **kwargs)
                     except Exception as e:
                         print(f"[Flow] Warning: Backend tracking failed: {e}")
@@ -639,7 +628,9 @@ class WorkflowRegistry:
                         self._current_task_index = 0
                         result = func(*args, **kwargs)
                 else:
-                    # No client, execute directly
+                    # No client or flow registration failed, execute directly
+                    if self._client and not flow_id:
+                        print(f"[Flow] Warning: Flow registration failed, executing without tracking")
                     result = func(*args, **kwargs)
 
                 print(f"[Flow] Completed {name}")
