@@ -430,13 +430,22 @@ class WorkflowRegistry:
         task_result = None
         task_error = None
 
+        # Get the current log capture from the flow thread (if any)
+        parent_log_capture = getattr(_thread_local, 'log_capture', None)
+
         # Execute task in background thread for progress updates
         def execute_task():
             nonlocal task_result, task_error
+            # Inherit the log capture from the parent flow thread
+            if parent_log_capture is not None:
+                _thread_local.log_capture = parent_log_capture
             try:
                 task_result = func(*args, **kwargs)
             except Exception as e:
                 task_error = e
+            finally:
+                # Clear the log capture for this thread
+                _thread_local.log_capture = None
 
         task_thread = threading.Thread(target=execute_task, daemon=True)
         task_thread.start()
