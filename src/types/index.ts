@@ -51,6 +51,7 @@ export interface TaskRun {
   progress: number; // 0 to 100 for this specific task
   result?: TaskResult;
   performanceWarning?: PerformanceWarning;
+  crucialPass?: boolean; // If true, task failure fails the entire flow (default: true)
 }
 
 export interface FlowRun {

@@ -422,8 +422,8 @@ class WorkflowRegistry:
 
         print(f"[Task] Executing {task_def.name} (task {task_index})...")
 
-        # Mark task as running (include task name and estimated time for dynamic task creation)
-        self._client.update_task_state(run_id, task_index, 'RUNNING', 0, task_name=task_def.name, estimated_time=task_def.estimated_time)
+        # Mark task as running (include task name, estimated time, and crucial_pass for dynamic task creation)
+        self._client.update_task_state(run_id, task_index, 'RUNNING', 0, task_name=task_def.name, estimated_time=task_def.estimated_time, crucial_pass=task_def.crucial_pass)
 
         task_start = time_module.time()
         estimated_ms = task_def.estimated_time

@@ -129,7 +129,7 @@ export class FlowEngine {
   /**
    * Update task state for a running flow
    */
-  updateTaskState(runId: string, taskIndex: number, state: TaskState | string, progress?: number, durationMs?: number, result?: TaskResult, taskName?: string, clientEstimatedTime?: number): boolean {
+  updateTaskState(runId: string, taskIndex: number, state: TaskState | string, progress?: number, durationMs?: number, result?: TaskResult, taskName?: string, clientEstimatedTime?: number, crucialPass?: boolean): boolean {
     const run = this.runs.find(r => r.id === runId);
     if (!run) {
       return false;
@@ -159,7 +159,8 @@ export class FlowEngine {
         logs: [],
         weight: 1,  // Will be recalculated
         estimatedTime: estimatedTime,
-        progress: 0
+        progress: 0,
+        crucialPass: crucialPass !== undefined ? crucialPass : true  // Default to true
       };
 
       // Ensure array is large enough
@@ -185,6 +186,11 @@ export class FlowEngine {
     if (taskName && task.taskName !== taskName) {
       console.log(`[FlowEngine] Task ${taskIndex} name changed: ${task.taskName} -> ${taskName}`);
       task.taskName = taskName;
+    }
+
+    // Update crucialPass if provided
+    if (crucialPass !== undefined) {
+      task.crucialPass = crucialPass;
     }
 
     // Don't allow updates to tasks that are already in a terminal state (COMPLETED or FAILED)
@@ -281,14 +287,17 @@ export class FlowEngine {
       }
     }
 
-    // Check if any task failed - mark flow as failed immediately
-    const anyFailed = run.tasks.some(t => t.state === TaskState.FAILED);
+    // Check if any CRUCIAL task failed - mark flow as failed immediately
+    // Non-crucial task failures are handled in completeFlow
+    const anyCrucialFailed = run.tasks.some(t => t.state === TaskState.FAILED && t.crucialPass !== false);
 
-    if (anyFailed) {
+    if (anyCrucialFailed) {
       run.state = TaskState.FAILED;
       run.endTime = new Date().toISOString();
-      // Generate report on failure
-      run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+      // Generate report on failure (only if not already generated)
+      if (!run.reportPath) {
+        run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+      }
     } else {
       // Update weighted progress (don't mark as completed - wait for client to signal completion)
       this.updateRunProgress(run);
@@ -323,19 +332,24 @@ export class FlowEngine {
       }
     }
 
-    // Mark all remaining tasks as completed if they're still running/pending
-    // (this handles edge cases where the last task update might not have been received)
-    const allCompleted = run.tasks.every(t => t.state === TaskState.COMPLETED);
-    const anyFailed = run.tasks.some(t => t.state === TaskState.FAILED);
+    // Check task states - only crucial task failures should fail the flow
+    const allTasksFinished = run.tasks.every(t => t.state === TaskState.COMPLETED || t.state === TaskState.FAILED);
+    const anyCrucialFailed = run.tasks.some(t => t.state === TaskState.FAILED && t.crucialPass !== false);
+    const anyNonCrucialFailed = run.tasks.some(t => t.state === TaskState.FAILED && t.crucialPass === false);
 
-    if (allCompleted && !anyFailed) {
+    if (allTasksFinished && !anyCrucialFailed) {
+      // Flow completed - either all tasks passed, or only non-crucial tasks failed
       run.state = TaskState.COMPLETED;
       run.progress = 100;
       if (!run.endTime) {
         run.endTime = new Date().toISOString();
       }
 
-      // Generate report on successful completion
+      if (anyNonCrucialFailed) {
+        console.log(`[FlowEngine] Flow ${run.flowName} completed with non-crucial task failures`);
+      }
+
+      // Generate report on completion
       if (!run.reportPath) {
         run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
       }
@@ -347,18 +361,24 @@ export class FlowEngine {
       }));
       statsDb.saveFlowTaskStructure(run.flowName, taskStructure);
 
-      // Update flow statistics (only for successful runs WITHOUT warnings)
+      // Update flow statistics (only for runs WITHOUT warnings and without any failed tasks)
       const flowDuration = new Date(run.endTime).getTime() - new Date(run.startTime).getTime();
       const hasAnyWarnings = run.tasks.some(t => t.performanceWarning);
+      const hasAnyFailedTasks = run.tasks.some(t => t.state === TaskState.FAILED);
 
-      if (!hasAnyWarnings) {
+      if (!hasAnyWarnings && !hasAnyFailedTasks) {
         statsDb.updateFlowStats(run.flowName, flowDuration);
         console.log(`[FlowEngine] Updated flow statistics for ${run.flowName}: ${flowDuration}ms`);
       }
-    } else if (anyFailed) {
+    } else if (anyCrucialFailed) {
+      // A crucial task failed - mark flow as failed
       run.state = TaskState.FAILED;
       if (!run.endTime) {
         run.endTime = new Date().toISOString();
+      }
+      // Generate report on failure (only if not already generated)
+      if (!run.reportPath) {
+        run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
       }
     }
 
@@ -837,11 +857,12 @@ export class FlowEngine {
           }
         });
 
-        // Save the failed run to database
-        runDb.saveRun(run);
+        // Generate report for the failed flow (only if not already generated)
+        if (!run.reportPath) {
+          run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+        }
 
-        // Generate report for the failed flow
-        run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+        // Save the failed run to database (single save after all modifications)
         runDb.saveRun(run);
       });
 
@@ -931,11 +952,12 @@ export class FlowEngine {
           }
         });
 
-        // Save the failed run to database
-        runDb.saveRun(run);
+        // Generate report for the failed flow (only if not already generated)
+        if (!run.reportPath) {
+          run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+        }
 
-        // Generate report for the failed flow
-        run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+        // Save the failed run to database (single save after all modifications)
         runDb.saveRun(run);
       });
 

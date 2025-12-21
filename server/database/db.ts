@@ -441,6 +441,7 @@ export const runDb = {
             progress: task.progress,
             result: task.result ? JSON.parse(task.result) : undefined,
             performanceWarning: task.performance_warning ? JSON.parse(task.performance_warning) : undefined,
+            crucialPass: true, // Default to true for historical runs
             logs: taskLogs.map(l => l.log_entry)
           };
         })
@@ -488,6 +489,7 @@ export const runDb = {
           progress: task.progress,
           result: task.result ? JSON.parse(task.result) : undefined,
           performanceWarning: task.performance_warning ? JSON.parse(task.performance_warning) : undefined,
+          crucialPass: true, // Default to true for historical runs - actual value comes from client
           logs: taskLogs.map(l => l.log_entry)
         };
       })

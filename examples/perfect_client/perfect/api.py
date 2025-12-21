@@ -112,7 +112,7 @@ class PerfectAPIClient:
             print(f"[ERROR] Failed to send log: {e}")
             return False
 
-    def update_task_state(self, run_id: str, task_index: int, state: str, progress: int = None, duration_ms: int = None, result: Dict = None, task_name: str = None, estimated_time: int = None) -> bool:
+    def update_task_state(self, run_id: str, task_index: int, state: str, progress: int = None, duration_ms: int = None, result: Dict = None, task_name: str = None, estimated_time: int = None, crucial_pass: bool = None) -> bool:
         """
         Update the state of a task in a flow run.
 
@@ -125,6 +125,7 @@ class PerfectAPIClient:
             result: Optional task result (TaskResult.to_dict())
             task_name: Optional task name (for dynamic task creation)
             estimated_time: Optional estimated time in ms (for dynamic task creation)
+            crucial_pass: If True, task failure fails the flow (default: True)
 
         Returns:
             True if update successful, False otherwise
@@ -141,6 +142,8 @@ class PerfectAPIClient:
                 payload["taskName"] = task_name
             if estimated_time is not None:
                 payload["estimatedTime"] = estimated_time
+            if crucial_pass is not None:
+                payload["crucialPass"] = crucial_pass
 
             response = self.session.post(
                 f"{self.base_url}/api/runs/{run_id}/tasks/{task_index}/state",
