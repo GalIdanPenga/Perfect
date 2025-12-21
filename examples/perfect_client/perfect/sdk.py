@@ -414,11 +414,30 @@ class WorkflowRegistry:
                 raise task_error
             return None
 
-        # Task completed successfully
+        # Check if task returned a result with passed=False
         result_dict = None
         if task_result and hasattr(task_result, 'to_dict'):
             result_dict = task_result.to_dict()
 
+        # Check if task explicitly failed via passed=False
+        task_passed = True
+        if task_result and hasattr(task_result, 'passed'):
+            task_passed = task_result.passed
+
+        if not task_passed:
+            # Task returned passed=False - treat as failure
+            self._client.update_task_state(
+                run_id, task_index, 'FAILED', 0,
+                duration_ms=actual_duration,
+                result=result_dict
+            )
+            print(f"[Task] {task_def.name} failed: {result_dict.get('note', 'Task returned passed=False') if result_dict else 'Task returned passed=False'}")
+
+            if task_def.crucial_pass:
+                raise Exception(f"Task '{task_def.name}' failed: {result_dict.get('note', 'passed=False') if result_dict else 'passed=False'}")
+            return task_result
+
+        # Task completed successfully
         self._client.update_task_state(
             run_id, task_index, 'COMPLETED', 100,
             duration_ms=actual_duration,
