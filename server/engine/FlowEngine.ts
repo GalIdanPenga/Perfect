@@ -237,8 +237,13 @@ export class FlowEngine {
       // This ensures accurate progress even when client has different estimates
       if (task.startTime) {
         const elapsedMs = Date.now() - new Date(task.startTime).getTime();
-        // Use server's estimated time for progress calculation
-        task.progress = Math.min(99, Math.round((elapsedMs / task.estimatedTime) * 100));
+        // Use server's estimated time for progress calculation (guard against division by zero)
+        if (task.estimatedTime > 0) {
+          task.progress = Math.min(99, Math.round((elapsedMs / task.estimatedTime) * 100));
+        } else {
+          // For tasks with estimatedTime of 0, use client progress or default to 50
+          task.progress = progress !== undefined ? progress : 50;
+        }
       } else if (progress !== undefined) {
         // Fallback to client progress if no start time yet
         task.progress = progress;
