@@ -8,12 +8,13 @@ const __dirname = path.dirname(__filename);
 
 /**
  * Generates a static HTML report for a completed flow run
- * @returns The relative path to the report (e.g., "Reports/client/flow_timestamp.html")
+ * @returns The relative path to the report (e.g., "Reports/FlowName/flow_timestamp.html")
  */
 export function generateFlowReport(run: FlowRun, clientName: string = 'default'): string | null {
   try {
-    // Create Reports directory structure
-    const reportsDir = path.join(__dirname, '../../Reports', clientName);
+    // Create Reports directory structure organized by flow name
+    const flowNameForDir = run.flowName.replace(/\s+/g, '_');
+    const reportsDir = path.join(__dirname, '../../Reports', flowNameForDir);
     if (!fs.existsSync(reportsDir)) {
       fs.mkdirSync(reportsDir, { recursive: true });
     }
@@ -41,7 +42,7 @@ export function generateFlowReport(run: FlowRun, clientName: string = 'default')
     console.log(`[ReportGenerator] Generated report: ${filePath}`);
 
     // Return relative path for accessing via web server
-    return `Reports/${clientName}/${filename}`;
+    return `Reports/${flowNameForDir}/${filename}`;
   } catch (error) {
     console.error('[ReportGenerator] Failed to generate report:', error);
     return null;

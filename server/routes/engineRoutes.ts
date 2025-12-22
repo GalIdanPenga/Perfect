@@ -1,5 +1,6 @@
 import express from 'express';
 import { flowEngine } from '../engine/FlowEngine';
+import { getActiveClient } from './clientRoutes';
 
 const router = express.Router();
 
@@ -37,7 +38,10 @@ router.post('/trigger/:flowId', (req, res) => {
   try {
     const { flowId } = req.params;
     const { configuration } = req.body;
-    const runId = flowEngine.triggerFlow(flowId, configuration || 'development');
+    const activeClient = getActiveClient();
+    const clientColor = activeClient?.color;
+    const clientName = activeClient?.name;
+    const runId = flowEngine.triggerFlow(flowId, configuration || 'development', clientColor, clientName);
     res.json({ success: true, runId });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
@@ -52,7 +56,10 @@ router.post('/run/:flowId', (req, res) => {
   try {
     const { flowId } = req.params;
     const { configuration } = req.body;
-    const runId = flowEngine.createRun(flowId, configuration || 'development');
+    const activeClient = getActiveClient();
+    const clientColor = activeClient?.color;
+    const clientName = activeClient?.name;
+    const runId = flowEngine.createRun(flowId, configuration || 'development', clientColor, clientName);
     res.json({ success: true, runId });
   } catch (error: any) {
     res.status(400).json({ success: false, error: error.message });
