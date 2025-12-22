@@ -300,6 +300,72 @@ class PerfectAPIClient:
             self._heartbeat_thread.join(timeout=1.0)
         self.session.close()
 
+    # Report Management API
+
+    def get_flow_reports(self, flow_name: str) -> List[Dict]:
+        """
+        Get all reports for a specific flow.
+
+        Args:
+            flow_name: Name of the flow
+
+        Returns:
+            List of report dictionaries containing:
+            - runId: The run ID
+            - filename: Report filename
+            - path: Relative path to report
+            - url: URL to access report
+            - size: File size in bytes
+            - createdAt: Creation timestamp
+            - modifiedAt: Modification timestamp
+            - flowState: Flow execution state (COMPLETED, FAILED, etc.)
+            - configuration: Configuration used for the run
+            - tags: Flow tags dictionary
+        """
+        try:
+            response = self.session.get(
+                f"{self.base_url}/api/reports/flow/{flow_name}",
+                timeout=5
+            )
+            response.raise_for_status()
+
+            result = response.json()
+            if result.get('success'):
+                return result.get('reports', [])
+            else:
+                print(f"[ERROR] Failed to get reports: {result.get('error')}")
+                return []
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Failed to get reports for {flow_name}: {e}")
+            return []
+
+    def get_report(self, run_id: str) -> Optional[Dict]:
+        """
+        Get report for a specific run ID.
+
+        Args:
+            run_id: The run ID
+
+        Returns:
+            Report dictionary or None if not found
+        """
+        try:
+            response = self.session.get(
+                f"{self.base_url}/api/reports/run/{run_id}",
+                timeout=5
+            )
+            response.raise_for_status()
+
+            result = response.json()
+            if result.get('success'):
+                return result.get('report')
+            else:
+                print(f"[ERROR] Failed to get report: {result.get('error')}")
+                return None
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Failed to get report for run {run_id}: {e}")
+            return None
+
 
 class MockPerfectClient(PerfectAPIClient):
     """

@@ -352,22 +352,41 @@ def weekly_report():
 # ==========================================
 
 if __name__ == "__main__":
-    # make a thread for each flow to register them concurrently
-    print("[Perfect] Registering flows with Perfect platform...")
+    # Example: Execute flows and download their reports
+    print("[Perfect] Registering and executing flows...")
     import threading
+    from perfect.sdk import download_report
+
+    reports_base_dir = os.path.join(os.path.dirname(__file__), 'Reports')
+
+    def execute_flow_and_download_report(flow_func):
+        """Execute a flow and download its report"""
+        # Execute the flow and get run_id
+        _, run_id = flow_func()
+
+        # Wait for report generation
+        time.sleep(2)
+
+        # Download the report using SDK
+        download_report(run_id, output_dir=reports_base_dir)
+
+    # Create a thread for each flow
     threads = []
     for flow_func in [daily_sales_etl, churn_model_retraining, infra_health_check, weekly_report]:
-        t = threading.Thread(target=flow_func)
+        t = threading.Thread(target=execute_flow_and_download_report, args=(flow_func,))
         t.start()
         threads.append(t)
 
+    # Wait for all threads to complete
     for t in threads:
         t.join()
 
+    print("\n[Perfect] All flows completed and reports downloaded!")
+
     # That's it! SDK auto-connects, registers, and listens in background.
     # Keep the script running to handle execution requests.
-    import time
     try:
+        print("\n[Perfect] Listening for execution requests...")
         while True:
             time.sleep(1)
     except KeyboardInterrupt:

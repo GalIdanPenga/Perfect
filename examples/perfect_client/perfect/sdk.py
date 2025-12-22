@@ -608,7 +608,8 @@ class WorkflowRegistry:
                                 actual_task_count = self._current_task_index
                                 self._client.complete_flow(run_id, actual_task_count)
                                 print(f"[Flow] Completed {name} with {actual_task_count} tasks")
-                                return result
+                                # Return both the flow result and run_id as a tuple
+                                return (result, run_id)
                             except Exception as e:
                                 print(f"[Flow] Flow {name} failed: {e}")
                                 raise
@@ -696,6 +697,67 @@ class WorkflowRegistry:
         """Get all registered tasks"""
         return list(self._tasks.values())
 
+    def get_report(self, run_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get report for a specific run ID.
+
+        Args:
+            run_id: The run ID to get the report for
+
+        Returns:
+            Report dictionary with metadata, or None if not found
+        """
+        self._ensure_client()
+        if not self._client:
+            print("[Perfect SDK] Warning: No client connection available")
+            return None
+
+        return self._client.get_report(run_id)
+
+    def download_report(self, run_id: str, output_dir: str = "Reports") -> Optional[str]:
+        """
+        Download a report and save it locally.
+
+        Args:
+            run_id: The run ID to download the report for
+            output_dir: Base directory to save reports (default: "Reports")
+
+        Returns:
+            Local file path if successful, None otherwise
+        """
+        import os
+        import requests
+
+        # Get report metadata
+        report = self.get_report(run_id)
+        if not report:
+            print(f"[Perfect SDK] No report available for run: {run_id}")
+            return None
+
+        # Download the report HTML file
+        report_url = f"{self._backend_url}{report['url']}"
+        try:
+            response = requests.get(report_url, timeout=10)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            print(f"[Perfect SDK] Failed to download report: {e}")
+            return None
+
+        # Create local directory structure matching server (Reports/FlowName/)
+        local_dir = os.path.join(output_dir, report['path'].split('/')[1])
+        os.makedirs(local_dir, exist_ok=True)
+
+        # Save the report locally
+        local_path = os.path.join(output_dir, *report['path'].split('/')[1:])
+        try:
+            with open(local_path, 'w', encoding='utf-8') as f:
+                f.write(response.text)
+            print(f"[Perfect SDK] Report saved: {local_path} ({report['size'] / 1024:.2f} KB)")
+            return local_path
+        except IOError as e:
+            print(f"[Perfect SDK] Failed to save report: {e}")
+            return None
+
 
 # ============================================================================
 # Global Registry and Exports
@@ -742,6 +804,47 @@ def configure(
         client_id=client_id,
         mock=mock
     )
+
+
+def get_report(run_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get report metadata for a specific run ID.
+
+    Args:
+        run_id: The run ID to get the report for (returned from flow execution)
+
+    Returns:
+        Report dictionary with metadata, or None if not found
+
+    Example:
+        result, run_id = my_flow()
+        time.sleep(2)  # Wait for report generation
+        report = get_report(run_id)
+        if report:
+            print(f"Report URL: {report['url']}")
+    """
+    return _default_registry.get_report(run_id)
+
+
+def download_report(run_id: str, output_dir: str = "Reports") -> Optional[str]:
+    """
+    Download a report and save it locally.
+
+    Args:
+        run_id: The run ID to download the report for
+        output_dir: Base directory to save reports (default: "Reports")
+
+    Returns:
+        Local file path if successful, None otherwise
+
+    Example:
+        result, run_id = my_flow()
+        time.sleep(2)  # Wait for report generation
+        local_path = download_report(run_id)
+        if local_path:
+            print(f"Report saved to: {local_path}")
+    """
+    return _default_registry.download_report(run_id, output_dir)
 
 
 def listen():

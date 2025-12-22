@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import clientRoutes, { getActiveClient } from './routes/clientRoutes';
 import engineRoutes from './routes/engineRoutes';
@@ -189,6 +190,88 @@ app.delete('/api/statistics', (req, res) => {
   try {
     flowEngine.deleteAllStats();
     res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get all reports for a specific flow
+app.get('/api/reports/flow/:flowName', (req, res) => {
+  try {
+    const { flowName } = req.params;
+
+    // Get all runs for this flow that have reports
+    const runs = flowEngine.getRuns().filter(r =>
+      r.flowName === flowName && r.reportPath
+    );
+
+    const reports = runs.map(run => {
+      const filePath = path.join(__dirname, '..', run.reportPath!);
+
+      let stats = null;
+      if (fs.existsSync(filePath)) {
+        stats = fs.statSync(filePath);
+      }
+
+      return {
+        runId: run.id,
+        filename: run.reportPath!.split('/').pop(),
+        path: run.reportPath,
+        url: `/${run.reportPath}`,
+        size: stats?.size || 0,
+        createdAt: stats?.birthtime.toISOString() || run.endTime || run.startTime,
+        modifiedAt: stats?.mtime.toISOString() || run.endTime || run.startTime,
+        flowState: run.state,
+        configuration: run.configuration,
+        tags: run.tags
+      };
+    })
+    .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    res.json({ success: true, flowName, reports });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get report for a specific run ID
+app.get('/api/reports/run/:runId', (req, res) => {
+  try {
+    const { runId } = req.params;
+
+    // Find the run
+    const run = flowEngine.getRuns().find(r => r.id === runId);
+
+    if (!run) {
+      return res.status(404).json({ success: false, error: 'Run not found' });
+    }
+
+    if (!run.reportPath) {
+      return res.status(404).json({ success: false, error: 'No report exists for this run' });
+    }
+
+    const filePath = path.join(__dirname, '..', run.reportPath);
+
+    let stats = null;
+    if (fs.existsSync(filePath)) {
+      stats = fs.statSync(filePath);
+    }
+
+    const report = {
+      runId: run.id,
+      filename: run.reportPath.split('/').pop(),
+      path: run.reportPath,
+      url: `/${run.reportPath}`,
+      size: stats?.size || 0,
+      createdAt: stats?.birthtime.toISOString() || run.endTime || run.startTime,
+      modifiedAt: stats?.mtime.toISOString() || run.endTime || run.startTime,
+      flowState: run.state,
+      flowName: run.flowName,
+      configuration: run.configuration,
+      tags: run.tags
+    };
+
+    res.json({ success: true, report });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
