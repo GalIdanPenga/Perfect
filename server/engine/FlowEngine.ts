@@ -277,32 +277,32 @@ export class FlowEngine {
       task.progress = stateStr === 'COMPLETED' ? 100 : task.progress;
 
       // Check for performance outliers and update statistics on completion
-      if (stateStr === 'COMPLETED' && task.durationMs !== undefined) {
-        const stats = statsDb.getTaskStats(run.flowName, task.taskName);
-        const activeClient = getActiveClient();
-        const sensitivity = activeClient?.performanceSensitivity || 'normal';
+      if (stateStr === 'COMPLETED') {
+        // Compute duration from timestamps if client didn't send it
+        const durationMs = task.durationMs !== undefined
+          ? task.durationMs
+          : (task.startTime ? Date.now() - new Date(task.startTime).getTime() : undefined);
 
-        if (stats) {
-          const warning = this.performanceMonitor.detectOutlier(task.durationMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
-          task.performanceWarning = warning || undefined;
-          if (warning) {
-            console.log(`[FlowEngine] ⚠️  Performance warning: ${run.flowName}/${task.taskName} - ${warning.message} (excluded from statistics)`);
-          } else {
-            // Update statistics only if not an outlier
-            try {
-              statsDb.updateTaskStats(run.flowName, task.taskName, task.durationMs);
-              console.log(`[FlowEngine] Updated statistics for ${run.flowName}/${task.taskName}: ${task.durationMs}ms`);
-            } catch (error) {
-              console.error(`[FlowEngine] Failed to update statistics:`, error);
-            }
-          }
-        } else {
-          // No existing statistics, this is the first run - always include
+        if (durationMs !== undefined) {
+          const stats = statsDb.getTaskStats(run.flowName, task.taskName);
+          const activeClient = getActiveClient();
+          const sensitivity = activeClient?.performanceSensitivity || 'normal';
+
+          // Always record stats - outlier detection is for warnings only, not for excluding data
           try {
-            statsDb.updateTaskStats(run.flowName, task.taskName, task.durationMs);
-            console.log(`[FlowEngine] Initial statistics for ${run.flowName}/${task.taskName}: ${task.durationMs}ms`);
+            statsDb.updateTaskStats(run.flowName, task.taskName, durationMs);
+            console.log(`[FlowEngine] Updated statistics for ${run.flowName}/${task.taskName}: ${durationMs}ms`);
           } catch (error) {
-            console.error(`[FlowEngine] Failed to create initial statistics:`, error);
+            console.error(`[FlowEngine] Failed to update statistics:`, error);
+          }
+
+          // Set performance warning independently of stats recording
+          if (stats) {
+            const warning = this.performanceMonitor.detectOutlier(durationMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
+            task.performanceWarning = warning || undefined;
+            if (warning) {
+              console.log(`[FlowEngine] ⚠️  Performance warning: ${run.flowName}/${task.taskName} - ${warning.message}`);
+            }
           }
         }
       }
@@ -382,12 +382,11 @@ export class FlowEngine {
       }));
       statsDb.saveFlowTaskStructure(run.flowName, taskStructure);
 
-      // Update flow statistics (only for runs WITHOUT warnings and without any failed tasks)
+      // Update flow statistics for all completed runs (warnings are display-only, not exclusion criteria)
       const flowDuration = new Date(run.endTime).getTime() - new Date(run.startTime).getTime();
-      const hasAnyWarnings = run.tasks.some(t => t.performanceWarning);
       const hasAnyFailedTasks = run.tasks.some(t => t.state === TaskState.FAILED);
 
-      if (!hasAnyWarnings && !hasAnyFailedTasks) {
+      if (!hasAnyFailedTasks) {
         statsDb.updateFlowStats(run.flowName, flowDuration);
         console.log(`[FlowEngine] Updated flow statistics for ${run.flowName}: ${flowDuration}ms`);
       }
