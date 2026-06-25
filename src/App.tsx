@@ -680,8 +680,8 @@ export default function App() {
               </div>
             ) : (
               <>
-                {/* Overall Progress Bar - Show when flows are running */}
-                {!allFlowsFinished && activeRuns.length > 0 && (
+                {/* Overall Progress Bar - Stays visible at 100% when flows finish */}
+                {activeRuns.length > 0 && (
                   <OverallProgress
                     flowCount={activeRuns.length}
                     activeRuns={activeRuns}

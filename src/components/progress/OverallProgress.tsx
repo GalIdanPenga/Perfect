@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Activity, Clock } from 'lucide-react';
+import { Activity, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { FlowRun, TaskState } from '../../types';
 
 const formatTimeRemaining = (ms: number): string => {
@@ -75,10 +75,19 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
 }) => {
   const [localProgress, setLocalProgress] = useState(0);
 
+  const completedCount = activeRuns.filter(r => r.state === TaskState.COMPLETED).length;
+  const failedCount = activeRuns.filter(r => r.state === TaskState.FAILED).length;
+  const isFinished = activeRuns.length > 0 && completedCount + failedCount === activeRuns.length;
+
   // Calculate overall progress locally for smooth updates
   useEffect(() => {
     if (activeRuns.length === 0) {
       setLocalProgress(0);
+      return;
+    }
+
+    if (isFinished) {
+      setLocalProgress(100);
       return;
     }
 
@@ -94,7 +103,7 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
     animationFrameId = requestAnimationFrame(updateProgress);
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [activeRuns]);
+  }, [activeRuns, isFinished]);
 
   return (
     <div className="mb-6 mx-auto max-w-4xl">
@@ -108,11 +117,11 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
       >
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <div className="text-xs font-bold uppercase tracking-widest text-slate-300 flex items-center gap-2">
                 <Activity
                   size={16}
-                  className="animate-pulse"
+                  className={isFinished ? '' : 'animate-pulse'}
                   style={{ color: themeColor }}
                 />
                 Overall Progress
@@ -127,9 +136,27 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
               >
                 {flowCount} {flowCount === 1 ? 'Flow' : 'Flows'}
               </span>
+              {isFinished && (
+                <>
+                  <span
+                    className="px-2.5 py-0.5 rounded-full text-xs font-bold border flex items-center gap-1.5 bg-emerald-500/15 text-emerald-300 border-emerald-500/40"
+                  >
+                    <CheckCircle2 size={12} />
+                    {completedCount} completed
+                  </span>
+                  {failedCount > 0 && (
+                    <span
+                      className="px-2.5 py-0.5 rounded-full text-xs font-bold border flex items-center gap-1.5 bg-rose-500/15 text-rose-300 border-rose-500/40"
+                    >
+                      <XCircle size={12} />
+                      {failedCount} failed
+                    </span>
+                  )}
+                </>
+              )}
             </div>
             <div className="flex items-center gap-4">
-              {timeRemaining > 0 && (
+              {!isFinished && timeRemaining > 0 && (
                 <div className="flex items-center gap-2 text-xs text-slate-300 font-mono">
                   <Clock size={14} className="text-slate-400" />
                   <span>~{formatTimeRemaining(timeRemaining)} remaining</span>
@@ -153,8 +180,8 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
                 background: `linear-gradient(90deg, ${themeColor} 0%, ${themeColor}cc 100%)`
               }}
             />
-            {/* Animated shimmer effect */}
-            {(() => {
+            {/* Animated shimmer effect - only while flows are running */}
+            {!isFinished && (() => {
               const shimmerWidth = Math.max(10, localProgress * 0.5);
               // Keep constant visual speed: duration based on container width / shimmer width
               // translateX(1000%) means shimmer travels 10x its own width
