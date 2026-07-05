@@ -38,6 +38,9 @@ server/database/flows.db-wal
 # Reports
 Reports/
 
+# Claude Code
+.claude/
+
 # Offline installation packages
 offline_packages/
 offline_setup/offline_packages/
