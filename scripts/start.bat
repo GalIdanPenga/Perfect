@@ -7,6 +7,9 @@ echo Perfect - Starting Application
 echo ========================================
 echo.
 
+REM Move to the project root (parent of this script's folder)
+cd /d "%~dp0.."
+
 REM Check if Node.js is installed
 where node >nul 2>nul
 if errorlevel 1 (
