@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Activity, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { FlowRun, TaskState } from '../../types';
 
@@ -6,29 +6,13 @@ const formatTimeRemaining = (ms: number): string => {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
   const minutes = Math.floor(ms / 60000);
-  const seconds = Math.round((ms % 60000) / 1000);
+  const seconds = Math.floor((ms % 60000) / 1000);
   return `${minutes}m ${seconds}s`;
 };
 
 interface OverallProgressProps {
-  /**
-   * Number of active flow runs
-   */
   flowCount: number;
-
-  /**
-   * Active flow runs for smooth progress calculation
-   */
   activeRuns: FlowRun[];
-
-  /**
-   * Total estimated time remaining in milliseconds
-   */
-  timeRemaining: number;
-
-  /**
-   * Theme color for the component (hex color)
-   */
   themeColor: string;
 }
 
@@ -70,24 +54,26 @@ const calculateFlowProgress = (run: FlowRun): number => {
 export const OverallProgress: React.FC<OverallProgressProps> = ({
   flowCount,
   activeRuns,
-  timeRemaining,
   themeColor
 }) => {
   const [localProgress, setLocalProgress] = useState(0);
+  const countdownRef = useRef<HTMLSpanElement>(null);
 
   const completedCount = activeRuns.filter(r => r.state === TaskState.COMPLETED).length;
   const failedCount = activeRuns.filter(r => r.state === TaskState.FAILED).length;
   const isFinished = activeRuns.length > 0 && completedCount + failedCount === activeRuns.length;
 
-  // Calculate overall progress locally for smooth updates
+  // Calculate overall progress and countdown locally for smooth updates
   useEffect(() => {
     if (activeRuns.length === 0) {
       setLocalProgress(0);
+      if (countdownRef.current) countdownRef.current.textContent = '';
       return;
     }
 
     if (isFinished) {
       setLocalProgress(100);
+      if (countdownRef.current) countdownRef.current.textContent = '';
       return;
     }
 
@@ -95,8 +81,25 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
 
     const updateProgress = () => {
       const totalProgress = activeRuns.reduce((sum, run) => sum + calculateFlowProgress(run), 0);
-      const avgProgress = totalProgress / activeRuns.length;
-      setLocalProgress(avgProgress);
+      setLocalProgress(totalProgress / activeRuns.length);
+
+      // Compute time remaining as the max across all runs, using startTime (not stale server progress)
+      let maxRemaining = 0;
+      for (const run of activeRuns) {
+        let runRemaining = 0;
+        for (const task of run.tasks) {
+          if (task.state === TaskState.PENDING) {
+            runRemaining += task.estimatedTime;
+          } else if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
+            runRemaining += Math.max(0, task.estimatedTime - (Date.now() - new Date(task.startTime).getTime()));
+          }
+        }
+        maxRemaining = Math.max(maxRemaining, runRemaining);
+      }
+      if (countdownRef.current) {
+        countdownRef.current.textContent = maxRemaining > 0 ? `~${formatTimeRemaining(maxRemaining)} remaining` : '';
+      }
+
       animationFrameId = requestAnimationFrame(updateProgress);
     };
 
@@ -156,10 +159,10 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
               )}
             </div>
             <div className="flex items-center gap-4">
-              {!isFinished && timeRemaining > 0 && (
+              {!isFinished && (
                 <div className="flex items-center gap-2 text-xs text-slate-300 font-mono">
                   <Clock size={14} className="text-slate-400" />
-                  <span>~{formatTimeRemaining(timeRemaining)} remaining</span>
+                  <span ref={countdownRef} />
                 </div>
               )}
               <span

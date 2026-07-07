@@ -10,41 +10,51 @@ interface ActiveRunCardProps {
   clientColor?: string;
 }
 
+const formatTimeRemaining = (ms: number): string => {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  return `${minutes}m ${seconds}s`;
+};
+
 export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }) => {
   const flowLogsRef = useRef<HTMLDivElement>(null);
+  const countdownRef = useRef<HTMLSpanElement>(null);
   const [logsExpanded, setLogsExpanded] = useState(false);
   const [localProgress, setLocalProgress] = useState(run.progress);
   const isRunning = run.state === TaskState.RUNNING || run.state === TaskState.PENDING || run.state === TaskState.RETRYING;
 
-  // Calculate flow progress locally for smooth updates
+  // Calculate flow progress and countdown locally for smooth updates
   useEffect(() => {
     if (!isRunning) {
       setLocalProgress(run.progress);
+      if (countdownRef.current) countdownRef.current.textContent = '';
       return;
     }
 
     let animationFrameId: number;
 
     const updateProgress = () => {
-      // Calculate weighted progress based on each task's local progress
       let totalWeightedProgress = 0;
+      let remainingMs = 0;
 
       for (const task of run.tasks) {
-        if (task.state === TaskState.COMPLETED) {
-          totalWeightedProgress += task.weight * 100;
-        } else if (task.state === TaskState.FAILED) {
-          // Failed tasks count as complete for progress calculation
+        if (task.state === TaskState.COMPLETED || task.state === TaskState.FAILED) {
           totalWeightedProgress += task.weight * 100;
         } else if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
-          // Calculate local progress for running task
           const elapsedMs = Date.now() - new Date(task.startTime).getTime();
-          const taskProgress = Math.min(99, (elapsedMs / task.estimatedTime) * 100);
-          totalWeightedProgress += task.weight * taskProgress;
+          totalWeightedProgress += task.weight * Math.min(99, (elapsedMs / task.estimatedTime) * 100);
+          remainingMs += Math.max(0, task.estimatedTime - elapsedMs);
+        } else if (task.state === TaskState.PENDING) {
+          remainingMs += task.estimatedTime;
         }
-        // Pending tasks contribute 0
       }
 
       setLocalProgress(Math.min(99, totalWeightedProgress));
+      if (countdownRef.current) {
+        countdownRef.current.textContent = remainingMs > 0 ? `~${formatTimeRemaining(remainingMs)} left` : '';
+      }
       animationFrameId = requestAnimationFrame(updateProgress);
     };
 
@@ -52,39 +62,6 @@ export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }
 
     return () => cancelAnimationFrame(animationFrameId);
   }, [isRunning, run.tasks, run.progress]);
-
-  // Calculate estimated time remaining
-  const calculateTimeRemaining = () => {
-    let remainingMs = 0;
-
-    for (const task of run.tasks) {
-      if (task.state === TaskState.PENDING) {
-        // Add full estimated time for pending tasks
-        remainingMs += task.estimatedTime;
-      } else if (task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) {
-        // Add remaining time for running tasks based on progress
-        const progressFraction = task.progress / 100;
-        remainingMs += task.estimatedTime * (1 - progressFraction);
-      }
-      // Completed and failed tasks contribute 0
-    }
-
-    return remainingMs;
-  };
-
-  const formatTimeRemaining = (ms: number) => {
-    if (ms < 1000) {
-      return `${Math.round(ms)}ms`;
-    } else if (ms < 60000) {
-      return `${(ms / 1000).toFixed(1)}s`;
-    } else {
-      const minutes = Math.floor(ms / 60000);
-      const seconds = Math.round((ms % 60000) / 1000);
-      return `${minutes}m ${seconds}s`;
-    }
-  };
-
-  const timeRemaining = isRunning ? calculateTimeRemaining() : 0;
 
   // Check if any task has a performance warning
   const hasPerformanceWarning = run.tasks.some(task => task.performanceWarning);
@@ -147,10 +124,10 @@ export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }
              <span className={`text-2xl font-bold font-mono tracking-tight ${run.state === TaskState.FAILED ? 'text-rose-400' : 'text-sky-400'}`}>
                {Math.floor(localProgress)}%
              </span>
-             {isRunning && timeRemaining > 0 && (
+             {isRunning && (
                <div className="flex items-center gap-1.5 text-xs text-slate-300 font-mono">
                  <Clock size={12} className="text-slate-400" />
-                 <span>~{formatTimeRemaining(timeRemaining)} left</span>
+                 <span ref={countdownRef} />
                </div>
              )}
              {!isRunning && run.reportPath && (
