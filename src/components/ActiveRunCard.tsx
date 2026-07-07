@@ -4,64 +4,24 @@ import { FlowRun, TaskState } from '../types';
 import { StatusBadge } from './StatusComponents';
 import { TagBadges } from './TagBadges';
 import { TaskRow } from './TaskRow';
+import { useAnimatedProgress } from '../hooks/useAnimatedProgress';
+import { calculateRunProgress } from '../utils/progressUtils';
 
 interface ActiveRunCardProps {
   run: FlowRun;
   clientColor?: string;
 }
 
-const formatTimeRemaining = (ms: number): string => {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  const minutes = Math.floor(ms / 60000);
-  const seconds = Math.floor((ms % 60000) / 1000);
-  return `${minutes}m ${seconds}s`;
-};
-
 export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }) => {
   const flowLogsRef = useRef<HTMLDivElement>(null);
-  const countdownRef = useRef<HTMLSpanElement>(null);
   const [logsExpanded, setLogsExpanded] = useState(false);
-  const [localProgress, setLocalProgress] = useState(run.progress);
   const isRunning = run.state === TaskState.RUNNING || run.state === TaskState.PENDING || run.state === TaskState.RETRYING;
 
-  // Calculate flow progress and countdown locally for smooth updates
-  useEffect(() => {
-    if (!isRunning) {
-      setLocalProgress(run.progress);
-      if (countdownRef.current) countdownRef.current.textContent = '';
-      return;
-    }
-
-    let animationFrameId: number;
-
-    const updateProgress = () => {
-      let totalWeightedProgress = 0;
-      let remainingMs = 0;
-
-      for (const task of run.tasks) {
-        if (task.state === TaskState.COMPLETED || task.state === TaskState.FAILED) {
-          totalWeightedProgress += task.weight * 100;
-        } else if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
-          const elapsedMs = Date.now() - new Date(task.startTime).getTime();
-          totalWeightedProgress += task.weight * Math.min(99, (elapsedMs / task.estimatedTime) * 100);
-          remainingMs += Math.max(0, task.estimatedTime - elapsedMs);
-        } else if (task.state === TaskState.PENDING) {
-          remainingMs += task.estimatedTime;
-        }
-      }
-
-      setLocalProgress(Math.min(99, totalWeightedProgress));
-      if (countdownRef.current) {
-        countdownRef.current.textContent = remainingMs > 0 ? `~${formatTimeRemaining(remainingMs)} left` : '';
-      }
-      animationFrameId = requestAnimationFrame(updateProgress);
-    };
-
-    animationFrameId = requestAnimationFrame(updateProgress);
-
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [isRunning, run.tasks, run.progress]);
+  const { localProgress, countdownRef } = useAnimatedProgress(
+    () => calculateRunProgress(run),
+    isRunning,
+    { countdownSuffix: 'left', inactiveProgress: run.progress }
+  );
 
   // Check if any task has a performance warning
   const hasPerformanceWarning = run.tasks.some(task => task.performanceWarning);

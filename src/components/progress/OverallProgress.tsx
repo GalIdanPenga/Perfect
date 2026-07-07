@@ -1,14 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 import { Activity, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { FlowRun, TaskState } from '../../types';
-
-const formatTimeRemaining = (ms: number): string => {
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-  const minutes = Math.floor(ms / 60000);
-  const seconds = Math.floor((ms % 60000) / 1000);
-  return `${minutes}m ${seconds}s`;
-};
+import { useAnimatedProgress } from '../../hooks/useAnimatedProgress';
+import { calculateOverallProgress } from '../../utils/progressUtils';
 
 interface OverallProgressProps {
   flowCount: number;
@@ -16,97 +10,20 @@ interface OverallProgressProps {
   themeColor: string;
 }
 
-/**
- * Calculate smooth progress for a single flow run
- */
-const calculateFlowProgress = (run: FlowRun): number => {
-  let totalWeightedProgress = 0;
-
-  for (const task of run.tasks) {
-    if (task.state === TaskState.COMPLETED || task.state === TaskState.FAILED) {
-      totalWeightedProgress += task.weight * 100;
-    } else if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
-      const elapsedMs = Date.now() - new Date(task.startTime).getTime();
-      const taskProgress = Math.min(99, (elapsedMs / task.estimatedTime) * 100);
-      totalWeightedProgress += task.weight * taskProgress;
-    }
-  }
-
-  return Math.min(99, totalWeightedProgress);
-};
-
-/**
- * Overall Progress Display Component
- *
- * Displays a progress bar showing the combined progress of all active flows,
- * along with the number of flows and estimated time remaining.
- *
- * @example
- * ```tsx
- * <OverallProgress
- *   flowCount={3}
- *   activeRuns={runs}
- *   timeRemaining={120000}
- *   themeColor="#0ea5e9"
- * />
- * ```
- */
 export const OverallProgress: React.FC<OverallProgressProps> = ({
   flowCount,
   activeRuns,
   themeColor
 }) => {
-  const [localProgress, setLocalProgress] = useState(0);
-  const countdownRef = useRef<HTMLSpanElement>(null);
-
   const completedCount = activeRuns.filter(r => r.state === TaskState.COMPLETED).length;
   const failedCount = activeRuns.filter(r => r.state === TaskState.FAILED).length;
   const isFinished = activeRuns.length > 0 && completedCount + failedCount === activeRuns.length;
 
-  // Calculate overall progress and countdown locally for smooth updates
-  useEffect(() => {
-    if (activeRuns.length === 0) {
-      setLocalProgress(0);
-      if (countdownRef.current) countdownRef.current.textContent = '';
-      return;
-    }
-
-    if (isFinished) {
-      setLocalProgress(100);
-      if (countdownRef.current) countdownRef.current.textContent = '';
-      return;
-    }
-
-    let animationFrameId: number;
-
-    const updateProgress = () => {
-      const totalProgress = activeRuns.reduce((sum, run) => sum + calculateFlowProgress(run), 0);
-      setLocalProgress(totalProgress / activeRuns.length);
-
-      // Compute time remaining as the max across all runs, using startTime (not stale server progress)
-      let maxRemaining = 0;
-      for (const run of activeRuns) {
-        let runRemaining = 0;
-        for (const task of run.tasks) {
-          if (task.state === TaskState.PENDING) {
-            runRemaining += task.estimatedTime;
-          } else if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
-            runRemaining += Math.max(0, task.estimatedTime - (Date.now() - new Date(task.startTime).getTime()));
-          }
-        }
-        maxRemaining = Math.max(maxRemaining, runRemaining);
-      }
-      if (countdownRef.current) {
-        countdownRef.current.textContent = maxRemaining > 0 ? `~${formatTimeRemaining(maxRemaining)} remaining` : '';
-      }
-
-      animationFrameId = requestAnimationFrame(updateProgress);
-    };
-
-    animationFrameId = requestAnimationFrame(updateProgress);
-
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [activeRuns, isFinished]);
+  const { localProgress, countdownRef } = useAnimatedProgress(
+    () => calculateOverallProgress(activeRuns),
+    !isFinished,
+    { countdownSuffix: 'remaining', inactiveProgress: isFinished ? 100 : 0 }
+  );
 
   return (
     <div className="mb-6 mx-auto max-w-4xl">

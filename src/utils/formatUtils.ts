@@ -5,6 +5,14 @@
  * @param ms Duration in milliseconds
  * @returns Formatted string (e.g., "500ms", "2.50s", "1.25m", "2.00h")
  */
+export function formatTimeRemaining(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  const minutes = Math.floor(ms / 60000);
+  const seconds = Math.floor((ms % 60000) / 1000);
+  return `${minutes}m ${seconds}s`;
+}
+
 export function formatDuration(ms: number): string {
   if (ms < 1000) {
     return `${Math.round(ms)}ms`;
