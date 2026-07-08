@@ -18,34 +18,19 @@ import { useFlowRuns } from './hooks/useFlowRuns';
 import { useClientStatus } from './hooks/useClientStatus';
 import { useClientConfigs } from './hooks/useClientConfigs';
 import { useClientActions } from './hooks/useClientActions';
+import { useLocalStorage } from './hooks/useLocalStorage';
 import { playCompletionSound } from './utils/audioUtils';
 
 // --- Main Layout ---
 
 export default function App() {
-  // Local UI state (must be before hooks that use it)
-  const [currentSessionStartTime, setCurrentSessionStartTime] = useState<string | null>(() => {
-    // Restore session start time from localStorage on initial load
-    return localStorage.getItem('currentSessionStartTime');
-  });
-
-  // Track previous state to detect completion transition
-  const prevAllFlowsFinishedRef = useRef<boolean>(false);
+  // Session start time persisted to localStorage
+  const [currentSessionStartTime, setSessionStartTime] = useLocalStorage<string | null>('currentSessionStartTime', null);
 
   // Custom hooks for data fetching
   const { runs, refreshRuns } = useFlowRuns();
   const { clientStatus, setClientStatus, activeClient } = useClientStatus();
   const { availableClients, selectedClientId, setSelectedClientId } = useClientConfigs();
-
-  // Function to set session start time
-  const setSessionStartTime = (time: string | null) => {
-    setCurrentSessionStartTime(time);
-    if (time) {
-      localStorage.setItem('currentSessionStartTime', time);
-    } else {
-      localStorage.removeItem('currentSessionStartTime');
-    }
-  };
 
   const { isStartingClient, handleStartClient, handleStopClient } = useClientActions(setClientStatus, setSessionStartTime, refreshRuns);
 
@@ -111,6 +96,9 @@ export default function App() {
     run => run.state === TaskState.COMPLETED || run.state === TaskState.FAILED
   );
 
+  // Initialize to current state so the sound doesn't re-fire when the page reloads
+  // while flows are already finished.
+  const prevAllFlowsFinishedRef = useRef<boolean>(allFlowsFinished);
 
   // Play sound notification when all flows complete
   useEffect(() => {
