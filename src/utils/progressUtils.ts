@@ -1,4 +1,4 @@
-import { FlowRun, TaskState } from '../types';
+import { FlowRun, TaskRun, TaskState } from '../types';
 
 export function calculateRunProgress(run: FlowRun): { progress: number; remainingMs: number } {
   let totalWeightedProgress = 0;
@@ -17,6 +17,19 @@ export function calculateRunProgress(run: FlowRun): { progress: number; remainin
   }
 
   return { progress: Math.min(99, totalWeightedProgress), remainingMs };
+}
+
+export function calculateTaskProgress(task: TaskRun): { progress: number; remainingMs: number } {
+  if (task.state === TaskState.COMPLETED || task.state === TaskState.FAILED) {
+    return { progress: 99, remainingMs: 0 };
+  }
+  if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
+    const elapsedMs = Date.now() - new Date(task.startTime).getTime();
+    const progress = Math.min(99, (elapsedMs / task.estimatedTime) * 100);
+    const remainingMs = Math.max(0, task.estimatedTime - elapsedMs);
+    return { progress, remainingMs };
+  }
+  return { progress: 0, remainingMs: task.estimatedTime };
 }
 
 export function calculateOverallProgress(runs: FlowRun[]): { progress: number; remainingMs: number } {

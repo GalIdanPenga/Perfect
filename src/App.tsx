@@ -26,8 +26,6 @@ import { useClientStatus } from './hooks/useClientStatus';
 import { useClientConfigs } from './hooks/useClientConfigs';
 import { useClientActions } from './hooks/useClientActions';
 import {
-  getActiveRuns,
-  getHistoryRuns,
   applyAllFilters,
   getUniqueFlowNames
 } from './utils/filterUtils';

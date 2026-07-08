@@ -1,16 +1,5 @@
 import { FlowRun, TaskState } from '../types';
 
-export const getActiveRuns = (runs: FlowRun[]) => {
-  // Keep ALL runs in active section (including completed/failed)
-  // Only exclude if explicitly moved to history
-  return runs;
-};
-
-export const getHistoryRuns = (runs: FlowRun[]) => {
-  // History is now empty - all flows stay in active section until reset
-  return [];
-};
-
 export const filterRunsByStatus = (
   runs: FlowRun[],
   statusFilter: 'all' | TaskState.COMPLETED | TaskState.FAILED

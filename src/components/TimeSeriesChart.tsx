@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatDuration } from '../utils/formatUtils';
 
 interface DataPoint {
   runId: string;
@@ -36,16 +37,6 @@ export function TimeSeriesChart({ data, avgDuration, stdDev, title }: TimeSeries
   const yMin = Math.max(0, minValue - yRange * 0.1);
   const yMax = maxValue + yRange * 0.1;
   const yScale = plotHeight / (yMax - yMin);
-
-  const formatDuration = (ms: number) => {
-    if (ms >= 60000) {
-      return `${(ms / 60000).toFixed(2)}m`;
-    } else if (ms >= 1000) {
-      return `${(ms / 1000).toFixed(3)}s`;
-    } else {
-      return `${Math.round(ms)}ms`;
-    }
-  };
 
   const formatTimestamp = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -165,7 +156,7 @@ export function TimeSeriesChart({ data, avgDuration, stdDev, title }: TimeSeries
               fill="#6366f1"
               stroke="#ffffff"
               strokeWidth="2"
-              className="hover:r-7 transition-all cursor-pointer"
+              className="transition-all cursor-pointer"
             >
               <title>
                 Sample {i + 1}

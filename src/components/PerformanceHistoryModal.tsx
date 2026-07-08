@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { X, TrendingUp } from 'lucide-react';
 import { TimeSeriesChart } from './TimeSeriesChart';
+import { useModalAnimation } from '../hooks/useModalAnimation';
+import { API_BASE_URL } from '../constants';
 
 interface HistoryDataPoint {
   runId: string;
@@ -20,22 +22,18 @@ export function PerformanceHistoryModal({ type, flowName, taskName, onClose }: P
   const [avgDuration, setAvgDuration] = useState<number>(0);
   const [stdDev, setStdDev] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  const [isClosing, setIsClosing] = useState(false);
-  const [isOpening, setIsOpening] = useState(true);
+  const { isClosing, isOpening, handleClose } = useModalAnimation(onClose);
 
   useEffect(() => {
     fetchHistory();
-    requestAnimationFrame(() => {
-      setIsOpening(false);
-    });
   }, []);
 
   const fetchHistory = async () => {
     try {
       setLoading(true);
       const url = type === 'task'
-        ? `http://localhost:3000/api/statistics/task-history/${encodeURIComponent(flowName)}/${encodeURIComponent(taskName!)}`
-        : `http://localhost:3000/api/statistics/flow-history/${encodeURIComponent(flowName)}`;
+        ? `${API_BASE_URL}/statistics/task-history/${encodeURIComponent(flowName)}/${encodeURIComponent(taskName!)}`
+        : `${API_BASE_URL}/statistics/flow-history/${encodeURIComponent(flowName)}`;
 
       const response = await fetch(url);
       const data = await response.json();
@@ -54,16 +52,7 @@ export function PerformanceHistoryModal({ type, flowName, taskName, onClose }: P
     }
   };
 
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-    }, 200);
-  };
-
-  const title = type === 'task'
-    ? `${flowName} / ${taskName}`
-    : flowName;
+  const title = type === 'task' ? `${flowName} / ${taskName}` : flowName;
 
   return (
     <div
@@ -78,7 +67,6 @@ export function PerformanceHistoryModal({ type, flowName, taskName, onClose }: P
         }`}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-700">
           <div className="flex items-center gap-3">
             <TrendingUp className="text-sky-400" size={24} />
@@ -95,7 +83,6 @@ export function PerformanceHistoryModal({ type, flowName, taskName, onClose }: P
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-auto p-6">
           {loading ? (
             <div className="flex items-center justify-center h-full">
