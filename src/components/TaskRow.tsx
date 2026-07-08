@@ -47,9 +47,11 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
                 </span>
               )}
               {task.performanceWarning && (
-                <span title={task.performanceWarning.message}>
-                  <PerformanceWarningBadge severity={task.performanceWarning.severity} isRunning={isRunning} />
-                </span>
+                <PerformanceWarningBadge
+                  severity={task.performanceWarning.severity}
+                  isRunning={isRunning}
+                  title={task.performanceWarning.message}
+                />
               )}
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400 font-mono mt-0.5">

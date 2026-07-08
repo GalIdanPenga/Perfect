@@ -1,11 +1,11 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../index';
+import { flowEngine } from '../engine/FlowEngine';
 
-// The FlowEngine singleton is created on import and connects to the real SQLite DB.
-// Tests observe the actual HTTP contract without depending on the DB being empty —
-// the DB may carry state from previous runs. Where emptiness matters, we either
-// clear state first or assert on shape rather than exact content.
+// The FlowEngine singleton is created on import. During tests PERFECT_DB_PATH is
+// ':memory:' (see vite.config.ts), so the singleton uses an isolated in-memory
+// database that starts empty and never touches the developer's flows.db.
 
 describe('Express API – integration', () => {
 
@@ -177,11 +177,9 @@ describe('Express API – integration', () => {
     expect(Array.isArray(res.body.history)).toBe(true);
   });
 
-  // Keep Vitest from hanging on open handles (FlowEngine setIntervals).
-  // Vitest's --forceExit flag handles this in CI; afterAll is a belt-and-suspenders
-  // approach that at least signals intent.
+  // Stop the engine's tick + heartbeat intervals so the test process exits
+  // cleanly without relying on `vitest run --forceExit`.
   afterAll(() => {
-    // Nothing to tear down at the Express layer — the engine's intervals
-    // are private. Use `vitest run --forceExit` if the process hangs.
+    flowEngine.destroy();
   });
 });

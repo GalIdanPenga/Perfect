@@ -16,12 +16,18 @@ export function useLocalStorage<T>(
 
   const setValue = useCallback(
     (value: T | null) => {
+      // Update React state regardless; persistence is best-effort (writes can throw
+      // on quota-exceeded or in private-mode/SSR contexts).
       if (value === null) {
-        localStorage.removeItem(key);
         setStoredValue(initialValue);
+        try {
+          localStorage.removeItem(key);
+        } catch { /* ignore persistence failure */ }
       } else {
-        localStorage.setItem(key, JSON.stringify(value));
         setStoredValue(value);
+        try {
+          localStorage.setItem(key, JSON.stringify(value));
+        } catch { /* ignore persistence failure */ }
       }
     },
     [key, initialValue]

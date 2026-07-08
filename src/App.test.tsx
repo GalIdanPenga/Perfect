@@ -36,10 +36,11 @@ vi.mock('./components/ClientSelector', () => ({
   ),
 }));
 
+// vi.fn so tests can inspect the props (onDeleteRun/onBulkDelete) App passes down.
 vi.mock('./components/HistoryPanel', () => ({
-  HistoryPanel: ({ runs }: any) => (
+  HistoryPanel: vi.fn(({ runs }: any) => (
     <div data-testid="history-panel" data-count={String(runs.length)} />
-  ),
+  )),
 }));
 
 vi.mock('./components/ActiveRunCard', () => ({
@@ -485,13 +486,12 @@ describe('App', () => {
 
     // Grab the onDeleteRun prop passed to HistoryPanel
     const historyPanelProps = vi.mocked(HistoryPanel as any).mock?.calls?.[0]?.[0];
-    if (historyPanelProps?.onDeleteRun) {
-      await historyPanelProps.onDeleteRun('run-abc');
-      expect(fetchSpy).toHaveBeenCalledWith(
-        expect.stringContaining('/runs/run-abc'),
-        { method: 'DELETE' }
-      );
-    }
+    expect(historyPanelProps?.onDeleteRun).toBeTypeOf('function');
+    await historyPanelProps.onDeleteRun('run-abc');
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.stringContaining('/runs/run-abc'),
+      { method: 'DELETE' }
+    );
 
     fetchSpy.mockRestore();
   });
@@ -508,10 +508,9 @@ describe('App', () => {
     render(<App />);
 
     const props = vi.mocked(HistoryPanel as any).mock?.calls?.[0]?.[0];
-    if (props?.onBulkDelete) {
-      await props.onBulkDelete(['run-1', 'run-2']);
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
-    }
+    expect(props?.onBulkDelete).toBeTypeOf('function');
+    await props.onBulkDelete(['run-1', 'run-2']);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
 
     fetchSpy.mockRestore();
   });

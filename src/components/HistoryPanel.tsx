@@ -371,7 +371,9 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
       <ConfirmDialog
         isOpen={showDeleteConfirmation}
         title="Delete Run"
-        message="Are you sure you want to delete this run?"
+        icon={Trash2}
+        message="Are you sure you want to delete the run for"
+        highlightText={runs.find(r => r.id === pendingDeleteRunId)?.flowName}
         confirmLabel="Delete"
         cancelLabel="Cancel"
         themeColor="#ef4444"
@@ -382,9 +384,15 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
       {/* Bulk delete confirmation */}
       <ConfirmDialog
         isOpen={showBulkDeleteConfirmation}
-        title="Delete Runs"
-        message={`Are you sure you want to delete ${selectedRunIds.size} run${selectedRunIds.size !== 1 ? 's' : ''}?`}
-        confirmLabel="Delete All"
+        title="Delete Multiple Runs"
+        icon={Trash2}
+        message={
+          <div className="text-slate-300 text-sm space-y-2">
+            <p>Are you sure you want to delete {selectedRunIds.size} run{selectedRunIds.size !== 1 ? 's' : ''}?</p>
+            <p className="text-red-400 font-medium">This action cannot be undone.</p>
+          </div>
+        }
+        confirmLabel={`Delete ${selectedRunIds.size} Run${selectedRunIds.size !== 1 ? 's' : ''}`}
         cancelLabel="Cancel"
         themeColor="#ef4444"
         onConfirm={handleConfirmBulkDelete}

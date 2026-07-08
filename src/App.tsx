@@ -5,7 +5,7 @@ import {
   ChevronRight,
   XCircle,
 } from 'lucide-react';
-import { TaskState, FlowRun } from './types';
+import { TaskState } from './types';
 import { DEFAULT_THEME_COLOR, API_BASE_URL } from './constants';
 import { PerfectLogo } from './components/PerfectLogo';
 import { ClientSelector } from './components/ClientSelector';

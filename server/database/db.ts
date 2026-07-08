@@ -345,8 +345,8 @@ function createRunDb(db: InstanceType<typeof Database>) {
               progress: task.progress,
               result: task.result ? JSON.parse(task.result) : undefined,
               performanceWarning: task.performance_warning ? JSON.parse(task.performance_warning) : undefined,
-              // Bug: stored value is ignored; hardcoded true for historical compatibility
-              crucialPass: true,
+              // Null (legacy rows written before crucial_pass existed) defaults to crucial (true)
+              crucialPass: task.crucial_pass === null ? true : task.crucial_pass === 1,
               logs: taskLogs.map((l: any) => l.log_entry)
             };
           })
@@ -389,8 +389,8 @@ function createRunDb(db: InstanceType<typeof Database>) {
             progress: task.progress,
             result: task.result ? JSON.parse(task.result) : undefined,
             performanceWarning: task.performance_warning ? JSON.parse(task.performance_warning) : undefined,
-            // Bug: stored value is ignored; hardcoded true for historical compatibility
-            crucialPass: true,
+            // Null (legacy rows written before crucial_pass existed) defaults to crucial (true)
+            crucialPass: task.crucial_pass === null ? true : task.crucial_pass === 1,
             logs: taskLogs.map((l: any) => l.log_entry)
           };
         })
@@ -611,8 +611,9 @@ export function createDatabase(dbPath: string): DatabaseDeps {
   };
 }
 
-// Singleton for production use
-const dbPath = path.join(__dirname, 'flows.db');
+// Singleton for production use. PERFECT_DB_PATH overrides the location so tests
+// (and other environments) can point at an isolated/in-memory database.
+const dbPath = process.env.PERFECT_DB_PATH || path.join(__dirname, 'flows.db');
 const defaultDeps = createDatabase(dbPath);
 console.log('Database initialized successfully at:', dbPath);
 

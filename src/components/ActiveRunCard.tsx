@@ -65,6 +65,7 @@ export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }
               <PerformanceWarningBadge
                 severity={hasCriticalWarning ? 'critical' : 'warning'}
                 isRunning={isRunning}
+                title={hasCriticalWarning ? 'Flow has critical performance issues' : 'Flow has performance warnings'}
               />
             )}
           </div>

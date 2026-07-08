@@ -126,7 +126,7 @@ describe('HistoryPanel', () => {
     render(<HistoryPanel runs={[makeRun()]} themeColor="#0ea5e9" onDeleteRun={noop} onBulkDelete={noop} />);
     fireEvent.click(screen.getByText('Select All'));
     fireEvent.click(screen.getByText(/Delete \(1\)/));
-    expect(screen.getByText('Delete Runs')).toBeTruthy();
+    expect(screen.getByText('Delete Multiple Runs')).toBeTruthy();
   });
 
   it('confirming bulk delete calls onBulkDelete', async () => {
@@ -135,7 +135,7 @@ describe('HistoryPanel', () => {
     render(<HistoryPanel runs={[run]} themeColor="#0ea5e9" onDeleteRun={noop} onBulkDelete={onBulkDelete} />);
     fireEvent.click(screen.getByText('Select All'));
     fireEvent.click(screen.getByText(/Delete \(1\)/));
-    fireEvent.click(screen.getByText('Delete All'));
+    fireEvent.click(screen.getByText('Delete 1 Run'));
     await vi.waitFor(() => expect(onBulkDelete).toHaveBeenCalledWith(['run-abc']));
   });
 
@@ -146,7 +146,7 @@ describe('HistoryPanel', () => {
     fireEvent.click(screen.getByText(/Delete \(1\)/));
     fireEvent.click(screen.getByText('Cancel'));
     expect(onBulkDelete).not.toHaveBeenCalled();
-    expect(screen.queryByText('Delete Runs')).toBeNull();
+    expect(screen.queryByText('Delete Multiple Runs')).toBeNull();
   });
 
   it('clicking trash icon on a run opens single delete dialog', () => {

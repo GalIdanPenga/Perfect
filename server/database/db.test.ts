@@ -492,13 +492,12 @@ describe('runDb — saveRun / getAllRuns / getRunById / deleteRun', () => {
 })
 
 // ---------------------------------------------------------------------------
-// crucialPass regression — known bug: getAllRuns hardcodes crucialPass: true
+// crucialPass round-trip — the stored crucial_pass column must survive reload
 // ---------------------------------------------------------------------------
 
-// The db.ts getAllRuns / getRunById implementation ignores the stored
-// crucial_pass column and always returns `crucialPass: true`. This test
-// documents the bug and is expected to fail until the bug is fixed.
-test.fails('crucialPass=false round-trips correctly (known bug: hardcoded true)', () => {
+// getAllRuns / getRunById read the stored crucial_pass column so a non-crucial
+// task keeps crucialPass=false after a run is reloaded from the database.
+test('crucialPass=false round-trips correctly', () => {
   const { runDb } = createDatabase(':memory:')
 
   const run: FlowRun = {
@@ -530,6 +529,7 @@ test.fails('crucialPass=false round-trips correctly (known bug: hardcoded true)'
 
   runDb.saveRun(run)
   const retrieved = runDb.getAllRuns()
-  // This assertion will fail due to the hardcoded `crucialPass: true` in getAllRuns
   expect(retrieved[0].tasks[0].crucialPass).toBe(false)
+  // getRunById must agree with getAllRuns
+  expect(runDb.getRunById('run-bug')!.tasks[0].crucialPass).toBe(false)
 })
