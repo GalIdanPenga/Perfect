@@ -106,11 +106,11 @@ def daily_sales_etl():
 # Flow 2: Churn Model Retraining
 # ==========================================
 
-@task(estimated_time=5000)
+@task(estimated_time=120000)
 def fetch_training_set():
     """Load user behavior logs"""
     print("Fetching training data...")
-    time.sleep(5)
+    time.sleep(120)
     return TaskResult(
         passed=True,
         note="Loaded 50,000 training samples",
@@ -121,11 +121,11 @@ def fetch_training_set():
     )
 
 
-@task(estimated_time=20000)
+@task(estimated_time=120000)
 def train_xgboost(data=None):
     """Train classifier on GPU"""
     print("Training model...")
-    time.sleep(20)
+    time.sleep(120)
     auc_score = 0.87
     return TaskResult(
         passed=auc_score > 0.85,
@@ -138,11 +138,11 @@ def train_xgboost(data=None):
     )
 
 
-@task(estimated_time=7000)
+@task(estimated_time=300000)
 def evaluate_model(model=None):
     """Check AUC metric"""
     print("Evaluating model...")
-    time.sleep(7)
+    time.sleep(300)
     # Extract passed status from model TaskResult
     passed = model.passed if (model and hasattr(model, 'passed')) else True
     return TaskResult(
@@ -155,13 +155,13 @@ def evaluate_model(model=None):
     )
 
 
-@task(estimated_time=10000)
+@task(estimated_time=120000)
 def deploy_if_better(passed=None):
     """Push to Sagemaker"""
     should_deploy = passed.passed if (passed and hasattr(passed, 'passed')) else True
     if should_deploy:
         print("Deploying model to production...")
-        time.sleep(10)
+        time.sleep(120)
         return TaskResult(
             passed=True,
             note="Model deployed to production successfully",
