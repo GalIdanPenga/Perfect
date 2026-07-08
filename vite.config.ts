@@ -18,6 +18,18 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      test: {
+        environment: 'node',
+        globals: true,
+        setupFiles: ['./src/test/setup.ts'],
+        include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'server/**/*.test.ts'],
+        environmentMatchGlobs: [
+          ['src/components/**/*.test.tsx', 'jsdom'],
+          ['src/hooks/**/*.test.ts', 'jsdom'],
+          ['src/hooks/**/*.test.tsx', 'jsdom'],
+          ['src/App.test.tsx', 'jsdom'],
+        ],
       }
     };
 });
