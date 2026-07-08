@@ -59,8 +59,8 @@ describe('TaskRow', () => {
 
   it('shows progress % badge while RUNNING', () => {
     render(<TaskRow task={makeTask({ state: TaskState.RUNNING, startTime: new Date().toISOString(), progress: 0 })} />);
-    // localProgress initializes to task.progress; rAF doesn't fire synchronously in tests
-    expect(screen.getByText('0%')).toBeTruthy();
+    // useAnimatedProgress is mocked to return localProgress: 45
+    expect(screen.getByText('45%')).toBeTruthy();
   });
 
   it('does not show progress badge while PENDING', () => {

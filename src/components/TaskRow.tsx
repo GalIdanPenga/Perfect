@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { TaskState, TaskRun } from '../types';
-import { StatusIcon } from './StatusComponents';
+import { StatusIcon, PerformanceWarningBadge } from './StatusComponents';
 import { formatDuration } from '../utils/formatUtils';
 import { TableModal } from './TableModal';
 import { Maximize2 } from 'lucide-react';
+import { useAnimatedProgress } from '../hooks/useAnimatedProgress';
+import { calculateTaskProgress } from '../utils/progressUtils';
 
 interface TaskRowProps {
   task: TaskRun;
@@ -13,36 +15,17 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
   const isRunning = task.state === TaskState.RUNNING || task.state === TaskState.RETRYING;
   const logsRef = useRef<HTMLDivElement>(null);
   const [showTableModal, setShowTableModal] = useState(false);
-  const [localProgress, setLocalProgress] = useState(task.progress);
+
+  const { localProgress } = useAnimatedProgress(
+    () => calculateTaskProgress(task),
+    isRunning,
+    { inactiveProgress: task.progress }
+  );
 
   // Check if table has complex values (objects/arrays) - only these need truncation
   const hasComplexTable = task.result?.table?.some((row: Record<string, any>) =>
     Object.values(row).some(v => typeof v === 'object' && v !== null)
   );
-
-  // Calculate progress locally for smooth updates
-  useEffect(() => {
-    if (!isRunning || !task.startTime) {
-      setLocalProgress(task.progress);
-      return;
-    }
-
-    let animationFrameId: number;
-    const startTime = new Date(task.startTime).getTime();
-
-    const updateProgress = () => {
-      const elapsedMs = Date.now() - startTime;
-      // Use precise decimal for smooth animation, cap at 99%
-      const progress = Math.min(99, (elapsedMs / task.estimatedTime) * 100);
-      setLocalProgress(progress);
-      animationFrameId = requestAnimationFrame(updateProgress);
-    };
-
-    // Start the animation loop
-    animationFrameId = requestAnimationFrame(updateProgress);
-
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [isRunning, task.startTime, task.estimatedTime, task.progress]);
 
   useEffect(() => {
     if (isRunning && logsRef.current) {
@@ -64,18 +47,8 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
                 </span>
               )}
               {task.performanceWarning && (
-                <span
-                  className={`text-xs px-1.5 py-0.5 rounded-md border font-semibold flex items-center gap-1 ${
-                    task.performanceWarning.severity === 'critical'
-                      ? 'bg-red-500/20 text-red-300 border-red-500/40'
-                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                  } ${isRunning ? 'animate-pulse' : ''}`}
-                  title={task.performanceWarning.message}
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-                  {task.performanceWarning.severity === 'critical' ? 'CRITICAL' : 'SLOW'}
+                <span title={task.performanceWarning.message}>
+                  <PerformanceWarningBadge severity={task.performanceWarning.severity} isRunning={isRunning} />
                 </span>
               )}
             </div>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { LucideIcon } from 'lucide-react';
+import { darkenHexColor } from '../../utils/colorUtils';
 
 interface ConfirmDialogProps {
   /**
@@ -151,10 +152,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               boxShadow: `0 4px 12px ${themeColor}40`
             }}
             onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-              const r = parseInt(themeColor.slice(1, 3), 16);
-              const g = parseInt(themeColor.slice(3, 5), 16);
-              const b = parseInt(themeColor.slice(5, 7), 16);
-              e.currentTarget.style.backgroundColor = `rgb(${Math.max(0, r - 20)}, ${Math.max(0, g - 20)}, ${Math.max(0, b - 20)})`;
+              e.currentTarget.style.backgroundColor = darkenHexColor(themeColor, 20);
             }}
             onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
               e.currentTarget.style.backgroundColor = themeColor;

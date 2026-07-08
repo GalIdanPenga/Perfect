@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
+import { useModalAnimation } from '../hooks/useModalAnimation';
 import { createPortal } from 'react-dom';
 import { X, Table } from 'lucide-react';
 
@@ -9,21 +10,7 @@ interface TableModalProps {
 }
 
 export function TableModal({ taskName, table, onClose }: TableModalProps) {
-  const [isClosing, setIsClosing] = useState(false);
-  const [isOpening, setIsOpening] = useState(true);
-
-  useEffect(() => {
-    requestAnimationFrame(() => {
-      setIsOpening(false);
-    });
-  }, []);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-    }, 200);
-  };
+  const { isClosing, isOpening, handleClose } = useModalAnimation(onClose);
 
   // Recursively render a value (handles nested objects)
   const renderValue = (value: any, depth = 0): React.ReactNode => {

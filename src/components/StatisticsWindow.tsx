@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useModalAnimation } from '../hooks/useModalAnimation';
 import { X, BarChart3, TrendingUp, Clock, LineChart, Trash2 } from 'lucide-react';
 import { PerformanceHistoryModal } from './PerformanceHistoryModal';
 import { ConfirmDialog } from './dialogs/ConfirmDialog';
@@ -31,25 +32,13 @@ export function StatisticsWindow({ onClose }: StatisticsWindowProps) {
   const [flowStatistics, setFlowStatistics] = useState<FlowStatistic[]>([]);
   const [loading, setLoading] = useState(true);
   const [groupByFlow, setGroupByFlow] = useState(true);
-  const [isClosing, setIsClosing] = useState(false);
-  const [isOpening, setIsOpening] = useState(true);
+  const { isClosing, isOpening, handleClose } = useModalAnimation(onClose);
   const [selectedChart, setSelectedChart] = useState<{ type: 'task' | 'flow'; flowName: string; taskName?: string } | null>(null);
   const [showClearConfirmation, setShowClearConfirmation] = useState(false);
 
   useEffect(() => {
     fetchStatistics();
-    // Trigger opening animation
-    requestAnimationFrame(() => {
-      setIsOpening(false);
-    });
   }, []);
-
-  const handleClose = () => {
-    setIsClosing(true);
-    setTimeout(() => {
-      onClose();
-    }, 200); // Match animation duration
-  };
 
   const fetchStatistics = async () => {
     try {
