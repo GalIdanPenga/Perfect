@@ -1,11 +1,12 @@
 import {
   FlowDefinition,
   FlowRun,
+  TaskRun,
   TaskState,
   FlowRegistrationPayload,
   TaskResult
 } from '../types';
-import { flowDb, runDb, statsDb } from '../database/db';
+import { flowDb as defaultFlowDb, runDb as defaultRunDb, statsDb as defaultStatsDb, DatabaseDeps } from '../database/db';
 import { generateFlowReport } from '../utils/reportGenerator';
 import { getActiveClient } from '../routes/clientRoutes';
 import { PerformanceMonitor } from './services/PerformanceMonitor';
@@ -23,20 +24,25 @@ export class FlowEngine {
   private flowTriggerListeners: ((runId: string, flowName: string, configuration: string) => void)[] = [];
   private tickInterval: NodeJS.Timeout;
   private readonly TICK_INTERVAL_MS = 100;
-  private simulationEnabled: boolean = false; // Disable simulation by default for real Python execution
+  private simulationEnabled: boolean = false;
   private lastClientHeartbeat: number | null = null;
-  private readonly HEARTBEAT_TIMEOUT_MS = 10000; // 10 seconds
+  private readonly HEARTBEAT_TIMEOUT_MS = 10000;
   private heartbeatCheckInterval: NodeJS.Timeout;
   private performanceMonitor: PerformanceMonitor;
+  private readonly flowDb: DatabaseDeps['flowDb'];
+  private readonly runDb: DatabaseDeps['runDb'];
+  private readonly statsDb: DatabaseDeps['statsDb'];
 
-  constructor(enableSimulation: boolean = false) {
+  constructor(enableSimulation: boolean = false, dbDeps?: DatabaseDeps) {
     this.simulationEnabled = enableSimulation;
     this.performanceMonitor = new PerformanceMonitor();
+    this.flowDb = dbDeps?.flowDb ?? defaultFlowDb;
+    this.runDb = dbDeps?.runDb ?? defaultRunDb;
+    this.statsDb = dbDeps?.statsDb ?? defaultStatsDb;
 
-    // Load existing flows and runs from database
     console.log('[FlowEngine] Loading flows and runs from database...');
-    this.flows = flowDb.getAllFlows();
-    this.runs = runDb.getAllRuns();
+    this.flows = this.flowDb.getAllFlows();
+    this.runs = this.runDb.getAllRuns();
     console.log(`[FlowEngine] Loaded ${this.flows.length} flows and ${this.runs.length} runs from database`);
 
     // Fail any stuck flows from previous server instance
@@ -121,7 +127,7 @@ export class FlowEngine {
     const run = this.runs.find(r => r.id === runId);
     if (run) {
       run.logs.push(log);
-      runDb.saveRun(run);
+      this.runDb.saveRun(run);
       this.notifyStateChange();
     }
   }
@@ -141,7 +147,7 @@ export class FlowEngine {
 
       // Look up statistics for this task to get estimated time
       // Priority: statistics > client-provided > default 1000ms
-      const taskStats = statsDb.getTaskStats(run.flowName, actualTaskName);
+      const taskStats = this.statsDb.getTaskStats(run.flowName, actualTaskName);
       const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : (clientEstimatedTime || 1000);
 
       if (taskStats) {
@@ -188,7 +194,7 @@ export class FlowEngine {
       task.taskName = taskName;
 
       // Look up statistics for the NEW task name and update estimatedTime
-      const taskStats = statsDb.getTaskStats(run.flowName, taskName);
+      const taskStats = this.statsDb.getTaskStats(run.flowName, taskName);
       if (taskStats) {
         const newEstimatedTime = Math.round(taskStats.avgDurationMs);
         console.log(`[FlowEngine] Updating estimatedTime for ${taskName}: ${task.estimatedTime}ms -> ${newEstimatedTime}ms (from statistics)`);
@@ -252,7 +258,7 @@ export class FlowEngine {
       // Real-time outlier detection for running tasks (check on EVERY update)
       if (task.startTime) {
         const elapsedMs = Date.now() - new Date(task.startTime).getTime();
-        const stats = statsDb.getTaskStats(run.flowName, task.taskName);
+        const stats = this.statsDb.getTaskStats(run.flowName, task.taskName);
 
         if (stats) {
           const activeClient = getActiveClient();
@@ -284,13 +290,13 @@ export class FlowEngine {
           : (task.startTime ? Date.now() - new Date(task.startTime).getTime() : undefined);
 
         if (durationMs !== undefined) {
-          const stats = statsDb.getTaskStats(run.flowName, task.taskName);
+          const stats = this.statsDb.getTaskStats(run.flowName, task.taskName);
           const activeClient = getActiveClient();
           const sensitivity = activeClient?.performanceSensitivity || 'normal';
 
           // Always record stats - outlier detection is for warnings only, not for excluding data
           try {
-            statsDb.updateTaskStats(run.flowName, task.taskName, durationMs);
+            this.statsDb.updateTaskStats(run.flowName, task.taskName, durationMs);
             console.log(`[FlowEngine] Updated statistics for ${run.flowName}/${task.taskName}: ${durationMs}ms`);
           } catch (error) {
             console.error(`[FlowEngine] Failed to update statistics:`, error);
@@ -324,7 +330,7 @@ export class FlowEngine {
       this.updateRunProgress(run);
     }
 
-    runDb.saveRun(run);
+    this.runDb.saveRun(run);
     this.notifyStateChange();
     return true;
   }
@@ -380,14 +386,14 @@ export class FlowEngine {
         taskName: t.taskName,
         estimatedTime: t.durationMs || t.estimatedTime
       }));
-      statsDb.saveFlowTaskStructure(run.flowName, taskStructure);
+      this.statsDb.saveFlowTaskStructure(run.flowName, taskStructure);
 
       // Update flow statistics for all completed runs (warnings are display-only, not exclusion criteria)
       const flowDuration = new Date(run.endTime).getTime() - new Date(run.startTime).getTime();
       const hasAnyFailedTasks = run.tasks.some(t => t.state === TaskState.FAILED);
 
       if (!hasAnyFailedTasks) {
-        statsDb.updateFlowStats(run.flowName, flowDuration);
+        this.statsDb.updateFlowStats(run.flowName, flowDuration);
         console.log(`[FlowEngine] Updated flow statistics for ${run.flowName}: ${flowDuration}ms`);
       }
     } else if (anyCrucialFailed) {
@@ -402,7 +408,7 @@ export class FlowEngine {
       }
     }
 
-    runDb.saveRun(run);
+    this.runDb.saveRun(run);
     this.notifyStateChange();
     return true;
   }
@@ -415,7 +421,7 @@ export class FlowEngine {
     // This supports parallel execution of the same flow
 
     // Get statistics for this flow
-    const flowStats = statsDb.getFlowStats(payload.name);
+    const flowStats = this.statsDb.getFlowStats(payload.name);
     console.log(`[FlowEngine] Registering flow '${payload.name}' with ${flowStats.size} task statistics available`);
 
     // Determine duration for each task (use statistics if available, otherwise use estimatedTime)
@@ -468,7 +474,7 @@ export class FlowEngine {
     };
 
     this.flows.push(newFlow);
-    flowDb.saveFlow(newFlow);
+    this.flowDb.saveFlow(newFlow);
     this.notifyStateChange();
     return newFlow;
   }
@@ -478,7 +484,7 @@ export class FlowEngine {
    */
   private removeFlow(flowId: string): void {
     this.flows = this.flows.filter(f => f.id !== flowId);
-    flowDb.deleteFlow(flowId);
+    this.flowDb.deleteFlow(flowId);
   }
 
   /**
@@ -491,7 +497,7 @@ export class FlowEngine {
     const timestamp = new Date().toISOString();
 
     // Check for learned task structure from previous runs
-    const learnedStructure = statsDb.getFlowTaskStructure(flow.name);
+    const learnedStructure = this.statsDb.getFlowTaskStructure(flow.name);
     let tasks: TaskRun[];
 
     if (learnedStructure && learnedStructure.length > 0) {
@@ -501,7 +507,7 @@ export class FlowEngine {
 
       // First pass: get estimated times from statistics (or use saved value as fallback)
       const tasksWithEstimates = learnedStructure.map(t => {
-        const taskStats = statsDb.getTaskStats(flow.name, t.taskName);
+        const taskStats = this.statsDb.getTaskStats(flow.name, t.taskName);
         const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
         return { taskName: t.taskName, estimatedTime };
       });
@@ -518,7 +524,8 @@ export class FlowEngine {
           logs: [],
           weight: weight,
           estimatedTime: t.estimatedTime,
-          progress: 0
+          progress: 0,
+          crucialPass: true
         };
       });
     } else {
@@ -528,7 +535,7 @@ export class FlowEngine {
 
       // First pass: get estimated times from statistics (or use registration value as fallback)
       const tasksWithEstimates = flow.tasks.map(t => {
-        const taskStats = statsDb.getTaskStats(flow.name, t.name);
+        const taskStats = this.statsDb.getTaskStats(flow.name, t.name);
         const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
         if (taskStats) {
           console.log(`[FlowEngine] Using statistics for ${t.name}: ${estimatedTime}ms (vs client: ${t.estimatedTime}ms)`);
@@ -548,7 +555,8 @@ export class FlowEngine {
           logs: [],
           weight: weight,
           estimatedTime: t.estimatedTime,
-          progress: 0
+          progress: 0,
+          crucialPass: t.crucialPass
         };
       });
     }
@@ -574,7 +582,7 @@ export class FlowEngine {
     this.removeFlow(flowId);
 
     // Save the new run to the database
-    runDb.saveRun(newRun);
+    this.runDb.saveRun(newRun);
 
     this.notifyStateChange();
 
@@ -592,7 +600,7 @@ export class FlowEngine {
     const timestamp = new Date().toISOString();
 
     // Check for learned task structure from previous runs
-    const learnedStructure = statsDb.getFlowTaskStructure(flow.name);
+    const learnedStructure = this.statsDb.getFlowTaskStructure(flow.name);
     let tasks: TaskRun[];
 
     if (learnedStructure && learnedStructure.length > 0) {
@@ -602,7 +610,7 @@ export class FlowEngine {
 
       // First pass: get estimated times from statistics (or use saved value as fallback)
       const tasksWithEstimates = learnedStructure.map(t => {
-        const taskStats = statsDb.getTaskStats(flow.name, t.taskName);
+        const taskStats = this.statsDb.getTaskStats(flow.name, t.taskName);
         const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
         return { taskName: t.taskName, estimatedTime };
       });
@@ -619,7 +627,8 @@ export class FlowEngine {
           logs: [],
           weight: weight,
           estimatedTime: t.estimatedTime,
-          progress: 0
+          progress: 0,
+          crucialPass: true
         };
       });
     } else {
@@ -629,7 +638,7 @@ export class FlowEngine {
 
       // First pass: get estimated times from statistics (or use registration value as fallback)
       const tasksWithEstimates = flow.tasks.map(t => {
-        const taskStats = statsDb.getTaskStats(flow.name, t.name);
+        const taskStats = this.statsDb.getTaskStats(flow.name, t.name);
         const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
         if (taskStats) {
           console.log(`[FlowEngine] Using statistics for ${t.name}: ${estimatedTime}ms (vs client: ${t.estimatedTime}ms)`);
@@ -649,7 +658,8 @@ export class FlowEngine {
           logs: [],
           weight: weight,
           estimatedTime: t.estimatedTime,
-          progress: 0
+          progress: 0,
+          crucialPass: t.crucialPass
         };
       });
     }
@@ -675,7 +685,7 @@ export class FlowEngine {
     this.removeFlow(flowId);
 
     // Save the new run to the database
-    runDb.saveRun(newRun);
+    this.runDb.saveRun(newRun);
 
     this.notifyStateChange();
 
@@ -701,7 +711,7 @@ export class FlowEngine {
       run.tasks.forEach(task => {
         if (task.state === TaskState.RUNNING && task.startTime) {
           const elapsedMs = Date.now() - new Date(task.startTime).getTime();
-          const stats = statsDb.getTaskStats(run.flowName, task.taskName);
+          const stats = this.statsDb.getTaskStats(run.flowName, task.taskName);
 
           if (stats) {
             const activeClient = getActiveClient();
@@ -818,7 +828,7 @@ export class FlowEngine {
       // Save all modified runs to database
       this.runs.forEach(run => {
         if (run.state === TaskState.RUNNING || run.state === TaskState.COMPLETED || run.state === TaskState.FAILED) {
-          runDb.saveRun(run);
+          this.runDb.saveRun(run);
         }
       });
       this.notifyStateChange();
@@ -881,7 +891,7 @@ export class FlowEngine {
         }
 
         // Save the failed run to database (single save after all modifications)
-        runDb.saveRun(run);
+        this.runDb.saveRun(run);
       });
 
       this.notifyStateChange();
@@ -931,7 +941,7 @@ export class FlowEngine {
           });
 
           // Save the failed run to database
-          runDb.saveRun(run);
+          this.runDb.saveRun(run);
 
           // Generate report for the failed flow
           generateFlowReport(run, run.clientName || 'default');
@@ -976,7 +986,7 @@ export class FlowEngine {
         }
 
         // Save the failed run to database (single save after all modifications)
-        runDb.saveRun(run);
+        this.runDb.saveRun(run);
       });
 
       this.notifyStateChange();
@@ -1005,13 +1015,13 @@ export class FlowEngine {
     this.runs.splice(runIndex, 1);
 
     // Remove from database
-    runDb.deleteRun(runId);
+    this.runDb.deleteRun(runId);
 
     // Check if there are any remaining runs for this flow
     const remainingRuns = this.runs.filter(r => r.flowName === flowName);
     if (remainingRuns.length === 0) {
       // No more runs for this flow, clean up statistics
-      statsDb.deleteFlowStats(flowName);
+      this.statsDb.deleteFlowStats(flowName);
       console.log(`[FlowEngine] Deleted run and statistics for flow: ${flowName}`);
     } else {
       console.log(`[FlowEngine] Deleted run: ${runId} (${remainingRuns.length} runs remaining for ${flowName})`);
@@ -1025,7 +1035,7 @@ export class FlowEngine {
    * Delete all statistics
    */
   deleteAllStats(): void {
-    statsDb.deleteAllStats();
+    this.statsDb.deleteAllStats();
     console.log(`[FlowEngine] Deleted all statistics`);
     this.notifyStateChange();
   }

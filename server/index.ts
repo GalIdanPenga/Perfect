@@ -310,9 +310,13 @@ app.get('/api/execution-requests', (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log('Perfect Backend Server running on http://localhost:' + PORT);
-});
+export { app };
+
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log('Perfect Backend Server running on http://localhost:' + PORT);
+  });
+}
 
 process.on('SIGINT', () => process.exit(0));
 process.on('SIGTERM', () => process.exit(0));

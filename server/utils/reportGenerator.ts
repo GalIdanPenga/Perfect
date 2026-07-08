@@ -52,7 +52,7 @@ export function generateFlowReport(run: FlowRun, clientName: string = 'default')
 /**
  * Format duration in milliseconds to readable string
  */
-function formatDuration(ms: number): string {
+export function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.round(ms)}ms`;
   if (ms < 60000) return `${(ms / 1000).toFixed(2)}s`;
   const minutes = Math.floor(ms / 60000);
@@ -63,7 +63,7 @@ function formatDuration(ms: number): string {
 /**
  * Calculate total duration of a flow run
  */
-function calculateTotalDuration(run: FlowRun): number {
+export function calculateTotalDuration(run: FlowRun): number {
   if (!run.endTime) return 0;
   return new Date(run.endTime).getTime() - new Date(run.startTime).getTime();
 }
@@ -71,7 +71,7 @@ function calculateTotalDuration(run: FlowRun): number {
 /**
  * Get status badge color
  */
-function getStatusColor(state: TaskState): string {
+export function getStatusColor(state: TaskState): string {
   switch (state) {
     case TaskState.COMPLETED:
       return '#10b981'; // green
@@ -89,7 +89,7 @@ function getStatusColor(state: TaskState): string {
 /**
  * Generate the complete HTML report
  */
-function generateReportHTML(run: FlowRun, clientName: string): string {
+export function generateReportHTML(run: FlowRun, clientName: string): string {
   const totalDuration = calculateTotalDuration(run);
   const successCount = run.tasks.filter(t => t.state === TaskState.COMPLETED).length;
   const failedCount = run.tasks.filter(t => t.state === TaskState.FAILED).length;
@@ -487,7 +487,7 @@ function generateReportHTML(run: FlowRun, clientName: string): string {
 /**
  * Recursively render a value for the report table
  */
-function renderValue(value: any, depth: number = 0): string {
+export function renderValue(value: any, depth: number = 0): string {
   if (value === null || value === undefined) {
     return '<span style="color: #64748b; font-style: italic;">null</span>';
   }
@@ -536,7 +536,7 @@ function renderValue(value: any, depth: number = 0): string {
 /**
  * Generate HTML for a single task
  */
-function generateTaskHTML(task: TaskRun): string {
+export function generateTaskHTML(task: TaskRun): string {
   const duration = task.durationMs ? formatDuration(task.durationMs) : 'N/A';
   const startTime = task.startTime ? new Date(task.startTime).toLocaleTimeString() : 'Not started';
   const endTime = task.endTime ? new Date(task.endTime).toLocaleTimeString() : 'Not finished';
