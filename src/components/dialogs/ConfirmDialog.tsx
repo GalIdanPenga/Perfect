@@ -15,7 +15,7 @@ interface ConfirmDialogProps {
   /**
    * Icon to display in the header
    */
-  icon: LucideIcon;
+  icon?: LucideIcon;
 
   /**
    * Message to display in the dialog body
@@ -107,7 +107,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
             className="text-lg font-bold flex items-center gap-2"
             style={{ color: themeColor }}
           >
-            <Icon size={20} />
+            {Icon && <Icon size={20} />}
             {title}
           </h3>
         </div>
