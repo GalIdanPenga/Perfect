@@ -11,7 +11,6 @@ import {
   X,
 } from 'lucide-react';
 import { TaskState, FlowRun } from '../types';
-import { API_BASE_URL } from '../constants';
 import { StatusIcon } from './StatusComponents';
 import { TagBadges } from './TagBadges';
 import { ActiveRunCard } from './ActiveRunCard';

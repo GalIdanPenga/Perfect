@@ -106,4 +106,40 @@ describe('useModalAnimation', () => {
       vi.useRealTimers();
     }
   });
+
+  it('does not call onClose when unmounted before durationMs elapses', () => {
+    vi.useFakeTimers();
+    try {
+      const onClose = vi.fn();
+      const { result, unmount } = renderHook(() => useModalAnimation(onClose, 200));
+      act(() => {
+        result.current.handleClose();
+      });
+      unmount();
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('calling handleClose twice fires onClose only once', () => {
+    vi.useFakeTimers();
+    try {
+      const onClose = vi.fn();
+      const { result } = renderHook(() => useModalAnimation(onClose, 200));
+      act(() => {
+        result.current.handleClose();
+        result.current.handleClose();
+      });
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

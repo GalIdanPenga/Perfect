@@ -533,3 +533,40 @@ test('crucialPass=false round-trips correctly', () => {
   // getRunById must agree with getAllRuns
   expect(runDb.getRunById('run-bug')!.tasks[0].crucialPass).toBe(false)
 })
+
+// A run written before crucial_pass was tracked stores NULL for the column
+// (saveRun writes NULL when task.crucialPass is undefined). Such legacy rows
+// must read back as crucialPass=true, the documented default.
+test('legacy NULL crucial_pass reads back as true (default)', () => {
+  const { runDb } = createDatabase(':memory:')
+
+  // crucialPass intentionally omitted to simulate a pre-migration row; cast
+  // because the current TaskRun type requires the field.
+  const legacyTask = {
+    id: 'tr-legacy',
+    taskId: 'task-legacy',
+    taskName: 'LegacyTask',
+    state: TaskState.COMPLETED,
+    logs: [],
+    weight: 1,
+    estimatedTime: 1000,
+    progress: 100,
+  }
+
+  const run = {
+    id: 'run-legacy',
+    flowId: 'flow-1',
+    flowName: 'LegacyFlow',
+    state: TaskState.COMPLETED,
+    startTime: '2024-01-01T00:00:00.000Z',
+    configuration: 'cfg',
+    tags: {},
+    logs: [],
+    progress: 100,
+    tasks: [legacyTask],
+  } as unknown as FlowRun
+
+  runDb.saveRun(run)
+  expect(runDb.getAllRuns()[0].tasks[0].crucialPass).toBe(true)
+  expect(runDb.getRunById('run-legacy')!.tasks[0].crucialPass).toBe(true)
+})

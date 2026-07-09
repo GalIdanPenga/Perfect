@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } from 'vitest';
-import { FlowEngine } from './FlowEngine';
+import { FlowEngine, flowEngine } from './FlowEngine';
 import { createDatabase } from '../database/db';
 import { TaskState, FlowRegistrationPayload } from '../types';
 
@@ -59,6 +59,16 @@ describe('FlowEngine', () => {
   afterEach(() => {
     vi.clearAllTimers();
     engine.destroy();
+  });
+
+  // The module-level `flowEngine` singleton is instantiated at import time with
+  // real interval handles (before fake timers are installed). Release them so
+  // they don't leak past this suite.
+  // Note: calling vi.useRealTimers() inside this hook makes vitest hang (a known
+  // issue also documented in useModalAnimation.test.ts); vitest resets timer
+  // mocks between files anyway, so we only release the singleton's handles here.
+  afterAll(() => {
+    flowEngine.destroy();
   });
 
   // ── registerFlow ───────────────────────────────────────────────────────────
