@@ -8,25 +8,37 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 
 ```
 /
+├── shared/                       # Types shared by frontend and backend
+│   └── types.ts                 # FlowDefinition, FlowRun, TaskState, etc. (single source of truth)
+│
 ├── src/                          # Frontend React application
-│   ├── components/              # React components (future)
-│   ├── types/                   # TypeScript type definitions
-│   │   └── index.ts            # FlowDefinition, FlowRun, TaskState, etc.
-│   ├── App.tsx                  # Main React application
+│   ├── components/              # React components (+ dialogs/, progress/)
+│   ├── hooks/                   # Data-fetching, storage & animation hooks
+│   ├── utils/                   # Pure helpers (format, color, filter, progress, audio)
+│   ├── constants/              # API URL, polling intervals, theme color
+│   ├── types/                   # Client-only types; re-exports shared/types
+│   ├── App.tsx                  # Root component (composition + session state)
 │   └── main.tsx                 # Application entry point
 │
 ├── server/                       # Backend Express server
 │   ├── engine/                  # Flow orchestration engine
-│   │   └── FlowEngine.ts       # Core workflow execution engine
+│   │   ├── FlowEngine.ts       # Core execution engine (facade)
+│   │   ├── runFactory.ts       # Builds run/task structures from flows + stats
+│   │   ├── failureHandler.ts   # Shared run-failure logic
+│   │   ├── progress.ts         # Weighted-progress calculation
+│   │   └── services/           # PerformanceMonitor (outlier detection)
 │   ├── database/                # Database operations
-│   │   └── db.ts               # SQLite database with statistics tracking
+│   │   ├── db.ts               # Composition root: createDatabase + singletons
+│   │   ├── schema.ts           # Tables, indexes, migrations
+│   │   ├── flowDb.ts / runDb.ts / statsDb.ts  # Per-domain data access
+│   │   └── mappers.ts          # Row → domain-object mapping
 │   ├── routes/                  # API route handlers
 │   │   ├── clientRoutes.ts     # Python client management endpoints
 │   │   └── engineRoutes.ts     # Flow and run management endpoints
 │   ├── utils/                   # Utility modules
-│   │   └── reportGenerator.ts  # HTML report generation
-│   ├── types/                   # Shared TypeScript types
-│   │   └── index.ts            # Backend type definitions
+│   │   ├── reportGenerator.ts  # HTML report generation
+│   │   └── reportStyles.ts     # Report CSS
+│   ├── types/                   # Server-only types; re-exports shared/types
 │   └── index.ts                 # Server entry point
 │
 ├── examples/                     # Python client examples
@@ -57,12 +69,13 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 - Configuration selection (dev/debug/release)
 
 **Key Components:**
-- `App.tsx` - Main application with flow library and live monitoring
+- `App.tsx` - Root component; composes the layout and owns session state
+- `components/AppHeader.tsx` / `LiveMonitorHeader.tsx` / `SessionActionButton.tsx` - Extracted layout sections
 - `components/ActiveRunCard.tsx` - Flow execution card with real-time progress
 - `components/TaskRow.tsx` - Task execution row with performance warnings
 - `components/StatisticsWindow.tsx` - Historical performance statistics with standard deviation
 - `components/StatusComponents.tsx` - Reusable status icons and badges
-- `types/index.ts` - Shared frontend types including PerformanceWarning interface
+- `shared/types.ts` - Domain types (FlowRun, TaskRun, PerformanceWarning, …) shared with the backend; `src/types/index.ts` re-exports these plus client-only types
 
 ### 2. Backend Layer (`server/`)
 
@@ -391,12 +404,12 @@ Warnings are stored in `task_runs.performance_warning` as JSON:
 1. **Type Safety** - Comprehensive TypeScript types across frontend and backend
 2. **Separation of Concerns** - Clear layer separation (UI, API, Engine, Client)
 3. **Single Responsibility** - Each module has one clear purpose
-4. **DRY Principle** - Shared types between frontend and backend
+4. **DRY Principle** - A single `shared/types.ts` is the source of truth for domain types across frontend and backend
 5. **Error Handling** - Graceful error handling at all layers
 6. **Process Management** - Proper cleanup on shutdown signals
 
 ---
 
-**Last Updated:** 2025-11-27
+**Last Updated:** 2026-07-09
 **Version:** 2.0.0
 **Architecture Type:** Client-Server with Subprocess Management

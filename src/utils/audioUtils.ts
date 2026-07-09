@@ -33,32 +33,3 @@ export const playCompletionSound = (): void => {
     console.warn('Failed to play completion sound:', error);
   }
 };
-
-/**
- * Plays an error notification sound
- */
-export const playErrorSound = (): void => {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-
-    oscillator.frequency.value = 220; // A3
-    oscillator.type = 'square';
-
-    const now = audioContext.currentTime;
-    const duration = 0.2;
-
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.15, now + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + duration);
-
-    oscillator.start(now);
-    oscillator.stop(now + duration);
-  } catch (error) {
-    console.warn('Failed to play error sound:', error);
-  }
-};

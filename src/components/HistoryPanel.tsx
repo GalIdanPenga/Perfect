@@ -27,12 +27,12 @@ interface HistoryPanelProps {
   onBulkDelete: (ids: string[]) => Promise<void>;
 }
 
-export const HistoryPanel: React.FC<HistoryPanelProps> = ({
+export function HistoryPanel({
   runs,
   themeColor,
   onDeleteRun,
   onBulkDelete,
-}) => {
+}: HistoryPanelProps) {
   // Filter state
   const [statusFilter, setStatusFilter] = useState<'all' | TaskState.COMPLETED | TaskState.FAILED>('all');
   const [flowNameFilter, setFlowNameFilter] = useState<string>('all');
@@ -399,4 +399,4 @@ export const HistoryPanel: React.FC<HistoryPanelProps> = ({
       />
     </div>
   );
-};
+}

@@ -10,6 +10,9 @@ import { flowDb as defaultFlowDb, runDb as defaultRunDb, statsDb as defaultStats
 import { generateFlowReport } from '../utils/reportGenerator';
 import { getActiveClient } from '../routes/clientRoutes';
 import { PerformanceMonitor } from './services/PerformanceMonitor';
+import { generateId, buildNewRun } from './runFactory';
+import { markRunFailed } from './failureHandler';
+import { updateRunProgress } from './progress';
 
 /**
  * FlowEngine - Core workflow orchestration engine
@@ -158,7 +161,7 @@ export class FlowEngine {
 
       // Create a new task entry
       const newTask: TaskRun = {
-        id: `tr-${this.generateId()}`,
+        id: `tr-${generateId()}`,
         taskId: `dynamic-task-${taskIndex}`,
         taskName: actualTaskName,
         state: TaskState.PENDING,
@@ -327,7 +330,7 @@ export class FlowEngine {
       }
     } else {
       // Update weighted progress (don't mark as completed - wait for client to signal completion)
-      this.updateRunProgress(run);
+      updateRunProgress(run);
     }
 
     this.runDb.saveRun(run);
@@ -443,7 +446,7 @@ export class FlowEngine {
     const totalDuration = taskDurations.reduce((sum, duration) => sum + duration, 0);
 
     const newFlow: FlowDefinition = {
-      id: `flow-${this.generateId()}`,
+      id: `flow-${generateId()}`,
       name: payload.name,
       description: payload.description,
       codeSnippet: '',
@@ -462,7 +465,7 @@ export class FlowEngine {
         const weight = totalDuration > 0 ? duration / totalDuration : 1 / payload.tasks.length;
 
         return {
-          id: `task-${this.generateId()}`,
+          id: `task-${generateId()}`,
           name: t.name,
           description: t.description || 'Registered task',
           weight: weight,
@@ -494,87 +497,7 @@ export class FlowEngine {
     const flow = this.flows.find(f => f.id === flowId);
     if (!flow) return undefined;
 
-    const timestamp = new Date().toISOString();
-
-    // Check for learned task structure from previous runs
-    const learnedStructure = this.statsDb.getFlowTaskStructure(flow.name);
-    let tasks: TaskRun[];
-
-    if (learnedStructure && learnedStructure.length > 0) {
-      // Use learned task structure from previous executions
-      // But look up fresh statistics for estimated times
-      console.log(`[FlowEngine] Using learned task structure for ${flow.name}: ${learnedStructure.length} tasks`);
-
-      // First pass: get estimated times from statistics (or use saved value as fallback)
-      const tasksWithEstimates = learnedStructure.map(t => {
-        const taskStats = this.statsDb.getTaskStats(flow.name, t.taskName);
-        const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
-        return { taskName: t.taskName, estimatedTime };
-      });
-
-      const totalEstimatedTime = tasksWithEstimates.reduce((sum, t) => sum + t.estimatedTime, 0);
-
-      tasks = tasksWithEstimates.map((t, index) => {
-        const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : 1 / learnedStructure.length;
-        return {
-          id: `tr-${this.generateId()}`,
-          taskId: `learned-task-${index}`,
-          taskName: t.taskName,
-          state: TaskState.PENDING,
-          logs: [],
-          weight: weight,
-          estimatedTime: t.estimatedTime,
-          progress: 0,
-          crucialPass: true
-        };
-      });
-    } else {
-      // Use tasks from flow registration (static analysis)
-      // But check statistics for better estimated times
-      console.log(`[FlowEngine] Using static task structure for ${flow.name}: ${flow.tasks.length} tasks`);
-
-      // First pass: get estimated times from statistics (or use registration value as fallback)
-      const tasksWithEstimates = flow.tasks.map(t => {
-        const taskStats = this.statsDb.getTaskStats(flow.name, t.name);
-        const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
-        if (taskStats) {
-          console.log(`[FlowEngine] Using statistics for ${t.name}: ${estimatedTime}ms (vs client: ${t.estimatedTime}ms)`);
-        }
-        return { ...t, estimatedTime };
-      });
-
-      const totalEstimatedTime = tasksWithEstimates.reduce((sum, t) => sum + t.estimatedTime, 0);
-
-      tasks = tasksWithEstimates.map(t => {
-        const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : t.weight;
-        return {
-          id: `tr-${this.generateId()}`,
-          taskId: t.id,
-          taskName: t.name,
-          state: TaskState.PENDING,
-          logs: [],
-          weight: weight,
-          estimatedTime: t.estimatedTime,
-          progress: 0,
-          crucialPass: t.crucialPass
-        };
-      });
-    }
-
-    const newRun: FlowRun = {
-      id: `run-${this.generateId()}`,
-      flowId: flow.id,
-      flowName: flow.name,
-      state: TaskState.RUNNING,
-      startTime: timestamp,
-      configuration: configuration,
-      tags: flow.tags,
-      logs: [],
-      tasks: tasks,
-      progress: 0,
-      clientColor: clientColor,
-      clientName: clientName
-    };
+    const newRun = buildNewRun(flow, configuration, clientColor, clientName, this.statsDb);
 
     this.runs.unshift(newRun);
 
@@ -597,87 +520,7 @@ export class FlowEngine {
     const flow = this.flows.find(f => f.id === flowId);
     if (!flow) return undefined;
 
-    const timestamp = new Date().toISOString();
-
-    // Check for learned task structure from previous runs
-    const learnedStructure = this.statsDb.getFlowTaskStructure(flow.name);
-    let tasks: TaskRun[];
-
-    if (learnedStructure && learnedStructure.length > 0) {
-      // Use learned task structure from previous executions
-      // But look up fresh statistics for estimated times
-      console.log(`[FlowEngine] Using learned task structure for ${flow.name}: ${learnedStructure.length} tasks`);
-
-      // First pass: get estimated times from statistics (or use saved value as fallback)
-      const tasksWithEstimates = learnedStructure.map(t => {
-        const taskStats = this.statsDb.getTaskStats(flow.name, t.taskName);
-        const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
-        return { taskName: t.taskName, estimatedTime };
-      });
-
-      const totalEstimatedTime = tasksWithEstimates.reduce((sum, t) => sum + t.estimatedTime, 0);
-
-      tasks = tasksWithEstimates.map((t, index) => {
-        const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : 1 / learnedStructure.length;
-        return {
-          id: `tr-${this.generateId()}`,
-          taskId: `learned-task-${index}`,
-          taskName: t.taskName,
-          state: TaskState.PENDING,
-          logs: [],
-          weight: weight,
-          estimatedTime: t.estimatedTime,
-          progress: 0,
-          crucialPass: true
-        };
-      });
-    } else {
-      // Use tasks from flow registration (static analysis)
-      // But check statistics for better estimated times
-      console.log(`[FlowEngine] Using static task structure for ${flow.name}: ${flow.tasks.length} tasks`);
-
-      // First pass: get estimated times from statistics (or use registration value as fallback)
-      const tasksWithEstimates = flow.tasks.map(t => {
-        const taskStats = this.statsDb.getTaskStats(flow.name, t.name);
-        const estimatedTime = taskStats ? Math.round(taskStats.avgDurationMs) : t.estimatedTime;
-        if (taskStats) {
-          console.log(`[FlowEngine] Using statistics for ${t.name}: ${estimatedTime}ms (vs client: ${t.estimatedTime}ms)`);
-        }
-        return { ...t, estimatedTime };
-      });
-
-      const totalEstimatedTime = tasksWithEstimates.reduce((sum, t) => sum + t.estimatedTime, 0);
-
-      tasks = tasksWithEstimates.map(t => {
-        const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : t.weight;
-        return {
-          id: `tr-${this.generateId()}`,
-          taskId: t.id,
-          taskName: t.name,
-          state: TaskState.PENDING,
-          logs: [],
-          weight: weight,
-          estimatedTime: t.estimatedTime,
-          progress: 0,
-          crucialPass: t.crucialPass
-        };
-      });
-    }
-
-    const newRun: FlowRun = {
-      id: `run-${this.generateId()}`,
-      flowId: flow.id,
-      flowName: flow.name,
-      state: TaskState.RUNNING,
-      startTime: timestamp,
-      configuration: configuration,
-      tags: flow.tags,
-      logs: [],
-      tasks: tasks,
-      progress: 0,
-      clientColor: clientColor,
-      clientName: clientName
-    };
+    const newRun = buildNewRun(flow, configuration, clientColor, clientName, this.statsDb);
 
     this.runs.unshift(newRun);
 
@@ -806,7 +649,7 @@ export class FlowEngine {
       });
 
       // Update Run State & Weighted Progress
-      this.updateRunProgress(run);
+      updateRunProgress(run);
 
       const isAnyFailed = run.tasks.some(t => t.state === TaskState.FAILED);
       const areAllCompleted = run.tasks.every(t => t.state === TaskState.COMPLETED);
@@ -836,31 +679,6 @@ export class FlowEngine {
   }
 
   /**
-   * Calculate weighted progress for a flow run
-   */
-  private updateRunProgress(run: FlowRun): void {
-    const totalWeight = run.tasks.reduce((sum, t) => sum + t.weight, 0);
-    let earnedWeight = 0;
-
-    run.tasks.forEach(t => {
-      if (t.state === TaskState.COMPLETED) {
-        earnedWeight += t.weight * 100;
-      } else if (t.state === TaskState.RUNNING || t.state === TaskState.FAILED) {
-        earnedWeight += t.weight * t.progress;
-      }
-    });
-
-    run.progress = totalWeight > 0 ? Math.floor(earnedWeight / totalWeight) : 0;
-  }
-
-  /**
-   * Generate a random ID
-   */
-  private generateId(): string {
-    return Math.random().toString(36).substring(2, 9);
-  }
-
-  /**
    * Fail any flows that were running when server was restarted
    */
   private failStuckFlows(): void {
@@ -872,18 +690,10 @@ export class FlowEngine {
       console.log(`[FlowEngine] Found ${stuckRuns.length} stuck flows from previous server instance - failing them`);
 
       stuckRuns.forEach(run => {
-        run.state = TaskState.FAILED;
-        run.endTime = new Date().toISOString();
-        run.logs.push('[System] Flow failed: Server was restarted');
-
-        // Mark all running/pending tasks as failed
-        run.tasks.forEach(task => {
-          if (task.state === TaskState.RUNNING || task.state === TaskState.PENDING) {
-            task.state = TaskState.FAILED;
-            task.endTime = new Date().toISOString();
-            task.logs.push('[System] Task failed: Server was restarted');
-          }
-        });
+        markRunFailed(run, {
+          flow: '[System] Flow failed: Server was restarted',
+          task: '[System] Task failed: Server was restarted'
+        }, { includePending: true });
 
         // Generate report for the failed flow (only if not already generated)
         if (!run.reportPath) {
@@ -927,18 +737,10 @@ export class FlowEngine {
         console.log(`[FlowEngine] Client heartbeat timeout - failing ${runningRuns.length} running flows`);
 
         runningRuns.forEach(run => {
-          run.state = TaskState.FAILED;
-          run.endTime = new Date().toISOString();
-          run.logs.push('[System] Flow failed: Lost connection to Python client');
-
-          // Mark all running/pending tasks as failed
-          run.tasks.forEach(task => {
-            if (task.state === TaskState.RUNNING || task.state === TaskState.PENDING) {
-              task.state = TaskState.FAILED;
-              task.endTime = new Date().toISOString();
-              task.logs.push('[System] Task failed: Lost connection to Python client');
-            }
-          });
+          markRunFailed(run, {
+            flow: '[System] Flow failed: Lost connection to Python client',
+            task: '[System] Task failed: Lost connection to Python client'
+          }, { includePending: true });
 
           // Save the failed run to database
           this.runDb.saveRun(run);
@@ -967,18 +769,11 @@ export class FlowEngine {
       console.log(`[FlowEngine] Manually failing ${runningRuns.length} running flows due to stop request`);
 
       runningRuns.forEach(run => {
-        run.state = TaskState.FAILED;
-        run.endTime = new Date().toISOString();
-        run.logs.push('[System] Flow failed: User stopped the client');
-
         // Only fail the currently running task, not pending tasks
-        run.tasks.forEach(task => {
-          if (task.state === TaskState.RUNNING) {
-            task.state = TaskState.FAILED;
-            task.endTime = new Date().toISOString();
-            task.logs.push('[System] Task failed: User stopped the client');
-          }
-        });
+        markRunFailed(run, {
+          flow: '[System] Flow failed: User stopped the client',
+          task: '[System] Task failed: User stopped the client'
+        }, { includePending: false });
 
         // Generate report for the failed flow (only if not already generated)
         if (!run.reportPath) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TaskState, TaskRun } from '../types';
 import { StatusIcon, PerformanceWarningBadge } from './StatusComponents';
 import { formatDuration } from '../utils/formatUtils';
@@ -11,7 +11,7 @@ interface TaskRowProps {
   task: TaskRun;
 }
 
-export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
+export function TaskRow({ task }: TaskRowProps) {
   const isRunning = task.state === TaskState.RUNNING || task.state === TaskState.RETRYING;
   const logsRef = useRef<HTMLDivElement>(null);
   const [showTableModal, setShowTableModal] = useState(false);
@@ -205,4 +205,4 @@ export const TaskRow: React.FC<TaskRowProps> = ({ task }) => {
       )}
     </div>
   );
-};
+}

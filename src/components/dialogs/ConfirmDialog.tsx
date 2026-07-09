@@ -73,7 +73,7 @@ interface ConfirmDialogProps {
  * />
  * ```
  */
-export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
+export function ConfirmDialog({
   isOpen,
   title,
   icon: Icon,
@@ -84,7 +84,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   cancelLabel = 'Cancel',
   onConfirm,
   onCancel
-}) => {
+}: ConfirmDialogProps) {
   if (!isOpen) return null;
 
   return (
@@ -164,4 +164,4 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       </div>
     </div>
   );
-};
+}

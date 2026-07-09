@@ -13,6 +13,14 @@ export function formatTimeRemaining(ms: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
+/**
+ * Format a duration for the UI (stat tables, chart axis/tooltip labels).
+ * Uses a compact decimal form for minutes/hours ("1.50m", "2.00h") which
+ * reads well as a short label. NOTE: the server has its own formatDuration in
+ * `server/utils/reportGenerator.ts` that intentionally uses a "1m 30s" form
+ * better suited to prose in HTML reports — the two are deliberately different
+ * presentations and are not shared.
+ */
 export function formatDuration(ms: number): string {
   if (ms < 1000) {
     return `${Math.round(ms)}ms`;

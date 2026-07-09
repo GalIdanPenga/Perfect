@@ -1,4 +1,3 @@
-import React from 'react';
 import { Activity, Clock, CheckCircle2, XCircle } from 'lucide-react';
 import { FlowRun, TaskState } from '../../types';
 import { useAnimatedProgress } from '../../hooks/useAnimatedProgress';
@@ -10,11 +9,11 @@ interface OverallProgressProps {
   themeColor: string;
 }
 
-export const OverallProgress: React.FC<OverallProgressProps> = ({
+export function OverallProgress({
   flowCount,
   activeRuns,
   themeColor
-}) => {
+}: OverallProgressProps) {
   const completedCount = activeRuns.filter(r => r.state === TaskState.COMPLETED).length;
   const failedCount = activeRuns.filter(r => r.state === TaskState.FAILED).length;
   const isFinished = activeRuns.length > 0 && completedCount + failedCount === activeRuns.length;
@@ -123,4 +122,4 @@ export const OverallProgress: React.FC<OverallProgressProps> = ({
       </div>
     </div>
   );
-};
+}

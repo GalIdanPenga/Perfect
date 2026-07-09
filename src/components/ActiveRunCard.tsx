@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Clock, ChevronLeft } from 'lucide-react';
 import { FlowRun, TaskState } from '../types';
 import { StatusBadge, PerformanceWarningBadge } from './StatusComponents';
@@ -12,7 +12,7 @@ interface ActiveRunCardProps {
   clientColor?: string;
 }
 
-export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }) => {
+export function ActiveRunCard({ run, clientColor }: ActiveRunCardProps) {
   const flowLogsRef = useRef<HTMLDivElement>(null);
   const [logsExpanded, setLogsExpanded] = useState(false);
   const isRunning = run.state === TaskState.RUNNING || run.state === TaskState.PENDING || run.state === TaskState.RETRYING;
@@ -163,4 +163,4 @@ export const ActiveRunCard: React.FC<ActiveRunCardProps> = ({ run, clientColor }
       </div>
     </div>
   );
-};
+}

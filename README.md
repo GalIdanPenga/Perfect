@@ -62,19 +62,37 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
 
 ```
 perfect/
-├── src/
-│   ├── App.tsx                    # Main React application
-│   └── types.ts                   # TypeScript type definitions
-├── server/
-│   ├── server.ts                  # Express backend server
+├── shared/
+│   └── types.ts                   # Domain types shared by frontend & backend
+├── src/                           # React frontend
+│   ├── App.tsx                    # Root component (composition + session state)
+│   ├── main.tsx                   # Entry point
+│   ├── components/                # UI components (+ dialogs/, progress/)
+│   ├── hooks/                     # Data-fetching, storage & animation hooks
+│   ├── utils/                     # Pure helpers (format, color, filter, progress, audio)
+│   ├── constants/                 # API URL, polling intervals, theme color
+│   └── types/                     # Client-only types (re-exports shared/)
+├── server/                        # Express backend
+│   ├── index.ts                   # Server entry + top-level routes
 │   ├── engine/
-│   │   └── FlowEngine.ts          # Workflow orchestration engine
+│   │   ├── FlowEngine.ts          # Orchestration engine (facade)
+│   │   ├── runFactory.ts          # Builds run/task structures
+│   │   ├── failureHandler.ts      # Shared run-failure logic
+│   │   ├── progress.ts            # Weighted-progress calculation
+│   │   └── services/
+│   │       └── PerformanceMonitor.ts  # Outlier detection
 │   ├── database/
-│   │   └── db.ts                  # SQLite database operations
+│   │   ├── db.ts                  # Composition root (createDatabase + singletons)
+│   │   ├── schema.ts              # Tables, indexes, migrations
+│   │   ├── flowDb.ts / runDb.ts / statsDb.ts  # Per-domain data access
+│   │   └── mappers.ts             # Row → domain-object mapping
 │   ├── routes/
 │   │   ├── engineRoutes.ts        # Flow and run API endpoints
 │   │   └── clientRoutes.ts        # Python client communication
-│   └── types.ts                   # Server type definitions
+│   ├── utils/
+│   │   ├── reportGenerator.ts     # HTML report generation
+│   │   └── reportStyles.ts        # Report CSS
+│   └── types/                     # Server-only types (re-exports shared/)
 ├── examples/
 │   ├── perfect_client/
 │   │   ├── sdk.py                 # Python SDK (decorators, flow definitions)

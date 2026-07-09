@@ -1,4 +1,3 @@
-import React from 'react';
 import { Play, XCircle } from 'lucide-react';
 import { ClientConfig } from '../types';
 import { darkenHexColor } from '../utils/colorUtils';
@@ -14,7 +13,7 @@ interface ClientSelectorProps {
   onStop: () => void;
 }
 
-export const ClientSelector: React.FC<ClientSelectorProps> = ({
+export function ClientSelector({
   availableClients,
   selectedClientId,
   clientStatus,
@@ -23,7 +22,7 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({
   onClientClick,
   onStart,
   onStop,
-}) => {
+}: ClientSelectorProps) {
   const isActive = clientStatus === 'running' || clientStatus === 'starting';
 
   return (
@@ -144,4 +143,4 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({
       </p>
     </div>
   );
-};
+}
