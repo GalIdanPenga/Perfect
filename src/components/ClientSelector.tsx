@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, XCircle } from 'lucide-react';
 import { ClientConfig } from '../types';
+import { darkenHexColor } from '../utils/colorUtils';
 
 interface ClientSelectorProps {
   availableClients: ClientConfig[];
@@ -114,10 +115,7 @@ export const ClientSelector: React.FC<ClientSelectorProps> = ({
           }}
           onMouseEnter={(e) => {
             if (!isStartingClient) {
-              const r = parseInt(themeColor.slice(1, 3), 16);
-              const g = parseInt(themeColor.slice(3, 5), 16);
-              const b = parseInt(themeColor.slice(5, 7), 16);
-              e.currentTarget.style.backgroundColor = `rgb(${Math.max(0, r - 20)}, ${Math.max(0, g - 20)}, ${Math.max(0, b - 20)})`;
+              e.currentTarget.style.backgroundColor = darkenHexColor(themeColor, 20);
             }
           }}
           onMouseLeave={(e) => {

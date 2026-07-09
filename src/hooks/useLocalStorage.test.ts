@@ -53,10 +53,17 @@ describe('useLocalStorage', () => {
     expect(JSON.parse(localStorage.getItem('key')!)).toEqual({ a: 42 });
   });
 
-  it('handles corrupt localStorage value gracefully', () => {
+  it('falls back to initialValue when a non-string store has a corrupt value', () => {
     localStorage.setItem('key', 'not-valid-json{{{');
-    const { result } = renderHook(() => useLocalStorage('key', 'fallback'));
-    expect(result.current[0]).toBe('fallback');
+    const { result } = renderHook(() => useLocalStorage<{ a: number }>('key', { a: 1 }));
+    expect(result.current[0]).toEqual({ a: 1 });
+  });
+
+  it('preserves a legacy raw (non-JSON) string value for string stores', () => {
+    // Simulates a value written by pre-migration code via setItem(key, rawString).
+    localStorage.setItem('selectedClientId', 'client-abc');
+    const { result } = renderHook(() => useLocalStorage('selectedClientId', ''));
+    expect(result.current[0]).toBe('client-abc');
   });
 
   it('different keys are independent', () => {

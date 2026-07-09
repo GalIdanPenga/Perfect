@@ -48,14 +48,19 @@ describe('PerformanceChart', () => {
     expect(screen.getByText('n=7')).toBeTruthy();
   });
 
-  it('uses unique gradient id per title', () => {
-    const { container: c1 } = render(<PerformanceChart data={[makePoint('x', 1)]} title="Flow One" />);
-    const { container: c2 } = render(<PerformanceChart data={[makePoint('x', 1)]} title="Flow Two" />);
-    const g1 = c1.querySelector('linearGradient')?.id;
-    const g2 = c2.querySelector('linearGradient')?.id;
-    expect(g1).not.toBe(g2);
-    expect(g1).toContain('barGradient-Flow-One');
-    expect(g2).toContain('barGradient-Flow-Two');
+  it('uses a unique gradient id per chart instance and the bars reference it', () => {
+    // Punctuation in the title must not break the id / url(#id) reference, and
+    // two charts (even with identical titles) must not collide.
+    const { container: c1 } = render(<PerformanceChart data={[makePoint('x', 1)]} title="Flow (v2)" />);
+    const { container: c2 } = render(<PerformanceChart data={[makePoint('x', 1)]} title="Flow (v2)" />);
+    const id1 = c1.querySelector('linearGradient')?.id;
+    const id2 = c2.querySelector('linearGradient')?.id;
+    expect(id1).toBeTruthy();
+    expect(id2).toBeTruthy();
+    expect(id1).not.toBe(id2);
+    // The bar fill must resolve to this chart's gradient (broken by an
+    // unescaped id in the old title-derived approach).
+    expect(c1.querySelector(`rect[fill="url(#${id1})"]`)).toBeTruthy();
   });
 
   it('renders error bars when stdDev > 0', () => {

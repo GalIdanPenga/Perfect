@@ -14,11 +14,14 @@ interface PerformanceChartProps {
 }
 
 export function PerformanceChart({ data, title }: PerformanceChartProps) {
+  // Stable, DOM-safe unique id per chart instance. Deriving it from `title`
+  // risked invalid/colliding SVG ids when titles contained punctuation.
+  const gradientId = `barGradient-${React.useId()}`;
+
   if (data.length === 0) {
     return null;
   }
 
-  const gradientId = `barGradient-${title.replace(/\s+/g, '-')}`;
   const chartWidth = 800;
   const chartHeight = 300;
   const padding = { top: 40, right: 20, bottom: 80, left: 60 };

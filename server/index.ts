@@ -312,11 +312,17 @@ app.get('/api/execution-requests', (req, res) => {
 
 export { app };
 
-if (process.env.NODE_ENV !== 'test') {
+function startServer() {
   app.listen(PORT, () => {
     console.log('Perfect Backend Server running on http://localhost:' + PORT);
   });
+  // Register shutdown handlers only when actually running the server, so
+  // importing { app } in tests doesn't attach process.exit handlers to the
+  // test runner.
+  process.on('SIGINT', () => process.exit(0));
+  process.on('SIGTERM', () => process.exit(0));
 }
 
-process.on('SIGINT', () => process.exit(0));
-process.on('SIGTERM', () => process.exit(0));
+if (process.env.NODE_ENV !== 'test') {
+  startServer();
+}

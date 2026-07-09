@@ -96,19 +96,25 @@ export default function App() {
     run => run.state === TaskState.COMPLETED || run.state === TaskState.FAILED
   );
 
-  // Initialize to current state so the sound doesn't re-fire when the page reloads
-  // while flows are already finished.
-  const prevAllFlowsFinishedRef = useRef<boolean>(allFlowsFinished);
+  const prevAllFlowsFinishedRef = useRef<boolean>(false);
+  // Only chime after we've actually observed running flows this session. Runs
+  // load asynchronously (empty on first render), so without this guard a reload
+  // when flows are already finished looks like a false->true transition and
+  // would replay the sound on every reload.
+  const hasSeenRunningFlowsRef = useRef<boolean>(false);
 
   // Play sound notification when all flows complete
   useEffect(() => {
-    // Check if flows just finished (transition from false to true)
-    if (allFlowsFinished && !prevAllFlowsFinishedRef.current) {
+    if (runningFlowsCount > 0) {
+      hasSeenRunningFlowsRef.current = true;
+    }
+    // Fire only on a genuine transition to "all finished" within a session
+    // that actually had running flows.
+    if (allFlowsFinished && !prevAllFlowsFinishedRef.current && hasSeenRunningFlowsRef.current) {
       playCompletionSound();
     }
-    // Update the ref to current state
     prevAllFlowsFinishedRef.current = allFlowsFinished;
-  }, [allFlowsFinished]);
+  }, [allFlowsFinished, runningFlowsCount]);
 
   // Handler to return to client selection
   const handleReturnToClients = async () => {

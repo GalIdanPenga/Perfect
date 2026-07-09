@@ -8,7 +8,17 @@ export function useLocalStorage<T>(
     try {
       const item = localStorage.getItem(key);
       if (item === null) return initialValue;
-      return JSON.parse(item) as T;
+      try {
+        return JSON.parse(item) as T;
+      } catch {
+        // A value that isn't valid JSON is either a legacy raw (unquoted) string
+        // written before this hook JSON-encoded values, or corrupt data. For a
+        // string-typed store, keep it so it survives the migration (it'll be
+        // re-written as JSON on the next setValue); otherwise treat it as
+        // corrupt and fall back to initialValue.
+        if (typeof initialValue === 'string') return item as unknown as T;
+        return initialValue;
+      }
     } catch {
       return initialValue;
     }

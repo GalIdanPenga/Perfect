@@ -9,7 +9,8 @@ export function calculateRunProgress(run: FlowRun): { progress: number; remainin
       totalWeightedProgress += task.weight * 100;
     } else if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
       const elapsedMs = Date.now() - new Date(task.startTime).getTime();
-      totalWeightedProgress += task.weight * Math.min(99, (elapsedMs / task.estimatedTime) * 100);
+      const pct = task.estimatedTime > 0 ? Math.min(99, (elapsedMs / task.estimatedTime) * 100) : 0;
+      totalWeightedProgress += task.weight * pct;
       remainingMs += Math.max(0, task.estimatedTime - elapsedMs);
     } else if (task.state === TaskState.PENDING) {
       remainingMs += task.estimatedTime;
@@ -25,7 +26,7 @@ export function calculateTaskProgress(task: TaskRun): { progress: number; remain
   }
   if ((task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) && task.startTime) {
     const elapsedMs = Date.now() - new Date(task.startTime).getTime();
-    const progress = Math.min(99, (elapsedMs / task.estimatedTime) * 100);
+    const progress = task.estimatedTime > 0 ? Math.min(99, (elapsedMs / task.estimatedTime) * 100) : 0;
     const remainingMs = Math.max(0, task.estimatedTime - elapsedMs);
     return { progress, remainingMs };
   }

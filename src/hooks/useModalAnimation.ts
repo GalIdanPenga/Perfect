@@ -20,7 +20,11 @@ export function useModalAnimation(onClose: () => void, durationMs = 200) {
     // Guard against double-invocation (e.g. rapid clicks) so onClose fires once.
     if (closeTimerRef.current !== null) return;
     setIsClosing(true);
-    closeTimerRef.current = setTimeout(onClose, durationMs);
+    closeTimerRef.current = setTimeout(() => {
+      // Reset so a still-mounted (controlled) modal can be closed again later.
+      closeTimerRef.current = null;
+      onClose();
+    }, durationMs);
   }
 
   return { isClosing, isOpening, handleClose };
