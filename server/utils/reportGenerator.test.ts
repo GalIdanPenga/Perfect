@@ -282,27 +282,27 @@ describe('generateReportHTML', () => {
   });
 
   it('contains the flow name', () => {
-    const html = generateReportHTML(makeRun({ flowName: 'My Awesome Flow' }), 'client');
+    const html = generateReportHTML(makeRun({ flowName: 'My Awesome Flow' }), 'worker');
     expect(html).toContain('My Awesome Flow');
   });
 
   it('contains the run state', () => {
-    const html = generateReportHTML(makeRun({ state: TaskState.FAILED }), 'client');
+    const html = generateReportHTML(makeRun({ state: TaskState.FAILED }), 'worker');
     expect(html).toContain(TaskState.FAILED);
   });
 
-  it('contains the client name', () => {
-    const html = generateReportHTML(makeRun(), 'SpecialClient');
-    expect(html).toContain('SpecialClient');
+  it('contains the worker name', () => {
+    const html = generateReportHTML(makeRun(), 'SpecialWorker');
+    expect(html).toContain('SpecialWorker');
   });
 
   it('contains the run id', () => {
-    const html = generateReportHTML(makeRun({ id: 'run-xyz' }), 'client');
+    const html = generateReportHTML(makeRun({ id: 'run-xyz' }), 'worker');
     expect(html).toContain('run-xyz');
   });
 
   it('opens with an HTML doctype declaration', () => {
-    const html = generateReportHTML(makeRun(), 'client');
+    const html = generateReportHTML(makeRun(), 'worker');
     expect(html.trimStart()).toMatch(/^<!DOCTYPE html>/i);
   });
 
@@ -310,26 +310,26 @@ describe('generateReportHTML', () => {
     const run = makeRun({
       tasks: [makeTask({ taskName: 'Alpha Task', state: TaskState.COMPLETED })],
     });
-    const html = generateReportHTML(run, 'client');
+    const html = generateReportHTML(run, 'worker');
     expect(html).toContain('Alpha Task');
   });
 
   it('includes flow logs when present', () => {
     const run = makeRun({ logs: ['Flow started', 'Flow ended'] });
-    const html = generateReportHTML(run, 'client');
+    const html = generateReportHTML(run, 'worker');
     expect(html).toContain('Flow started');
     expect(html).toContain('Flow ended');
   });
 
   it('includes tag badges when tags are provided', () => {
     const run = makeRun({ tags: { env: 'staging' } });
-    const html = generateReportHTML(run, 'client');
+    const html = generateReportHTML(run, 'worker');
     expect(html).toContain('env');
     expect(html).toContain('staging');
   });
 
   it('displays the correct status color for the run state', () => {
-    const html = generateReportHTML(makeRun({ state: TaskState.FAILED }), 'client');
+    const html = generateReportHTML(makeRun({ state: TaskState.FAILED }), 'worker');
     // FAILED → #ef4444
     expect(html).toContain('#ef4444');
   });
@@ -341,7 +341,7 @@ describe('generateReportHTML', () => {
         makeTask({ id: 'tr-2', taskId: 'task-2', state: TaskState.FAILED }),
       ],
     });
-    const html = generateReportHTML(run, 'client');
+    const html = generateReportHTML(run, 'worker');
     // 1 of 2 passed → 50.0%
     expect(html).toContain('50.0%');
   });

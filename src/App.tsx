@@ -6,16 +6,16 @@ import { PerfectLogo } from './components/PerfectLogo';
 import { AppHeader } from './components/AppHeader';
 import { LiveMonitorHeader } from './components/LiveMonitorHeader';
 import { SessionActionButton } from './components/SessionActionButton';
-import { ClientSelector } from './components/ClientSelector';
+import { WorkerSelector } from './components/WorkerSelector';
 import { HistoryPanel } from './components/HistoryPanel';
 import { ActiveRunCard } from './components/ActiveRunCard';
 import { StatisticsWindow } from './components/StatisticsWindow';
 import { ConfirmDialog } from './components/dialogs/ConfirmDialog';
 import { OverallProgress } from './components/progress/OverallProgress';
 import { useFlowRuns } from './hooks/useFlowRuns';
-import { useClientStatus } from './hooks/useClientStatus';
-import { useClientConfigs } from './hooks/useClientConfigs';
-import { useClientActions } from './hooks/useClientActions';
+import { useWorkerStatus } from './hooks/useWorkerStatus';
+import { useWorkerConfigs } from './hooks/useWorkerConfigs';
+import { useWorkerActions } from './hooks/useWorkerActions';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { playCompletionSound } from './utils/audioUtils';
 
@@ -27,22 +27,22 @@ export default function App() {
 
   // Custom hooks for data fetching
   const { runs, refreshRuns } = useFlowRuns();
-  const { clientStatus, setClientStatus, activeClient } = useClientStatus();
-  const { availableClients, selectedClientId, setSelectedClientId } = useClientConfigs();
+  const { workerStatus, setWorkerStatus, activeWorker } = useWorkerStatus();
+  const { availableWorkers, selectedWorkerId, setSelectedWorkerId } = useWorkerConfigs();
 
-  const { isStartingClient, handleStartClient, handleStopClient } = useClientActions(setClientStatus, setSessionStartTime, refreshRuns);
+  const { isStartingWorker, handleStartWorker, handleStopWorker } = useWorkerActions(setWorkerStatus, setSessionStartTime, refreshRuns);
 
   // UI state
   const [showStatistics, setShowStatistics] = useState(false);
-  const [showClientConfirmation, setShowClientConfirmation] = useState(false);
-  const [pendingClientId, setPendingClientId] = useState<string | null>(null);
+  const [showWorkerConfirmation, setShowWorkerConfirmation] = useState(false);
+  const [pendingWorkerId, setPendingWorkerId] = useState<string | null>(null);
   const [showStopConfirmation, setShowStopConfirmation] = useState(false);
 
-  // Theme color based on selected client
-  const selectedClient = availableClients.find(c => c.id === selectedClientId);
-  const themeColor = selectedClient?.color || activeClient?.color || DEFAULT_THEME_COLOR;
+  // Theme color based on selected worker
+  const selectedWorker = availableWorkers.find(c => c.id === selectedWorkerId);
+  const themeColor = selectedWorker?.color || activeWorker?.color || DEFAULT_THEME_COLOR;
 
-  // Auto-detect if client is running externally and flows are being registered
+  // Auto-detect if worker is running externally and flows are being registered
   useEffect(() => {
     // If there's no session start time but we have recent running/pending flows,
     // automatically set the session start time to show the live monitor
@@ -114,46 +114,46 @@ export default function App() {
     prevAllFlowsFinishedRef.current = allFlowsFinished;
   }, [allFlowsFinished, runningFlowsCount]);
 
-  // Handler to return to client selection
-  const handleReturnToClients = async () => {
-    // Stop client on server side and clear session to move flows to history
-    await handleStopClient(true);
+  // Handler to return to worker selection
+  const handleReturnToWorkers = async () => {
+    // Stop worker on server side and clear session to move flows to history
+    await handleStopWorker(true);
   };
 
-  // Handler to show confirmation dialog when switching clients
-  const handleClientClick = (clientId: string) => {
-    if (clientStatus === 'running' || clientStatus === 'starting') {
-      // Don't allow switching while client is active
+  // Handler to show confirmation dialog when switching workers
+  const handleWorkerClick = (workerId: string) => {
+    if (workerStatus === 'running' || workerStatus === 'starting') {
+      // Don't allow switching while worker is active
       return;
     }
-    setPendingClientId(clientId);
-    setShowClientConfirmation(true);
+    setPendingWorkerId(workerId);
+    setShowWorkerConfirmation(true);
   };
 
-  // Handler to confirm client selection
-  const handleConfirmClientSelection = () => {
-    if (pendingClientId) {
-      setSelectedClientId(pendingClientId);
+  // Handler to confirm worker selection
+  const handleConfirmWorkerSelection = () => {
+    if (pendingWorkerId) {
+      setSelectedWorkerId(pendingWorkerId);
     }
-    setShowClientConfirmation(false);
-    setPendingClientId(null);
+    setShowWorkerConfirmation(false);
+    setPendingWorkerId(null);
   };
 
-  // Handler to cancel client selection
-  const handleCancelClientSelection = () => {
-    setShowClientConfirmation(false);
-    setPendingClientId(null);
+  // Handler to cancel worker selection
+  const handleCancelWorkerSelection = () => {
+    setShowWorkerConfirmation(false);
+    setPendingWorkerId(null);
   };
 
   // Handler to show stop confirmation dialog
-  const handleStopClientClick = () => {
+  const handleStopWorkerClick = () => {
     setShowStopConfirmation(true);
   };
 
-  // Handler to confirm and stop client
-  const handleConfirmStopClient = () => {
+  // Handler to confirm and stop worker
+  const handleConfirmStopWorker = () => {
     setShowStopConfirmation(false);
-    handleStopClient();
+    handleStopWorker();
   };
 
   const handleDeleteRun = async (runId: string) => {
@@ -184,7 +184,7 @@ export default function App() {
       >
 
       {/* Top Navigation Bar */}
-      <AppHeader themeColor={themeColor} activeClient={activeClient} />
+      <AppHeader themeColor={themeColor} activeWorker={activeWorker} />
 
       {/* Main Content Area */}
       <main className="flex-1 flex overflow-hidden">
@@ -195,7 +195,7 @@ export default function App() {
           <LiveMonitorHeader
             themeColor={themeColor}
             runningFlowsCount={runningFlowsCount}
-            activeClient={activeClient}
+            activeWorker={activeWorker}
             onShowStatistics={() => setShowStatistics(true)}
           />
 
@@ -218,16 +218,16 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Client Control - Centered */}
-                <ClientSelector
-                  availableClients={availableClients}
-                  selectedClientId={selectedClientId}
-                  clientStatus={clientStatus}
+                {/* Worker Control - Centered */}
+                <WorkerSelector
+                  availableWorkers={availableWorkers}
+                  selectedWorkerId={selectedWorkerId}
+                  workerStatus={workerStatus}
                   themeColor={themeColor}
-                  isStartingClient={isStartingClient}
-                  onClientClick={handleClientClick}
-                  onStart={() => handleStartClient(selectedClientId)}
-                  onStop={handleStopClientClick}
+                  isStartingWorker={isStartingWorker}
+                  onWorkerClick={handleWorkerClick}
+                  onStart={() => handleStartWorker(selectedWorkerId)}
+                  onStop={handleStopWorkerClick}
                 />
               </div>
             ) : (
@@ -243,16 +243,16 @@ export default function App() {
 
                 <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 pb-6">
                   {activeRuns.map(run => (
-                    <ActiveRunCard key={run.id} run={run} clientColor={activeClient?.color} />
+                    <ActiveRunCard key={run.id} run={run} clientColor={activeWorker?.color} />
                   ))}
                 </div>
 
-                {/* Action Button - Stop or Return to Client Selection */}
+                {/* Action Button - Stop or Return to Worker Selection */}
                 <SessionActionButton
                   allFlowsFinished={allFlowsFinished}
                   themeColor={themeColor}
-                  onReturn={handleReturnToClients}
-                  onStop={handleStopClientClick}
+                  onReturn={handleReturnToWorkers}
+                  onStop={handleStopWorkerClick}
                 />
               </>
             )}
@@ -272,21 +272,21 @@ export default function App() {
         <StatisticsWindow onClose={() => setShowStatistics(false)} />
       )}
 
-      {/* Client Confirmation Dialog */}
-      {showClientConfirmation && pendingClientId && (() => {
-        const pendingClient = availableClients.find((c: any) => c.id === pendingClientId);
-        const confirmThemeColor = pendingClient?.color || themeColor;
+      {/* Worker Confirmation Dialog */}
+      {showWorkerConfirmation && pendingWorkerId && (() => {
+        const pendingWorker = availableWorkers.find((c: any) => c.id === pendingWorkerId);
+        const confirmThemeColor = pendingWorker?.color || themeColor;
 
         return (
           <ConfirmDialog
-            isOpen={showClientConfirmation}
-            title="Confirm Client Selection"
+            isOpen={showWorkerConfirmation}
+            title="Confirm Worker Selection"
             icon={ChevronRight}
             message="Are you sure you want to choose"
-            highlightText={pendingClient?.name}
+            highlightText={pendingWorker?.name}
             themeColor={confirmThemeColor}
-            onConfirm={handleConfirmClientSelection}
-            onCancel={handleCancelClientSelection}
+            onConfirm={handleConfirmWorkerSelection}
+            onCancel={handleCancelWorkerSelection}
           />
         );
       })()}
@@ -297,10 +297,10 @@ export default function App() {
         title="Confirm Stop"
         icon={XCircle}
         message="Are you sure you want to stop"
-        highlightText={activeClient?.name || 'the client'}
+        highlightText={activeWorker?.name || 'the worker'}
         themeColor="#ef4444"
         confirmLabel="Stop"
-        onConfirm={handleConfirmStopClient}
+        onConfirm={handleConfirmStopWorker}
         onCancel={() => setShowStopConfirmation(false)}
       />
 

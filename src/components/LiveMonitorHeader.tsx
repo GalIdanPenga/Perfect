@@ -1,15 +1,15 @@
 import { Activity, BarChart3 } from 'lucide-react';
-import { ClientConfig } from '../types';
+import { WorkerConfig } from '../types';
 
 interface LiveMonitorHeaderProps {
   themeColor: string;
   runningFlowsCount: number;
-  activeClient: ClientConfig | null;
+  activeWorker: WorkerConfig | null;
   onShowStatistics: () => void;
 }
 
 /** Dashboard header bar: live-monitor title, active badges, and Statistics button. */
-export function LiveMonitorHeader({ themeColor, runningFlowsCount, activeClient, onShowStatistics }: LiveMonitorHeaderProps) {
+export function LiveMonitorHeader({ themeColor, runningFlowsCount, activeWorker, onShowStatistics }: LiveMonitorHeaderProps) {
   return (
     <div
       className="p-3 border-b flex justify-between items-center shadow-sm backdrop-blur-sm transition-all duration-700"
@@ -39,22 +39,22 @@ export function LiveMonitorHeader({ themeColor, runningFlowsCount, activeClient,
             {runningFlowsCount} ACTIVE
           </span>
         )}
-        {/* Active Client Indicator */}
-        {activeClient && activeClient.color && (
+        {/* Active Worker Indicator */}
+        {activeWorker && activeWorker.color && (
           <span
             className="px-2.5 py-1 rounded-md text-xs font-bold border-2 flex items-center gap-1.5 transition-all duration-700"
             style={{
-              backgroundColor: `${activeClient.color}18`,
-              borderColor: activeClient.color,
-              color: activeClient.color,
-              boxShadow: `0 0 20px ${activeClient.color}40`
+              backgroundColor: `${activeWorker.color}18`,
+              borderColor: activeWorker.color,
+              color: activeWorker.color,
+              boxShadow: `0 0 20px ${activeWorker.color}40`
             }}
           >
             <div
               className="w-1.5 h-1.5 rounded-full animate-pulse"
-              style={{ backgroundColor: activeClient.color }}
+              style={{ backgroundColor: activeWorker.color }}
             ></div>
-            {activeClient.name}
+            {activeWorker.name}
           </span>
         )}
       </h2>

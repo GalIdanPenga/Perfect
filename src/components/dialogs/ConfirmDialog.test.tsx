@@ -57,8 +57,8 @@ describe('ConfirmDialog', () => {
   });
 
   it('renders highlightText in a highlighted span', () => {
-    render(<ConfirmDialog {...baseProps} highlightText="my-client" />);
-    expect(screen.getByText('my-client')).toBeTruthy();
+    render(<ConfirmDialog {...baseProps} highlightText="my-worker" />);
+    expect(screen.getByText('my-worker')).toBeTruthy();
   });
 
   it('applies themeColor to confirm button background', () => {

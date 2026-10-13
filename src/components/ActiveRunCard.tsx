@@ -33,7 +33,7 @@ export function ActiveRunCard({ run, clientColor }: ActiveRunCardProps) {
     }
   }, [run.logs.length, isRunning]);
 
-  // Create dynamic styles based on client color (more subtle)
+  // Create dynamic styles based on worker color (more subtle)
   const glowColor = clientColor ? `${clientColor}20` : 'rgba(71, 85, 105, 0.15)'; // Reduced opacity
   const bgGradient = clientColor
     ? `linear-gradient(135deg, ${clientColor}05 0%, transparent 50%)`

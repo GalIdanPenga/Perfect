@@ -2,11 +2,11 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { LiveMonitorHeader } from './LiveMonitorHeader';
-import { ClientConfig } from '../types';
+import { WorkerConfig } from '../types';
 
-const client: ClientConfig = {
+const worker: WorkerConfig = {
   id: 'c1',
-  name: 'My Client',
+  name: 'My Worker',
   description: '',
   workingDir: '.',
   command: 'python',
@@ -17,7 +17,7 @@ const client: ClientConfig = {
 const baseProps = {
   themeColor: '#0ea5e9',
   runningFlowsCount: 0,
-  activeClient: null,
+  activeWorker: null,
   onShowStatistics: vi.fn(),
 };
 
@@ -35,9 +35,9 @@ describe('LiveMonitorHeader', () => {
     expect(screen.getByText(/3 ACTIVE/)).toBeTruthy();
   });
 
-  it('shows the active client name when present', () => {
-    render(<LiveMonitorHeader {...baseProps} activeClient={client} />);
-    expect(screen.getByText('My Client')).toBeTruthy();
+  it('shows the active worker name when present', () => {
+    render(<LiveMonitorHeader {...baseProps} activeWorker={worker} />);
+    expect(screen.getByText('My Worker')).toBeTruthy();
   });
 
   it('calls onShowStatistics when the Statistics button is clicked', () => {

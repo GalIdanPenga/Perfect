@@ -105,12 +105,12 @@ describe('buildRunTasks — learned-structure path', () => {
 
 describe('buildNewRun', () => {
   it('assembles a RUNNING run at 0 progress with the given metadata and tasks', () => {
-    const run = buildNewRun(makeFlow(), 'staging', '#abcdef', 'Client X', makeStatsStub({ structure: null }));
+    const run = buildNewRun(makeFlow(), 'staging', '#abcdef', 'Worker X', makeStatsStub({ structure: null }));
     expect(run.state).toBe(TaskState.RUNNING);
     expect(run.progress).toBe(0);
     expect(run.configuration).toBe('staging');
     expect(run.clientColor).toBe('#abcdef');
-    expect(run.clientName).toBe('Client X');
+    expect(run.clientName).toBe('Worker X');
     expect(run.flowId).toBe('flow-1');
     expect(run.flowName).toBe('MyFlow');
     expect(run.tasks).toHaveLength(2);

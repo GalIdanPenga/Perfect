@@ -61,9 +61,9 @@ describe('useLocalStorage', () => {
 
   it('preserves a legacy raw (non-JSON) string value for string stores', () => {
     // Simulates a value written by pre-migration code via setItem(key, rawString).
-    localStorage.setItem('selectedClientId', 'client-abc');
-    const { result } = renderHook(() => useLocalStorage('selectedClientId', ''));
-    expect(result.current[0]).toBe('client-abc');
+    localStorage.setItem('selectedWorkerId', 'worker-abc');
+    const { result } = renderHook(() => useLocalStorage('selectedWorkerId', ''));
+    expect(result.current[0]).toBe('worker-abc');
   });
 
   it('different keys are independent', () => {

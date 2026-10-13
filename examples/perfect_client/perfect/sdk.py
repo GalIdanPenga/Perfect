@@ -339,7 +339,7 @@ class WorkflowRegistry:
 
     @property
     def heartbeat_enabled(self) -> bool:
-        """Whether this client sends heartbeats to the backend."""
+        """Whether this worker sends heartbeats to the backend."""
         return self._heartbeat_enabled
 
     def _start_heartbeat(self):
@@ -378,7 +378,7 @@ class WorkflowRegistry:
             if self._heartbeat_enabled:
                 self._start_heartbeat()
             elif not self._mock:
-                print("[Perfect SDK] Heartbeat disabled: the backend will not detect if this client crashes")
+                print("[Perfect SDK] Heartbeat disabled: the backend will not detect if this worker crashes")
 
             self._register_pending_flows()
 
@@ -901,7 +901,7 @@ def configure(
 
     Args:
         backend_url: URL of the Perfect backend server
-        client_id: Unique identifier for this client
+        client_id: Unique identifier for this worker
         mock: If True, run in mock mode without backend
         heartbeat: If False, send no heartbeats. The backend then cannot detect
             a crashed client, and its running flows stay RUNNING until stopped
@@ -986,7 +986,7 @@ def listen():
     client = _default_registry._client
 
     print("\n" + "=" * 60)
-    print("Perfect Python Client - Listening for Execution Requests")
+    print("Perfect Worker - Listening for Execution Requests")
     print("=" * 60)
 
     # Track completion
@@ -997,10 +997,10 @@ def listen():
     def on_flow_complete(flow_name: str):
         with lock:
             completed_count['value'] += 1
-            print(f"\n[Perfect Client] Completed {completed_count['value']}/{total_flows} flows")
+            print(f"\n[Perfect Worker] Completed {completed_count['value']}/{total_flows} flows")
 
             if completed_count['value'] >= total_flows:
-                print("[Perfect Client] All flows completed. Shutting down...")
+                print("[Perfect Worker] All flows completed. Shutting down...")
                 client.stop_listening()
 
     try:
@@ -1011,7 +1011,7 @@ def listen():
             heartbeat_interval=_default_registry._heartbeat_interval,
         )
     except KeyboardInterrupt:
-        print("\n\n[Perfect Client] Shutting down...")
+        print("\n\n[Perfect Worker] Shutting down...")
     finally:
         client.close()
 
@@ -1029,7 +1029,7 @@ def connect(
 
     Args:
         backend_url: URL of the Perfect backend server
-        client_id: Unique identifier for this client
+        client_id: Unique identifier for this worker
         mock: If True, run in mock mode without backend
 
     Example:

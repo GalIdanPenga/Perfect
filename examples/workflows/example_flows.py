@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Perfect Python Client - Flow Definitions
+Perfect Worker - Flow Definitions
 
 This file demonstrates Perfect's fully automatic Python SDK.
 Just define tasks/flows with decorators and call them. That's it!

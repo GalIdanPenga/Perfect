@@ -3,7 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import clientRoutes, { getActiveClient } from './routes/clientRoutes';
+import workerRoutes, { getActiveWorker } from './routes/workerRoutes';
 import engineRoutes from './routes/engineRoutes';
 import { flowEngine } from './engine/FlowEngine';
 import { statsDb } from './database/db';
@@ -20,7 +20,8 @@ app.use(express.json());
 // Serve static reports
 app.use('/Reports', express.static(path.join(__dirname, '../Reports')));
 
-app.use('/api/client', clientRoutes);
+app.use('/api/worker', workerRoutes);
+app.use('/api/client', workerRoutes); // legacy alias, kept so older callers keep working
 app.use('/api/engine', engineRoutes);
 
 // Queue for pending execution requests
@@ -43,11 +44,11 @@ flowEngine.subscribeToFlowTriggers((runId: string, flowName: string, configurati
     configuration: configuration
   };
 
-  // If there's a client waiting, respond immediately
+  // If there's a worker waiting, respond immediately
   if (pendingResponses.length > 0) {
     const res = pendingResponses.shift();
     res?.json(executionRequest);
-    console.log(`[Server] Sent execution request to waiting Python client`);
+    console.log(`[Server] Sent execution request to waiting worker`);
   } else {
     // Otherwise queue it for later
     executionQueue.push(executionRequest);
@@ -55,7 +56,7 @@ flowEngine.subscribeToFlowTriggers((runId: string, flowName: string, configurati
   }
 });
 
-// Legacy endpoints for Python client compatibility
+// Legacy endpoints for worker compatibility
 app.post('/api/flows', (req, res) => {
   try {
     const { autoTrigger, autoTriggerConfig, ...flowData } = req.body;
@@ -64,10 +65,10 @@ app.post('/api/flows', (req, res) => {
     // Only auto-trigger if autoTrigger flag is explicitly true
     if (autoTrigger === true) {
       const config = autoTriggerConfig || 'development';
-      const activeClient = getActiveClient();
-      const clientColor = activeClient?.color;
-      const clientName = activeClient?.name;
-      console.log(`[Server] Auto-triggering flow '${flow.name}' with config: ${config}${clientColor ? ` and client color: ${clientColor}` : ''}${clientName ? ` for client: ${clientName}` : ''}`);
+      const activeWorker = getActiveWorker();
+      const clientColor = activeWorker?.color;
+      const clientName = activeWorker?.name;
+      console.log(`[Server] Auto-triggering flow '${flow.name}' with config: ${config}${clientColor ? ` and worker color: ${clientColor}` : ''}${clientName ? ` for worker: ${clientName}` : ''}`);
       flowEngine.triggerFlow(flow.id, config, clientColor, clientName);
     } else {
       console.log(`[Server] Registered flow '${flow.name}' without auto-triggering (autoTrigger=${autoTrigger})`);
@@ -108,7 +109,7 @@ app.post('/api/runs/:runId/tasks/:taskIndex/state', (req, res) => {
   }
 });
 
-// Flow completion endpoint - signals that client finished executing a flow
+// Flow completion endpoint - signals that worker finished executing a flow
 app.post('/api/runs/:runId/complete', (req, res) => {
   try {
     const { runId } = req.params;
@@ -126,7 +127,7 @@ app.post('/api/runs/:runId/complete', (req, res) => {
   }
 });
 
-// Heartbeat endpoint for Python client to signal it's alive
+// Heartbeat endpoint for worker to signal it's alive
 app.post('/api/heartbeat', (req, res) => {
   flowEngine.updateHeartbeat();
   res.json({ success: true });
@@ -277,16 +278,16 @@ app.get('/api/reports/run/:runId', (req, res) => {
   }
 });
 
-// Long-poll endpoint for Python client to receive execution requests
+// Long-poll endpoint for worker to receive execution requests
 app.get('/api/execution-requests', (req, res) => {
   // Polling is not a heartbeat. Only POST /api/heartbeat arms the watchdog, so a
-  // client that opted out of heartbeats is never failed for a stalled poll.
+  // worker that opted out of heartbeats is never failed for a stalled poll.
 
   // If there's a queued request, return it immediately
   if (executionQueue.length > 0) {
     const executionRequest = executionQueue.shift()!;
     res.json(executionRequest);
-    console.log(`[Server] Sent queued execution request to Python client`);
+    console.log(`[Server] Sent queued execution request to worker`);
   } else {
     // Otherwise, hold the connection for long-polling (30 seconds timeout)
     pendingResponses.push(res);
@@ -299,7 +300,7 @@ app.get('/api/execution-requests', (req, res) => {
       }
     }, 30000); // 30 second long-poll timeout
 
-    // Clean up timeout if client disconnects
+    // Clean up timeout if worker disconnects
     req.on('close', () => {
       clearTimeout(timeout);
       const index = pendingResponses.indexOf(res);

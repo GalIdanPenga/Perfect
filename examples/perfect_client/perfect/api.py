@@ -447,7 +447,7 @@ class PerfectAPIClient:
                 # (e.g. the session being swapped by stop_listening() mid-call)
                 # must not kill the thread, or the backend would fail every run.
                 if not warned:
-                    print(f"[Perfect Client] Heartbeat error (will keep trying): {e!r}")
+                    print(f"[Perfect Worker] Heartbeat error (will keep trying): {e!r}")
                     warned = True
             if stop.wait(interval):
                 return
@@ -483,11 +483,11 @@ class PerfectAPIClient:
         if not self._execution_callback:
             raise ValueError("No execution callback registered. Call on_execution_request() first.")
 
-        print(f"[Perfect Client] Listening for execution requests from {self.base_url}...")
+        print(f"[Perfect Worker] Listening for execution requests from {self.base_url}...")
         started_heartbeat = heartbeat and self.start_heartbeat(heartbeat_interval)
         if started_heartbeat:
-            print(f"[Perfect Client] Sending heartbeats every {heartbeat_interval:g} seconds...")
-        print("[Perfect Client] Press Ctrl+C to stop")
+            print(f"[Perfect Worker] Sending heartbeats every {heartbeat_interval:g} seconds...")
+        print("[Perfect Worker] Press Ctrl+C to stop")
 
         self._listening = True
 
@@ -516,12 +516,12 @@ class PerfectAPIClient:
                     pass
                 except requests.exceptions.RequestException as e:
                     if self._listening:  # Only log if still listening
-                        print(f"[Perfect Client] Connection error: {e}")
-                        print(f"[Perfect Client] Retrying in {poll_interval}s...")
+                        print(f"[Perfect Worker] Connection error: {e}")
+                        print(f"[Perfect Worker] Retrying in {poll_interval}s...")
                         time.sleep(poll_interval)
 
         except KeyboardInterrupt:
-            print("\n[Perfect Client] Shutting down...")
+            print("\n[Perfect Worker] Shutting down...")
         finally:
             self._listening = False
             if started_heartbeat:

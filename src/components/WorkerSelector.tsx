@@ -1,51 +1,51 @@
 import { Play, XCircle } from 'lucide-react';
-import { ClientConfig } from '../types';
+import { WorkerConfig } from '../types';
 import { darkenHexColor } from '../utils/colorUtils';
 
-interface ClientSelectorProps {
-  availableClients: ClientConfig[];
-  selectedClientId: string | null;
-  clientStatus: 'stopped' | 'starting' | 'running' | 'error';
+interface WorkerSelectorProps {
+  availableWorkers: WorkerConfig[];
+  selectedWorkerId: string | null;
+  workerStatus: 'stopped' | 'starting' | 'running' | 'error';
   themeColor: string;
-  isStartingClient: boolean;
-  onClientClick: (clientId: string) => void;
+  isStartingWorker: boolean;
+  onWorkerClick: (workerId: string) => void;
   onStart: () => void;
   onStop: () => void;
 }
 
-export function ClientSelector({
-  availableClients,
-  selectedClientId,
-  clientStatus,
+export function WorkerSelector({
+  availableWorkers,
+  selectedWorkerId,
+  workerStatus,
   themeColor,
-  isStartingClient,
-  onClientClick,
+  isStartingWorker,
+  onWorkerClick,
   onStart,
   onStop,
-}: ClientSelectorProps) {
-  const isActive = clientStatus === 'running' || clientStatus === 'starting';
+}: WorkerSelectorProps) {
+  const isActive = workerStatus === 'running' || workerStatus === 'starting';
 
   return (
     <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center max-w-md w-full shadow-2xl">
-      <h3 className="text-base font-bold text-slate-300 mb-1">Python Client</h3>
+      <h3 className="text-base font-bold text-slate-300 mb-1">Worker</h3>
       <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-        Start the Python client to register and automatically execute workflows.
+        Start the worker to register and automatically execute workflows.
       </p>
 
-      {availableClients.length > 0 && (
+      {availableWorkers.length > 0 && (
         <div className="mb-4 text-left">
           <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-            Select Client Configuration
+            Select Worker Configuration
           </label>
           <div className="space-y-1.5">
-            {availableClients.map(client => {
-              const isSelected = selectedClientId === client.id;
-              const clientColor = client.color || '#0ea5e9';
+            {availableWorkers.map(worker => {
+              const isSelected = selectedWorkerId === worker.id;
+              const clientColor = worker.color || '#0ea5e9';
 
               return (
                 <button
-                  key={client.id}
-                  onClick={() => onClientClick(client.id)}
+                  key={worker.id}
+                  onClick={() => onWorkerClick(worker.id)}
                   disabled={isActive}
                   className="w-full text-left p-3 rounded-lg border-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
                   style={{
@@ -58,19 +58,19 @@ export function ClientSelector({
                       : 'none'
                   }}
                 >
-                  {isSelected && client.color && (
+                  {isSelected && worker.color && (
                     <div
                       className="absolute inset-0 rounded-lg opacity-50 blur-md -z-10"
                       style={{ background: clientColor }}
                     />
                   )}
                   <div className="flex items-start gap-2.5">
-                    {client.color && (
+                    {worker.color && (
                       <div
                         className="mt-0.5 w-6 h-6 rounded-md flex items-center justify-center shadow-lg relative"
                         style={{
-                          background: `linear-gradient(135deg, ${client.color} 0%, ${client.color}cc 100%)`,
-                          boxShadow: `0 2px 8px ${client.color}60, inset 0 1px 0 rgba(255,255,255,0.2)`
+                          background: `linear-gradient(135deg, ${worker.color} 0%, ${worker.color}cc 100%)`,
+                          boxShadow: `0 2px 8px ${worker.color}60, inset 0 1px 0 rgba(255,255,255,0.2)`
                         }}
                       >
                         <div className="w-2 h-2 bg-white/90 rounded-full" />
@@ -81,10 +81,10 @@ export function ClientSelector({
                         className="text-sm font-bold mb-0.5 transition-colors"
                         style={{ color: isSelected ? clientColor : '#cbd5e1' }}
                       >
-                        {client.name}
+                        {worker.name}
                       </div>
                       <div className="text-xs text-slate-500 leading-snug">
-                        {client.description}
+                        {worker.description}
                       </div>
                     </div>
                     <div
@@ -103,28 +103,28 @@ export function ClientSelector({
         </div>
       )}
 
-      {clientStatus === 'stopped' || clientStatus === 'error' ? (
+      {workerStatus === 'stopped' || workerStatus === 'error' ? (
         <button
           onClick={onStart}
-          disabled={isStartingClient}
+          disabled={isStartingWorker}
           className="w-full flex items-center justify-center gap-2 px-5 py-2.5 text-white rounded-lg font-medium text-sm transition-all shadow-lg disabled:text-slate-500 disabled:cursor-not-allowed active:scale-95 disabled:bg-slate-700"
           style={{
-            backgroundColor: isStartingClient ? '#334155' : themeColor,
-            boxShadow: isStartingClient ? 'none' : `0 10px 30px ${themeColor}40, 0 0 20px ${themeColor}30`
+            backgroundColor: isStartingWorker ? '#334155' : themeColor,
+            boxShadow: isStartingWorker ? 'none' : `0 10px 30px ${themeColor}40, 0 0 20px ${themeColor}30`
           }}
           onMouseEnter={(e) => {
-            if (!isStartingClient) {
+            if (!isStartingWorker) {
               e.currentTarget.style.backgroundColor = darkenHexColor(themeColor, 20);
             }
           }}
           onMouseLeave={(e) => {
-            if (!isStartingClient) {
+            if (!isStartingWorker) {
               e.currentTarget.style.backgroundColor = themeColor;
             }
           }}
         >
           <Play size={20} className="fill-current" />
-          {isStartingClient ? 'Starting...' : 'Start Python Client'}
+          {isStartingWorker ? 'Starting...' : 'Start Worker'}
         </button>
       ) : (
         <button
@@ -132,13 +132,13 @@ export function ClientSelector({
           className="w-full flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-700 hover:bg-rose-500 text-slate-300 hover:text-white rounded-lg font-medium text-sm transition-all shadow-lg active:scale-95"
         >
           <XCircle size={18} />
-          Stop Client
+          Stop Worker
         </button>
       )}
 
       <p className="text-xs text-slate-500 mt-3 leading-snug">
-        {clientStatus === 'running'
-          ? 'Client is connected. Flows will auto-execute upon registration.'
+        {workerStatus === 'running'
+          ? 'Worker is connected. Flows will auto-execute upon registration.'
           : 'Once started, all registered flows will execute automatically.'}
       </p>
     </div>

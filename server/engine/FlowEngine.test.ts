@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } 
 import { FlowEngine, flowEngine } from './FlowEngine';
 import { createDatabase } from '../database/db';
 import { TaskState, FlowRegistrationPayload } from '../types';
-import { getActiveClient } from '../routes/clientRoutes';
+import { getActiveWorker } from '../routes/workerRoutes';
 import { generateFlowReport } from '../utils/reportGenerator';
 
 // ---------------------------------------------------------------------------
@@ -10,8 +10,8 @@ import { generateFlowReport } from '../utils/reportGenerator';
 //
 // 1. reportGenerator – prevents FlowEngine from writing HTML files to disk
 //    when flows complete or fail during tests.
-// 2. clientRoutes – prevents the circular-import singleton from affecting
-//    our isolated test engine and keeps getActiveClient() returning null.
+// 2. workerRoutes – prevents the circular-import singleton from affecting
+//    our isolated test engine and keeps getActiveWorker() returning null.
 // ---------------------------------------------------------------------------
 
 vi.mock('../utils/reportGenerator', () => ({
@@ -19,8 +19,8 @@ vi.mock('../utils/reportGenerator', () => ({
   generateReportHTML: vi.fn().mockReturnValue('<html></html>'),
 }));
 
-vi.mock('../routes/clientRoutes', () => ({
-  getActiveClient: vi.fn().mockReturnValue(null),
+vi.mock('../routes/workerRoutes', () => ({
+  getActiveWorker: vi.fn().mockReturnValue(null),
 }));
 
 // ---------------------------------------------------------------------------
@@ -339,7 +339,7 @@ describe('FlowEngine', () => {
       const flow = engine.registerFlow(makePayload('NoHeartbeatFlow', 1));
       const runId = engine.createRun(flow.id)!;
 
-      // lastClientHeartbeat is null – checkHeartbeat should return early.
+      // lastWorkerHeartbeat is null – checkHeartbeat should return early.
       (engine as any).checkHeartbeat();
 
       const run = engine.getRuns().find(r => r.id === runId)!;
@@ -373,9 +373,9 @@ describe('FlowEngine', () => {
 
     it('resetHeartbeat() disarms the watchdog so a stale heartbeat cannot fail runs', () => {
       engine.updateHeartbeat();
-      engine.resetHeartbeat();                     // e.g. a new client without heartbeats starts
+      engine.resetHeartbeat();                     // e.g. a new worker without heartbeats starts
 
-      const flow = engine.registerFlow(makePayload('NoHeartbeatClientFlow', 1));
+      const flow = engine.registerFlow(makePayload('NoHeartbeatWorkerFlow', 1));
       const runId = engine.createRun(flow.id)!;
       vi.setSystemTime(Date.now() + 11_000);
       (engine as any).checkHeartbeat();
@@ -385,14 +385,14 @@ describe('FlowEngine', () => {
     });
 
     it('disarms after a timeout even when nothing was running', () => {
-      // A heartbeat client finishes and exits: its last heartbeat goes stale with no runs.
+      // A heartbeat worker finishes and exits: its last heartbeat goes stale with no runs.
       engine.updateHeartbeat();
       vi.setSystemTime(Date.now() + 11_000);
       (engine as any).checkHeartbeat();
-      expect((engine as any).lastClientHeartbeat).toBeNull();
+      expect((engine as any).lastWorkerHeartbeat).toBeNull();
 
-      // A later client that sends no heartbeats must not be failed by the stale timestamp.
-      const flow = engine.registerFlow(makePayload('LaterClientFlow', 1));
+      // A later worker that sends no heartbeats must not be failed by the stale timestamp.
+      const flow = engine.registerFlow(makePayload('LaterWorkerFlow', 1));
       const runId = engine.createRun(flow.id)!;
       vi.setSystemTime(Date.now() + 11_000);
       (engine as any).checkHeartbeat();
@@ -416,7 +416,7 @@ describe('FlowEngine', () => {
     });
   });
 
-  // ── Slow-task detection uses the active client's settings ──────────────────
+  // ── Slow-task detection uses the active worker's settings ──────────────────
 
   describe('slow-task detection settings', () => {
     // Seed two 1000ms samples so avg=1000, stdDev=0 → floor 100ms. A 1600ms
@@ -435,36 +435,36 @@ describe('FlowEngine', () => {
       eng.destroy();
       return task.performanceWarning;
     };
-    const withClient = (performanceMinOverageMs: unknown, performanceSensitivity: unknown = 'normal') =>
-      vi.mocked(getActiveClient).mockReturnValue({ id: 'c', name: 'C', performanceSensitivity, performanceMinOverageMs } as any);
+    const withWorker = (performanceMinOverageMs: unknown, performanceSensitivity: unknown = 'normal') =>
+      vi.mocked(getActiveWorker).mockReturnValue({ id: 'c', name: 'C', performanceSensitivity, performanceMinOverageMs } as any);
 
     afterEach(() => {
-      vi.mocked(getActiveClient).mockReturnValue(null);
+      vi.mocked(getActiveWorker).mockReturnValue(null);
     });
 
-    it('falls back to the 1000ms default with no active client', () => {
+    it('falls back to the 1000ms default with no active worker', () => {
       expect(completeAt(1600)).toBeUndefined();
       expect(completeAt(2100)).toBeDefined();
     });
 
-    it("uses the active client's performanceMinOverageMs", () => {
-      withClient(500);
+    it("uses the active worker's performanceMinOverageMs", () => {
+      withWorker(500);
       expect(completeAt(1600)).toBeDefined();
-      withClient(1000);
+      withWorker(1000);
       expect(completeAt(1600)).toBeUndefined();
-      withClient(0);
+      withWorker(0);
       expect(completeAt(1600)).toBeDefined();
     });
 
-    it('falls back to the default when the client value is invalid', () => {
-      withClient(-5);
+    it('falls back to the default when the worker value is invalid', () => {
+      withWorker(-5);
       expect(completeAt(1600)).toBeUndefined();
-      withClient('500');
+      withWorker('500');
       expect(completeAt(1600)).toBeUndefined();
     });
 
     it('treats an unknown sensitivity as normal instead of throwing inside the engine', () => {
-      withClient(0, 'high');
+      withWorker(0, 'high');
       // zScore=6.0 at 1600: warns under normal, so an unknown level behaves like normal
       expect(() => completeAt(1600)).not.toThrow();
       expect(completeAt(1600)).toBeDefined();

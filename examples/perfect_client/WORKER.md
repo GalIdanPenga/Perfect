@@ -1,4 +1,4 @@
-# Perfect Python Client
+# Perfect Worker
 
 A Python SDK for defining and orchestrating data workflows with the Perfect platform.
 
@@ -92,7 +92,7 @@ if __name__ == "__main__":
 
 ### Configuration (Optional)
 
-By default, the SDK auto-connects to `http://localhost:3000` with client ID `perfect_example`.
+By default, the SDK auto-connects to `http://localhost:3000` with worker ID `perfect_example`.
 
 To customize, use `configure()`:
 
@@ -101,7 +101,7 @@ from perfect.sdk import configure
 
 configure(
     backend_url="http://localhost:3000",  # Perfect backend URL
-    client_id="my_custom_client",         # Unique client identifier
+    client_id="my_custom_worker",         # Unique worker identifier
     mock=False,                            # Set to True for testing without backend
     heartbeat=True,                        # Set to False to skip crash detection
     heartbeat_interval=3.0                 # Seconds between heartbeats
@@ -112,7 +112,7 @@ Call `configure()` before calling any flows if you need custom settings. Any arg
 
 ### Heartbeat
 
-When the SDK first connects, it starts sending a heartbeat to the backend every 3 seconds. If heartbeats stop for 10 seconds, the backend marks this client's running flows as failed. That is how a crashed or killed client gets detected.
+When the SDK first connects, it starts sending a heartbeat to the backend every 3 seconds. If heartbeats stop for 10 seconds, the backend marks this worker's running flows as failed. That is how a crashed or killed worker gets detected.
 
 To run without heartbeat checks, turn them off in any of these ways:
 
@@ -120,11 +120,11 @@ To run without heartbeat checks, turn them off in any of these ways:
 |---|---|
 | Environment | `PERFECT_HEARTBEAT=0` |
 | Code | `configure(heartbeat=False)` |
-| UI-launched client | `"heartbeat": false` in `server/clients.json` |
+| UI-launched worker | `"heartbeat": false` in `server/workers.json` |
 
 `PERFECT_HEARTBEAT_INTERVAL` sets the interval from the environment. Keep it well below 10 seconds.
 
-Without heartbeats, a crashed client's flows stay RUNNING until you press Stop in the UI or restart the backend. The exception is a client started from the UI: the backend owns that process and fails its flows the moment it exits unexpectedly, whatever the heartbeat setting.
+Without heartbeats, a crashed worker's flows stay RUNNING until you press Stop in the UI or restart the backend. The exception is a worker started from the UI: the backend owns that process and fails its flows the moment it exits unexpectedly, whatever the heartbeat setting.
 
 ### Listen Function
 
@@ -133,14 +133,14 @@ listen()  # Start listening for execution requests
 ```
 
 Call `listen()` after you've called all the flows you want to register. It:
-- Ensures the client is connected (auto-connects if needed)
+- Ensures the worker is connected (auto-connects if needed)
 - Starts listening for execution requests from the Perfect UI
 - Blocks until interrupted (Ctrl+C)
 - Automatically shuts down gracefully
 
 ## Example Flows
 
-The `client_example.py` includes 4 production-ready workflow examples:
+The `workflows/example_flows.py` includes 4 production-ready workflow examples:
 
 1. **Daily Sales ETL** - Extract sales data, transform, and load to warehouse
 2. **Churn Model Retraining** - ML pipeline for model training and deployment
@@ -151,8 +151,8 @@ The `client_example.py` includes 4 production-ready workflow examples:
 
 ```
 ┌─────────────────┐
-│  Python Client  │  <- Your workflow definitions
-│  client_example │
+│  Worker  │  <- Your workflow definitions
+│  worker_example │
 └────────┬────────┘
          │
          │ HTTP API
@@ -207,9 +207,9 @@ IntervalSchedule("*/5 * * * *")  # Every 5 minutes
 ```
 perfect/
 ├── perfect/sdk.py                     # Python SDK (decorators, engine)
-├── client_example.py      # Example workflows
+├── workflows/example_flows.py      # Example workflows
 ├── requirements.txt       # Python dependencies
-└── PYTHON_CLIENT.md      # This file
+└── WORKER.md      # This file
 ```
 
 ### Running Tests
@@ -221,13 +221,13 @@ pytest tests/
 ### Type Checking
 
 ```bash
-mypy perfect/sdk.py client_example.py
+mypy perfect/sdk.py workflows/example_flows.py
 ```
 
 ### Code Formatting
 
 ```bash
-black perfect/sdk.py client_example.py
+black perfect/sdk.py workflows/example_flows.py
 ```
 
 ## Dynamic Task Execution
@@ -287,8 +287,8 @@ Once flows are registered, they appear in the Perfect web dashboard where you ca
 
 ## Next Steps
 
-1. Modify `client_example.py` to add your own flows
-2. Run the client to register flows with the engine
+1. Modify `workflows/example_flows.py` to add your own flows
+2. Run the worker to register flows with the engine
 3. Open the Perfect UI to monitor and trigger executions
 4. Build production workflows for ETL, ML, reporting, and more!
 

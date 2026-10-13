@@ -11,7 +11,7 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
 - 🎨 **Modern UI** - Beautiful cyberpunk-themed dashboard
 - 💾 **Persistent Storage** - SQLite database for flows and execution history
 - 🔍 **Advanced Filtering** - Search and filter execution history by status, flow name, date, or tag values
-- 💓 **Client Heartbeat** - Automatic failure detection when Python client disconnects
+- 💓 **Worker Heartbeat** - Automatic failure detection when worker disconnects
 - 📈 **Performance Analytics** - Track task performance with configurable sensitivity levels for outlier detection
 
 ## Run Locally
@@ -36,7 +36,7 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
 
 3. Open http://localhost:5173 in your browser
 
-### Python Client
+### Worker
 
 1. The Python SDK has no external dependencies (uses only standard library)
 
@@ -45,7 +45,7 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
    python examples/workflows/example_flows.py
    ```
 
-3. The Python client will:
+3. The worker will:
    - Register flows with the Perfect backend
    - Listen for execution requests from the UI
    - Execute tasks and report progress in real-time
@@ -71,7 +71,7 @@ perfect/
 │   ├── hooks/                     # Data-fetching, storage & animation hooks
 │   ├── utils/                     # Pure helpers (format, color, filter, progress, audio)
 │   ├── constants/                 # API URL, polling intervals, theme color
-│   └── types/                     # Client-only types (re-exports shared/)
+│   └── types/                     # Frontend-only types (re-exports shared/)
 ├── server/                        # Express backend
 │   ├── index.ts                   # Server entry + top-level routes
 │   ├── engine/
@@ -88,7 +88,7 @@ perfect/
 │   │   └── mappers.ts             # Row → domain-object mapping
 │   ├── routes/
 │   │   ├── engineRoutes.ts        # Flow and run API endpoints
-│   │   └── clientRoutes.ts        # Python client communication
+│   │   └── workerRoutes.ts        # worker communication
 │   ├── utils/
 │   │   ├── reportGenerator.ts     # HTML report generation
 │   │   └── reportStyles.ts        # Report CSS
@@ -97,13 +97,13 @@ perfect/
 │   ├── perfect_client/
 │   │   ├── sdk.py                 # Python SDK (decorators, flow definitions)
 │   │   ├── api.py                 # HTTP client for backend communication
-│   │   └── PYTHON_CLIENT.md       # Python SDK documentation
+│   │   └── WORKER.md       # Python SDK documentation
 │   └── workflows/
 │       └── example_flows.py       # Example workflow definitions
 └── README.md                      # This file
 ```
 
-## Python Client Example
+## Worker Example
 
 Define workflows using the Perfect Python SDK:
 
@@ -149,28 +149,28 @@ if __name__ == "__main__":
         time.sleep(1)
 ```
 
-See [PYTHON_CLIENT.md](./examples/perfect_client/PYTHON_CLIENT.md) for detailed Python SDK documentation.
+See [WORKER.md](./examples/perfect_client/WORKER.md) for detailed Python SDK documentation.
 
 ## How It Works
 
 1. **Define Flows** - Write Python workflows using `@task` and `@flow` decorators
 2. **Call Flows** - Flows are registered with Perfect only when you call them (lazy registration)
-3. **Register Flows** - Python client registers flows with the backend via REST API on first call
+3. **Register Flows** - worker registers flows with the backend via REST API on first call
 4. **Trigger Execution** - Click trigger button in the UI to execute flows
-5. **Long Polling** - Python client continuously polls the backend for execution requests
-6. **Execute & Report** - Client executes tasks and sends progress updates back to the server
+5. **Long Polling** - worker continuously polls the backend for execution requests
+6. **Execute & Report** - Worker executes tasks and sends progress updates back to the server
 7. **Real-Time Updates** - UI displays live execution progress with weighted progress bars
 8. **Persistent History** - All flows and runs are stored in SQLite database
-9. **Heartbeat Monitoring** - Client sends heartbeats; flows marked failed if client disconnects. Set `"heartbeat": false` on a client in `server/clients.json`, or `PERFECT_HEARTBEAT=0` for a client you run yourself, to turn this off. See `examples/perfect_client/PYTHON_CLIENT.md`.
+9. **Heartbeat Monitoring** - Worker sends heartbeats; flows marked failed if worker disconnects. Set `"heartbeat": false` on a worker in `server/workers.json`, or `PERFECT_HEARTBEAT=0` for a worker you run yourself, to turn this off. See `examples/perfect_client/WORKER.md`.
 
 ## Architecture
 
 Perfect uses a three-tier architecture:
 
 - **Frontend (React + Vite)** - Modern UI built with React, displaying real-time flow execution
-- **Backend (Express + TypeScript)** - RESTful API server for flow management and client communication
+- **Backend (Express + TypeScript)** - RESTful API server for flow management and worker communication
 - **Database (SQLite)** - Persistent storage for flow definitions and execution history
-- **Python Client** - SDK for defining and executing workflows, with long-polling for requests
+- **Worker** - SDK for defining and executing workflows, with long-polling for requests
 
 ## Example Workflows
 
@@ -219,7 +219,7 @@ Tasks are flagged with performance warnings using statistical analysis (z-score 
 
 #### Sensitivity Levels
 
-Configure per-client in `server/clients.json` using the `performanceSensitivity` field:
+Configure per-worker in `server/workers.json` using the `performanceSensitivity` field:
 
 - **Conservative** (fewer alerts, higher confidence)
   - Samples < 20: Requires 7σ deviation
@@ -240,7 +240,7 @@ Configure per-client in `server/clients.json` using the `performanceSensitivity`
 
 **Noise Floor**: The standard deviation used for scoring is never smaller than 10% of the task's average duration or 100ms, whichever is larger. A task whose first few runs were nearly identical would otherwise have a deviation of a few milliseconds, and normal jitter would read as many σ. For tasks of a second or more, this means a task must be at least 25–70% slower than its average (depending on sensitivity and sample count) before it is flagged; shorter tasks are governed by the 100ms floor and the absolute threshold below, which require a far larger relative overage.
 
-**Absolute Threshold**: On top of the σ test, a task must be at least `performanceMinOverageMs` milliseconds slower than its average (default **1000**). Both conditions have to hold. This keeps short tasks from being flagged over overages nobody would notice, however many σ they represent. Set it per client in `server/clients.json`; an invalid value is logged and the default is used.
+**Absolute Threshold**: On top of the σ test, a task must be at least `performanceMinOverageMs` milliseconds slower than its average (default **1000**). Both conditions have to hold. This keeps short tasks from being flagged over overages nobody would notice, however many σ they represent. Set it per worker in `server/workers.json`; an invalid value is logged and the default is used.
 
 ### Performance Warning Display
 
@@ -255,11 +255,11 @@ Performance warnings appear in multiple locations:
 
 ### Configuration
 
-Configure sensitivity and the absolute threshold per client in `server/clients.json`:
+Configure sensitivity and the absolute threshold per worker in `server/workers.json`:
 
 ```json
 {
-  "clients": [
+  "workers": [
     {
       "id": "perfect_example",
       "name": "Perfect Example Flows",

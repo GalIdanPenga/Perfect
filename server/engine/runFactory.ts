@@ -12,7 +12,7 @@ export function generateId(): string {
  * (statically analyzed) tasks. In both cases estimated times/weights are refined
  * from recorded statistics when available.
  *
- * Shared by createRun (client-initiated) and triggerFlow (server-initiated),
+ * Shared by createRun (worker-initiated) and triggerFlow (server-initiated),
  * which previously duplicated this logic verbatim.
  */
 export function buildRunTasks(flow: FlowDefinition, statsDb: StatsDb): TaskRun[] {
@@ -34,7 +34,7 @@ export function buildRunTasks(flow: FlowDefinition, statsDb: StatsDb): TaskRun[]
     return tasksWithEstimates.map((t, index) => {
       const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : 1 / learnedStructure.length;
       // The learned structure only records names and timings; crucialPass comes
-      // from the client's registration of the same-named task (default: crucial).
+      // from the worker's registration of the same-named task (default: crucial).
       const registered = flow.tasks.find(ft => ft.name === t.taskName);
       return {
         id: `tr-${generateId()}`,

@@ -589,7 +589,7 @@ describe('run persistence round trip', () => {
     expect(runDb.getAllRuns()[0].clientName).toBe('Perfect Example Flows')
   })
 
-  it('maps a missing client name to undefined, not null', () => {
+  it('maps a missing worker name to undefined, not null', () => {
     const { runDb } = createDatabase(':memory:')
     runDb.saveRun({
       id: 'run-2', flowId: 'flow-1', flowName: 'F', state: 'COMPLETED' as any,

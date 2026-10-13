@@ -24,7 +24,7 @@ interface ConfirmDialogProps {
   message: string | React.ReactNode;
 
   /**
-   * Text to highlight within the message (e.g., client name)
+   * Text to highlight within the message (e.g., worker name)
    */
   highlightText?: string;
 

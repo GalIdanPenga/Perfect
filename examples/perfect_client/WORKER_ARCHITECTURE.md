@@ -1,10 +1,10 @@
-# Perfect Client Architecture
+# Perfect Worker Architecture
 
-This document describes the architecture of the Perfect client and provides guidance for implementing clients in other languages.
+This document describes the architecture of the Perfect worker and provides guidance for implementing workers in other languages.
 
 ## Overview
 
-The Perfect client is organized into three clean layers:
+The Perfect worker is organized into three clean layers:
 
 ```
 ┌─────────────────────────────────────┐
@@ -58,7 +58,7 @@ listen_for_executions(poll_interval: float) -> None
 - `POST /api/flows` - Register a flow
 - `POST /api/flows/{run_id}/logs` - Send log message
 - `POST /api/runs/{run_id}/tasks/{task_index}/state` - Update task state (supports dynamic task creation)
-- `POST /api/runs/{run_id}/complete` - Signal flow completion from client
+- `POST /api/runs/{run_id}/complete` - Signal flow completion from worker
 - `POST /api/heartbeat` - Send keepalive signal
 - `GET /api/execution-requests` - Poll for execution requests (long-polling)
 
@@ -167,9 +167,9 @@ def my_flow():
     my_task()
 ```
 
-## Implementing a Client in Another Language
+## Implementing a Worker in Another Language
 
-To implement a Perfect client in another language (e.g., JavaScript, Go, Rust), you need to implement the three core layers:
+To implement a Perfect worker in another language (e.g., JavaScript, Go, Rust), you need to implement the three core layers:
 
 ### Step 1: Transport Layer
 
@@ -233,7 +233,7 @@ Tasks send progress updates during execution:
 
 The server determines estimated time for each task using this priority:
 1. **Statistics** - Historical average from previous runs (most accurate)
-2. **Client-provided** - Sent with task state update (for new/dynamic tasks)
+2. **Worker-provided** - Sent with task state update (for new/dynamic tasks)
 3. **Default** - 1000ms fallback
 
 ### Weight Calculation
@@ -253,8 +253,8 @@ Flows can have dynamic task structures:
 
 ### Flow Completion
 
-Flow completion is controlled by the client:
-- Client calls `complete_flow(run_id, actual_task_count)` when done
+Flow completion is controlled by the worker:
+- Worker calls `complete_flow(run_id, actual_task_count)` when done
 - Server removes any predefined tasks beyond `actual_task_count`
 - Flow is only marked COMPLETED after this call (not when last task finishes)
 - This prevents premature completion when more tasks might be added
@@ -277,9 +277,9 @@ Tasks have a `crucial_pass` flag:
 
 The SDK starts a heartbeat thread when it first connects, sending one every 3 seconds:
 - Backend fails flows if no heartbeat for 10 seconds
-- Prevents stuck flows when client crashes
-- The backend's watchdog only arms after the first heartbeat, so a client with heartbeats off is never failed by it
-- Disable with `PERFECT_HEARTBEAT=0`, `configure(heartbeat=False)`, or `"heartbeat": false` in `server/clients.json`
+- Prevents stuck flows when worker crashes
+- The backend's watchdog only arms after the first heartbeat, so a worker with heartbeats off is never failed by it
+- Disable with `PERFECT_HEARTBEAT=0`, `configure(heartbeat=False)`, or `"heartbeat": false` in `server/workers.json`
 
 ### Parallel Flow Execution
 
@@ -299,8 +299,8 @@ examples/perfect_client/
 │   ├── sdk.py            # SDK layer
 │   └── executor.py       # Executor layer
 ├── pyproject.toml        # Package configuration
-├── CLIENT_ARCHITECTURE.md  # This file
-└── PYTHON_CLIENT.md      # Python-specific docs
+├── WORKER_ARCHITECTURE.md  # This file
+└── WORKER.md      # Python-specific docs
 
 examples/workflows/
 └── example_flows.py     # Application layer (user's flows)
@@ -313,7 +313,7 @@ examples/workflows/
    npm run server
    ```
 
-2. Run your client with example flows:
+2. Run your worker with example flows:
    ```bash
    python examples/workflows/example_flows.py
    ```
@@ -327,14 +327,14 @@ examples/workflows/
 
 ## Reference Implementation
 
-The Python client in this repository serves as the reference implementation. When in doubt, refer to:
+The worker in this repository serves as the reference implementation. When in doubt, refer to:
 - `api.py` - HTTP communication patterns
 - `executor.py` - Execution orchestration logic
 - `sdk.py` - Data structures and decorator patterns
 
 ## Questions?
 
-For questions about implementing clients in other languages, refer to:
+For questions about implementing workers in other languages, refer to:
 - Backend API documentation: `server/index.ts`
 - Frontend integration: `src/App.tsx`
 - Example flows: `examples/workflows/example_flows.py`

@@ -1,6 +1,6 @@
 import express from 'express';
 import { flowEngine } from '../engine/FlowEngine';
-import { getActiveClient } from './clientRoutes';
+import { getActiveWorker } from './workerRoutes';
 
 const router = express.Router();
 
@@ -32,15 +32,15 @@ router.get('/runs', (req, res) => {
 
 /**
  * POST /api/engine/trigger/:flowId
- * Trigger a flow execution (server-initiated, sends execution request to clients)
+ * Trigger a flow execution (server-initiated, sends execution request to workers)
  */
 router.post('/trigger/:flowId', (req, res) => {
   try {
     const { flowId } = req.params;
     const { configuration } = req.body;
-    const activeClient = getActiveClient();
-    const clientColor = activeClient?.color;
-    const clientName = activeClient?.name;
+    const activeWorker = getActiveWorker();
+    const clientColor = activeWorker?.color;
+    const clientName = activeWorker?.name;
     const runId = flowEngine.triggerFlow(flowId, configuration || 'development', clientColor, clientName);
     res.json({ success: true, runId });
   } catch (error: any) {
@@ -50,15 +50,15 @@ router.post('/trigger/:flowId', (req, res) => {
 
 /**
  * POST /api/engine/run/:flowId
- * Create a run for client-initiated execution (no execution request sent)
+ * Create a run for worker-initiated execution (no execution request sent)
  */
 router.post('/run/:flowId', (req, res) => {
   try {
     const { flowId } = req.params;
     const { configuration } = req.body;
-    const activeClient = getActiveClient();
-    const clientColor = activeClient?.color;
-    const clientName = activeClient?.name;
+    const activeWorker = getActiveWorker();
+    const clientColor = activeWorker?.color;
+    const clientName = activeWorker?.name;
     const runId = flowEngine.createRun(flowId, configuration || 'development', clientColor, clientName);
     res.json({ success: true, runId });
   } catch (error: any) {
@@ -68,7 +68,7 @@ router.post('/run/:flowId', (req, res) => {
 
 /**
  * POST /api/flows
- * Register a new flow (called by Python clients)
+ * Register a new flow (called by workers)
  */
 router.post('/register', (req, res) => {
   try {
@@ -81,7 +81,7 @@ router.post('/register', (req, res) => {
 
 /**
  * POST /api/flows/:runId/logs
- * Add a log message to a running flow (called by Python clients)
+ * Add a log message to a running flow (called by workers)
  */
 router.post('/runs/:runId/logs', (req, res) => {
   try {

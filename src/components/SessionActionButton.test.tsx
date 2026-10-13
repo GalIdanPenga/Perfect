@@ -14,12 +14,12 @@ describe('SessionActionButton', () => {
   it('shows Stop while flows are running', () => {
     render(<SessionActionButton {...baseProps} allFlowsFinished={false} />);
     expect(screen.getByText('Stop')).toBeTruthy();
-    expect(screen.queryByText('Return to Client Selection')).toBeNull();
+    expect(screen.queryByText('Return to Worker Selection')).toBeNull();
   });
 
-  it('shows Return to Client Selection when all flows finished', () => {
+  it('shows Return to Worker Selection when all flows finished', () => {
     render(<SessionActionButton {...baseProps} allFlowsFinished={true} />);
-    expect(screen.getByText('Return to Client Selection')).toBeTruthy();
+    expect(screen.getByText('Return to Worker Selection')).toBeTruthy();
     expect(screen.queryByText('Stop')).toBeNull();
   });
 
@@ -33,7 +33,7 @@ describe('SessionActionButton', () => {
   it('calls onReturn when Return is clicked', () => {
     const onReturn = vi.fn();
     render(<SessionActionButton {...baseProps} allFlowsFinished={true} onReturn={onReturn} />);
-    fireEvent.click(screen.getByText('Return to Client Selection'));
+    fireEvent.click(screen.getByText('Return to Worker Selection'));
     expect(onReturn).toHaveBeenCalledTimes(1);
   });
 });

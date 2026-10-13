@@ -8,7 +8,7 @@ import {
 } from '../types';
 import { flowDb as defaultFlowDb, runDb as defaultRunDb, statsDb as defaultStatsDb, DatabaseDeps } from '../database/db';
 import { generateFlowReport } from '../utils/reportGenerator';
-import { getActiveClient } from '../routes/clientRoutes';
+import { getActiveWorker } from '../routes/workerRoutes';
 import { PerformanceMonitor, PerformanceSensitivity, DEFAULT_MIN_OVERAGE_MS, isValidMinOverageMs, isValidSensitivity } from './services/PerformanceMonitor';
 import { generateId, buildNewRun } from './runFactory';
 import { markRunFailed } from './failureHandler';
@@ -28,7 +28,7 @@ export class FlowEngine {
   private tickInterval: NodeJS.Timeout;
   private readonly TICK_INTERVAL_MS = 100;
   private simulationEnabled: boolean = false;
-  private lastClientHeartbeat: number | null = null;
+  private lastWorkerHeartbeat: number | null = null;
   // Keep in sync with HEARTBEAT_SERVER_TIMEOUT_S in examples/perfect_client/perfect/sdk.py
   private readonly HEARTBEAT_TIMEOUT_MS = 10000;
   private heartbeatCheckInterval: NodeJS.Timeout;
@@ -220,7 +220,7 @@ export class FlowEngine {
     }
 
     // Don't allow updates to tasks that are already in a terminal state (COMPLETED or FAILED)
-    // This prevents the Python client from overwriting FAILED states after Stop is clicked
+    // This prevents the worker from overwriting FAILED states after Stop is clicked
     if (task.state === TaskState.COMPLETED || task.state === TaskState.FAILED) {
       console.log(`[FlowEngine] Ignoring state update for task ${task.taskName} - already in terminal state ${task.state}`);
       return false;
@@ -244,18 +244,18 @@ export class FlowEngine {
       }
 
       // Calculate progress server-side using the server's estimated time (from statistics)
-      // This ensures accurate progress even when client has different estimates
+      // This ensures accurate progress even when worker has different estimates
       if (task.startTime) {
         const elapsedMs = Date.now() - new Date(task.startTime).getTime();
         // Use server's estimated time for progress calculation (guard against division by zero)
         if (task.estimatedTime > 0) {
           task.progress = Math.min(99, Math.round((elapsedMs / task.estimatedTime) * 100));
         } else {
-          // For tasks with estimatedTime of 0, use client progress or default to 50
+          // For tasks with estimatedTime of 0, use worker progress or default to 50
           task.progress = progress !== undefined ? progress : 50;
         }
       } else if (progress !== undefined) {
-        // Fallback to client progress if no start time yet
+        // Fallback to worker progress if no start time yet
         task.progress = progress;
       }
 
@@ -287,7 +287,7 @@ export class FlowEngine {
 
       // Check for performance outliers and update statistics on completion
       if (stateStr === 'COMPLETED') {
-        // Compute duration from timestamps if client didn't send it
+        // Compute duration from timestamps if worker didn't send it
         const durationMs = task.durationMs !== undefined
           ? task.durationMs
           : (task.startTime ? Date.now() - new Date(task.startTime).getTime() : undefined);
@@ -328,7 +328,7 @@ export class FlowEngine {
         run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
       }
     } else {
-      // Update weighted progress (don't mark as completed - wait for client to signal completion)
+      // Update weighted progress (don't mark as completed - wait for worker to signal completion)
       updateRunProgress(run);
     }
 
@@ -338,7 +338,7 @@ export class FlowEngine {
   }
 
   /**
-   * Complete a flow from client side - removes any predefined tasks that weren't executed
+   * Complete a flow from worker side - removes any predefined tasks that weren't executed
    */
   completeFlow(runId: string, actualTaskCount: number): boolean {
     const run = this.runs.find(r => r.id === runId);
@@ -416,7 +416,7 @@ export class FlowEngine {
   }
 
   /**
-   * Register a new flow definition (typically called by Python clients)
+   * Register a new flow definition (typically called by workers)
    */
   registerFlow(payload: FlowRegistrationPayload): FlowDefinition {
     // Allow multiple registrations of the same flow name - each becomes a separate instance
@@ -455,7 +455,7 @@ export class FlowEngine {
         const clientEstimatedTime = t.estimatedTime || 1000;
         const stats = flowStats.get(t.name);
 
-        // Use statistics for estimatedTime if we have at least 2 samples, otherwise use client's estimate
+        // Use statistics for estimatedTime if we have at least 2 samples, otherwise use worker's estimate
         const estimatedTime = (stats && stats.sampleCount >= 2)
           ? Math.round(stats.avgDurationMs)
           : clientEstimatedTime;
@@ -490,7 +490,7 @@ export class FlowEngine {
   }
 
   /**
-   * Create a run for a flow without notifying clients (for client-initiated execution)
+   * Create a run for a flow without notifying workers (for worker-initiated execution)
    */
   createRun(flowId: string, configuration: string = 'development', clientColor?: string, clientName?: string): string | undefined {
     const flow = this.flows.find(f => f.id === flowId);
@@ -508,12 +508,12 @@ export class FlowEngine {
 
     this.notifyStateChange();
 
-    // Don't notify clients - this is client-initiated execution
+    // Don't notify workers - this is worker-initiated execution
     return newRun.id;
   }
 
   /**
-   * Trigger a flow execution (server-initiated, notifies clients)
+   * Trigger a flow execution (server-initiated, notifies workers)
    */
   triggerFlow(flowId: string, configuration: string = 'development', clientColor?: string, clientName?: string): string | undefined {
     const flow = this.flows.find(f => f.id === flowId);
@@ -531,7 +531,7 @@ export class FlowEngine {
 
     this.notifyStateChange();
 
-    // Notify clients that a flow has been triggered
+    // Notify workers that a flow has been triggered
     this.notifyFlowTrigger(newRun.id, flow.name, configuration);
 
     return newRun.id;
@@ -545,7 +545,7 @@ export class FlowEngine {
     let changed = false;
 
     // Real-time outlier detection for all running tasks (runs even when simulation disabled).
-    // The active client's settings are the same for every task in this tick.
+    // The active worker's settings are the same for every task in this tick.
     const { sensitivity, minOverageMs } = this.outlierSettings();
     this.runs.forEach(run => {
       if (run.state !== TaskState.RUNNING && run.state !== TaskState.PENDING) {
@@ -585,7 +585,7 @@ export class FlowEngine {
       this.notifyStateChange();
     }
 
-    // Skip simulation if disabled (for real Python client execution)
+    // Skip simulation if disabled (for real worker execution)
     if (!this.simulationEnabled) {
       return;
     }
@@ -715,13 +715,13 @@ export class FlowEngine {
   }
 
   /**
-   * Outlier-detection settings of the active client, resolved once here.
+   * Outlier-detection settings of the active worker, resolved once here.
    * Absent or invalid values fall back to 'normal' and DEFAULT_MIN_OVERAGE_MS.
    */
   private outlierSettings(): { sensitivity: PerformanceSensitivity; minOverageMs: number } {
-    const activeClient = getActiveClient();
-    const sensitivity = activeClient?.performanceSensitivity;
-    const minOverageMs = activeClient?.performanceMinOverageMs;
+    const activeWorker = getActiveWorker();
+    const sensitivity = activeWorker?.performanceSensitivity;
+    const minOverageMs = activeWorker?.performanceMinOverageMs;
     return {
       sensitivity: isValidSensitivity(sensitivity) ? sensitivity : 'normal',
       minOverageMs: isValidMinOverageMs(minOverageMs) ? minOverageMs : DEFAULT_MIN_OVERAGE_MS
@@ -729,47 +729,47 @@ export class FlowEngine {
   }
 
   /**
-   * Update the client heartbeat timestamp
+   * Update the worker heartbeat timestamp
    */
   updateHeartbeat(): void {
-    this.lastClientHeartbeat = Date.now();
+    this.lastWorkerHeartbeat = Date.now();
   }
 
   /**
    * Forget the last heartbeat so the watchdog is disarmed until a new one arrives.
-   * Called when a client starts, so a previous client's stale heartbeat can't
-   * fail the runs of a client that has heartbeats turned off. Not called on exit:
+   * Called when a worker starts, so a previous worker's stale heartbeat can't
+   * fail the runs of a worker that has heartbeats turned off. Not called on exit:
    * after a crash the watchdog must still time out and fail the leftover runs.
    */
   resetHeartbeat(): void {
-    this.lastClientHeartbeat = null;
+    this.lastWorkerHeartbeat = null;
   }
 
   /**
-   * Check if client heartbeat is stale and fail all running flows
+   * Check if worker heartbeat is stale and fail all running flows
    */
   private checkHeartbeat(): void {
-    if (this.lastClientHeartbeat === null) {
-      // No client has connected yet
+    if (this.lastWorkerHeartbeat === null) {
+      // No worker has connected yet
       return;
     }
 
     const now = Date.now();
-    const timeSinceLastHeartbeat = now - this.lastClientHeartbeat;
+    const timeSinceLastHeartbeat = now - this.lastWorkerHeartbeat;
 
     if (timeSinceLastHeartbeat > this.HEARTBEAT_TIMEOUT_MS) {
-      // Client connection lost - fail all running flows
+      // Worker connection lost - fail all running flows
       const runningRuns = this.runs.filter(
         r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING
       );
 
       if (runningRuns.length > 0) {
-        console.log(`[FlowEngine] Client heartbeat timeout - failing ${runningRuns.length} running flows`);
+        console.log(`[FlowEngine] Worker heartbeat timeout - failing ${runningRuns.length} running flows`);
 
         runningRuns.forEach(run => {
           markRunFailed(run, {
-            flow: '[System] Flow failed: Lost connection to Python client',
-            task: '[System] Task failed: Lost connection to Python client'
+            flow: '[System] Flow failed: Lost connection to worker',
+            task: '[System] Task failed: Lost connection to worker'
           }, { includePending: true });
 
           // Generate the report first so its path is persisted with the run
@@ -782,18 +782,18 @@ export class FlowEngine {
         this.notifyStateChange();
       }
 
-      // The client is gone either way. Disarm until a new heartbeat arrives, so
-      // this stale timestamp can't fail a later client that sends no heartbeats.
-      this.lastClientHeartbeat = null;
+      // The worker is gone either way. Disarm until a new heartbeat arrives, so
+      // this stale timestamp can't fail a later worker that sends no heartbeats.
+      this.lastWorkerHeartbeat = null;
     }
   }
 
   /**
-   * Fail all running flows, e.g. when the user clicks Stop or the client
+   * Fail all running flows, e.g. when the user clicks Stop or the worker
    * process dies. By default only the currently running task in each flow is
    * marked failed; pass includePending to fail queued tasks too.
    */
-  failAllRunningFlows(reason: string = 'User stopped the client', options: { includePending?: boolean } = {}): void {
+  failAllRunningFlows(reason: string = 'User stopped the worker', options: { includePending?: boolean } = {}): void {
     const runningRuns = this.runs.filter(
       r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING
     );

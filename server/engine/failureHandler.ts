@@ -11,7 +11,7 @@ export interface FailMessages {
  * Mark a run and its unfinished tasks as FAILED, appending the given log lines.
  * By default only RUNNING tasks are failed; set `includePending` to also fail
  * PENDING tasks (used when the whole flow is abandoned, e.g. server restart or
- * lost client). Persistence/report/notify are left to the caller since those
+ * lost worker). Persistence/report/notify are left to the caller since those
  * differ per failure scenario.
  */
 export function markRunFailed(

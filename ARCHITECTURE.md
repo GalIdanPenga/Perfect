@@ -16,7 +16,7 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 │   ├── hooks/                   # Data-fetching, storage & animation hooks
 │   ├── utils/                   # Pure helpers (format, color, filter, progress, audio)
 │   ├── constants/              # API URL, polling intervals, theme color
-│   ├── types/                   # Client-only types; re-exports shared/types
+│   ├── types/                   # Worker-only types; re-exports shared/types
 │   ├── App.tsx                  # Root component (composition + session state)
 │   └── main.tsx                 # Application entry point
 │
@@ -33,7 +33,7 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 │   │   ├── flowDb.ts / runDb.ts / statsDb.ts  # Per-domain data access
 │   │   └── mappers.ts          # Row → domain-object mapping
 │   ├── routes/                  # API route handlers
-│   │   ├── clientRoutes.ts     # Python client management endpoints
+│   │   ├── workerRoutes.ts     # worker management endpoints
 │   │   └── engineRoutes.ts     # Flow and run management endpoints
 │   ├── utils/                   # Utility modules
 │   │   ├── reportGenerator.ts  # HTML report generation
@@ -41,7 +41,7 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 │   ├── types/                   # Server-only types; re-exports shared/types
 │   └── index.ts                 # Server entry point
 │
-├── examples/                     # Python client examples
+├── examples/                     # worker examples
 │   ├── perfect_client/          # Perfect Python SDK
 │   │   ├── __init__.py         # Package exports
 │   │   ├── sdk.py              # Workflow decorators (@task, @flow)
@@ -65,7 +65,7 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 **Responsibilities:**
 - Display flow library and execution history
 - Real-time progress monitoring
-- Client process management UI
+- Worker process management UI
 - Configuration selection (dev/debug/release)
 
 **Key Components:**
@@ -75,7 +75,7 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 - `components/TaskRow.tsx` - Task execution row with performance warnings
 - `components/StatisticsWindow.tsx` - Historical performance statistics with standard deviation
 - `components/StatusComponents.tsx` - Reusable status icons and badges
-- `shared/types.ts` - Domain types (FlowRun, TaskRun, PerformanceWarning, …) shared with the backend; `src/types/index.ts` re-exports these plus client-only types
+- `shared/types.ts` - Domain types (FlowRun, TaskRun, PerformanceWarning, …) shared with the backend; `src/types/index.ts` re-exports these plus worker-only types
 
 ### 2. Backend Layer (`server/`)
 
@@ -84,8 +84,8 @@ Perfect is a workflow orchestration platform with a Python SDK for defining work
 **Responsibilities:**
 - Flow registration and storage
 - Execution state management
-- Python client process lifecycle
-- API endpoints for frontend and Python clients
+- worker process lifecycle
+- API endpoints for frontend and workers
 
 **Key Modules:**
 
@@ -105,20 +105,20 @@ export class FlowEngine {
 }
 ```
 
-#### Client Routes (`server/routes/clientRoutes.ts`)
-- `POST /api/client/start` - Start Python client process
-- `POST /api/client/stop` - Stop Python client process
-- `GET /api/client/status` - Get client status and logs
+#### Worker Routes (`server/routes/workerRoutes.ts`)
+- `POST /api/worker/start` - Start worker process
+- `POST /api/worker/stop` - Stop worker process
+- `GET /api/worker/status` - Get worker status and logs
 
 #### Engine Routes (`server/routes/engineRoutes.ts`)
 - `GET /api/engine/flows` - Get all registered flows
 - `GET /api/engine/runs` - Get all flow runs
 - `POST /api/engine/trigger/:flowId` - Trigger flow execution
-- `POST /api/engine/register` - Register new flow (Python client)
-- `POST /api/engine/runs/:runId/logs` - Add logs (Python client)
+- `POST /api/engine/register` - Register new flow (worker)
+- `POST /api/engine/runs/:runId/logs` - Add logs (worker)
 - `GET /api/statistics` - Get task and flow performance statistics
 
-### 3. Python Client Layer (`examples/`)
+### 3. Worker Layer (`examples/`)
 
 **Technology:** Python 3 + requests
 
@@ -144,10 +144,10 @@ def etl_pipeline():
 
 #### API Client (`examples/perfect_client/api.py`)
 ```python
-client = create_client(mock=False)
-client.register_flow(flow_definition)
-client.send_log(run_id, "Processing...")
-client.listen_for_executions()
+worker = create_client(mock=False)
+worker.register_flow(flow_definition)
+worker.send_log(run_id, "Processing...")
+worker.listen_for_executions()
 ```
 
 ## Data Flow
@@ -167,7 +167,7 @@ client.listen_for_executions()
                                                       ▲
                                                       │ registers/logs
                                              ┌────────┴────────┐
-                                             │  Python Client  │
+                                             │  Worker  │
                                              │   (subprocess)  │
                                              └─────────────────┘
 ```
@@ -177,9 +177,9 @@ client.listen_for_executions()
 ### Frontend ↔ Backend
 - **Protocol:** HTTP REST
 - **Polling:** Every 1 second for flows/runs
-- **Polling:** Every 2 seconds for client status
+- **Polling:** Every 2 seconds for worker status
 
-### Python Client ↔ Backend
+### Worker ↔ Backend
 - **Registration:** POST to `/api/flows` (or `/api/engine/register`)
 - **Logging:** POST to `/api/flows/:runId/logs`
 - **Future:** WebSocket for real-time bidirectional communication
@@ -244,7 +244,7 @@ npm run server
 # Terminal 2: Frontend dev server
 npm run dev
 
-# Terminal 3: Python client (optional - can use UI button)
+# Terminal 3: worker (optional - can use UI button)
 python3 examples/workflows/example_flows.py
 ```
 
@@ -386,7 +386,7 @@ Warnings are stored in `task_runs.performance_warning` as JSON:
 - tsx 4.7.0 (TypeScript execution)
 - cors 2.8.5
 
-### Python Client
+### Worker
 - Python 3.x
 - requests library
 
@@ -402,7 +402,7 @@ Warnings are stored in `task_runs.performance_warning` as JSON:
 ## Best Practices
 
 1. **Type Safety** - Comprehensive TypeScript types across frontend and backend
-2. **Separation of Concerns** - Clear layer separation (UI, API, Engine, Client)
+2. **Separation of Concerns** - Clear layer separation (UI, API, Engine, Worker)
 3. **Single Responsibility** - Each module has one clear purpose
 4. **DRY Principle** - A single `shared/types.ts` is the source of truth for domain types across frontend and backend
 5. **Error Handling** - Graceful error handling at all layers
@@ -412,4 +412,4 @@ Warnings are stored in `task_runs.performance_warning` as JSON:
 
 **Last Updated:** 2026-07-09
 **Version:** 2.0.0
-**Architecture Type:** Client-Server with Subprocess Management
+**Architecture Type:** Worker-Server with Subprocess Management

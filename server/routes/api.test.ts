@@ -33,10 +33,10 @@ describe('Express API – integration', () => {
     expect(res.body).toEqual({ success: true });
   });
 
-  // ── Client status ────────────────────────────────────────────────────────────
+  // ── Worker status ────────────────────────────────────────────────────────────
 
-  it('GET /api/client/status → 200 with status field', async () => {
-    const res = await request(app).get('/api/client/status');
+  it('GET /api/worker/status → 200 with status field', async () => {
+    const res = await request(app).get('/api/worker/status');
     expect(res.status).toBe(200);
     expect(res.body).toHaveProperty('status');
     expect(typeof res.body.status).toBe('string');
@@ -44,14 +44,14 @@ describe('Express API – integration', () => {
     expect(Array.isArray(res.body.logs)).toBe(true);
   });
 
-  // ── Client configs ───────────────────────────────────────────────────────────
+  // ── Worker configs ───────────────────────────────────────────────────────────
 
-  it('GET /api/client/configs → 200 with clients array', async () => {
-    const res = await request(app).get('/api/client/configs');
+  it('GET /api/worker/configs → 200 with workers array', async () => {
+    const res = await request(app).get('/api/worker/configs');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('clients');
-    expect(Array.isArray(res.body.clients)).toBe(true);
-    expect(res.body.clients.length).toBeGreaterThan(0);
+    expect(res.body).toHaveProperty('workers');
+    expect(Array.isArray(res.body.workers)).toBe(true);
+    expect(res.body.workers.length).toBeGreaterThan(0);
   });
 
   // ── Flow registration ─────────────────────────────────────────────────────────

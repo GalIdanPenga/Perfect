@@ -4,33 +4,33 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import App from './App';
 import { useFlowRuns } from './hooks/useFlowRuns';
-import { useClientStatus } from './hooks/useClientStatus';
-import { useClientConfigs } from './hooks/useClientConfigs';
-import { useClientActions } from './hooks/useClientActions';
+import { useWorkerStatus } from './hooks/useWorkerStatus';
+import { useWorkerConfigs } from './hooks/useWorkerConfigs';
+import { useWorkerActions } from './hooks/useWorkerActions';
 import { playCompletionSound } from './utils/audioUtils';
 import { TaskState, FlowRun } from './types';
 
 // ─── Mock hooks ──────────────────────────────────────────────────────────────
 
 vi.mock('./hooks/useFlowRuns');
-vi.mock('./hooks/useClientStatus');
-vi.mock('./hooks/useClientConfigs');
-vi.mock('./hooks/useClientActions');
+vi.mock('./hooks/useWorkerStatus');
+vi.mock('./hooks/useWorkerConfigs');
+vi.mock('./hooks/useWorkerActions');
 vi.mock('./utils/audioUtils', () => ({ playCompletionSound: vi.fn() }));
 
 // ─── Stub heavy child components ─────────────────────────────────────────────
 
-vi.mock('./components/ClientSelector', () => ({
-  ClientSelector: ({ onClientClick, onStart, onStop, availableClients, clientStatus }: any) => (
-    <div data-testid="client-selector">
-      {availableClients?.map((c: any) => (
-        <button key={c.id} data-testid={`client-btn-${c.id}`} onClick={() => onClientClick(c.id)}>
+vi.mock('./components/WorkerSelector', () => ({
+  WorkerSelector: ({ onWorkerClick, onStart, onStop, availableWorkers, workerStatus }: any) => (
+    <div data-testid="worker-selector">
+      {availableWorkers?.map((c: any) => (
+        <button key={c.id} data-testid={`worker-btn-${c.id}`} onClick={() => onWorkerClick(c.id)}>
           {c.name}
         </button>
       ))}
-      <button data-testid="start-btn" onClick={onStart}>Start Client</button>
-      {clientStatus === 'running' && (
-        <button data-testid="stop-btn-selector" onClick={onStop}>Stop Client</button>
+      <button data-testid="start-btn" onClick={onStart}>Start Worker</button>
+      {workerStatus === 'running' && (
+        <button data-testid="stop-btn-selector" onClick={onStop}>Stop Worker</button>
       )}
     </div>
   ),
@@ -63,9 +63,9 @@ vi.mock('./components/StatisticsWindow', () => ({
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const MOCK_CLIENT = {
+const MOCK_WORKER = {
   id: 'c1',
-  name: 'Test Client',
+  name: 'Test Worker',
   color: '#00D9FF',
   description: 'Test',
   workingDir: '.',
@@ -73,9 +73,9 @@ const MOCK_CLIENT = {
   args: [],
 };
 
-const MOCK_CLIENT_2 = {
+const MOCK_WORKER_2 = {
   id: 'c2',
-  name: 'Second Client',
+  name: 'Second Worker',
   color: '#ff0099',
   description: 'Test 2',
   workingDir: '.',
@@ -84,10 +84,10 @@ const MOCK_CLIENT_2 = {
 };
 
 let mockRefreshRuns: ReturnType<typeof vi.fn>;
-let mockSetClientStatus: ReturnType<typeof vi.fn>;
-let mockSetSelectedClientId: ReturnType<typeof vi.fn>;
-let mockHandleStartClient: ReturnType<typeof vi.fn>;
-let mockHandleStopClient: ReturnType<typeof vi.fn>;
+let mockSetWorkerStatus: ReturnType<typeof vi.fn>;
+let mockSetSelectedWorkerId: ReturnType<typeof vi.fn>;
+let mockHandleStartWorker: ReturnType<typeof vi.fn>;
+let mockHandleStopWorker: ReturnType<typeof vi.fn>;
 
 function makeRun(overrides: Partial<FlowRun> = {}): FlowRun {
   return {
@@ -107,23 +107,23 @@ function makeRun(overrides: Partial<FlowRun> = {}): FlowRun {
 
 function setupMocks({
   runs = [] as FlowRun[],
-  clientStatus = 'stopped' as 'stopped' | 'starting' | 'running' | 'error',
-  activeClient = null as any,
-  availableClients = [MOCK_CLIENT] as any[],
-  selectedClientId = 'c1',
-  isStartingClient = false,
+  workerStatus = 'stopped' as 'stopped' | 'starting' | 'running' | 'error',
+  activeWorker = null as any,
+  availableWorkers = [MOCK_WORKER] as any[],
+  selectedWorkerId = 'c1',
+  isStartingWorker = false,
 } = {}) {
   vi.mocked(useFlowRuns).mockReturnValue({ runs, refreshRuns: mockRefreshRuns } as any);
-  vi.mocked(useClientStatus).mockReturnValue({ clientStatus, setClientStatus: mockSetClientStatus, activeClient } as any);
-  vi.mocked(useClientConfigs).mockReturnValue({
-    availableClients,
-    selectedClientId,
-    setSelectedClientId: mockSetSelectedClientId,
+  vi.mocked(useWorkerStatus).mockReturnValue({ workerStatus, setWorkerStatus: mockSetWorkerStatus, activeWorker } as any);
+  vi.mocked(useWorkerConfigs).mockReturnValue({
+    availableWorkers,
+    selectedWorkerId,
+    setSelectedWorkerId: mockSetSelectedWorkerId,
   } as any);
-  vi.mocked(useClientActions).mockReturnValue({
-    isStartingClient,
-    handleStartClient: mockHandleStartClient,
-    handleStopClient: mockHandleStopClient,
+  vi.mocked(useWorkerActions).mockReturnValue({
+    isStartingWorker,
+    handleStartWorker: mockHandleStartWorker,
+    handleStopWorker: mockHandleStopWorker,
   } as any);
 }
 
@@ -135,12 +135,12 @@ describe('App', () => {
     vi.clearAllMocks();
 
     mockRefreshRuns = vi.fn().mockResolvedValue(undefined);
-    mockSetClientStatus = vi.fn();
-    mockSetSelectedClientId = vi.fn();
-    mockHandleStartClient = vi.fn();
-    mockHandleStopClient = vi.fn().mockResolvedValue(undefined);
+    mockSetWorkerStatus = vi.fn();
+    mockSetSelectedWorkerId = vi.fn();
+    mockHandleStartWorker = vi.fn();
+    mockHandleStopWorker = vi.fn().mockResolvedValue(undefined);
 
-    // Default: stopped, no runs, client c1 selected
+    // Default: stopped, no runs, worker c1 selected
     setupMocks();
   });
 
@@ -148,9 +148,9 @@ describe('App', () => {
 
   // ── Empty state ────────────────────────────────────────────────────────────
 
-  it('shows ClientSelector when there are no active runs', () => {
+  it('shows WorkerSelector when there are no active runs', () => {
     render(<App />);
-    expect(screen.getByTestId('client-selector')).toBeTruthy();
+    expect(screen.getByTestId('worker-selector')).toBeTruthy();
     expect(screen.queryByTestId('active-run-card')).toBeNull();
     expect(screen.queryByTestId('overall-progress')).toBeNull();
   });
@@ -176,7 +176,7 @@ describe('App', () => {
     render(<App />);
 
     expect(screen.getByTestId('active-run-card')).toBeTruthy();
-    expect(screen.queryByTestId('client-selector')).toBeNull();
+    expect(screen.queryByTestId('worker-selector')).toBeNull();
     // History panel gets 0 runs (run is active, not past)
     expect(screen.getByTestId('history-panel').dataset.count).toBe('0');
   });
@@ -203,8 +203,8 @@ describe('App', () => {
 
     render(<App />);
 
-    // No session → no active runs → shows ClientSelector
-    expect(screen.getByTestId('client-selector')).toBeTruthy();
+    // No session → no active runs → shows WorkerSelector
+    expect(screen.getByTestId('worker-selector')).toBeTruthy();
     expect(screen.getByTestId('history-panel').dataset.count).toBe('2');
   });
 
@@ -249,7 +249,7 @@ describe('App', () => {
 
     // Session was already set; run is before session so stays as history (RUNNING filtered out)
     expect(screen.queryByTestId('active-run-card')).toBeNull();
-    expect(screen.getByTestId('client-selector')).toBeTruthy();
+    expect(screen.getByTestId('worker-selector')).toBeTruthy();
   });
 
   // ── Completion sound ───────────────────────────────────────────────────────
@@ -323,14 +323,14 @@ describe('App', () => {
     expect(screen.queryByText(/ACTIVE/)).toBeNull();
   });
 
-  it('shows active client indicator when activeClient is set', () => {
-    const activeClient = { ...MOCK_CLIENT, id: 'active-1', name: 'Active Client' };
-    setupMocks({ activeClient });
+  it('shows active worker indicator when activeWorker is set', () => {
+    const activeWorker = { ...MOCK_WORKER, id: 'active-1', name: 'Active Worker' };
+    setupMocks({ activeWorker });
 
     render(<App />);
 
-    // Active client name appears in the header indicator
-    expect(screen.getByText('Active Client')).toBeTruthy();
+    // Active worker name appears in the header indicator
+    expect(screen.getByText('Active Worker')).toBeTruthy();
   });
 
   // ── Stop vs Return button ──────────────────────────────────────────────────
@@ -344,10 +344,10 @@ describe('App', () => {
     render(<App />);
 
     expect(screen.getByText('Stop')).toBeTruthy();
-    expect(screen.queryByText('Return to Client Selection')).toBeNull();
+    expect(screen.queryByText('Return to Worker Selection')).toBeNull();
   });
 
-  it('shows Return to Client Selection when all flows are finished', () => {
+  it('shows Return to Worker Selection when all flows are finished', () => {
     const sessionTime = new Date(Date.now() - 5000).toISOString();
     localStorage.setItem('currentSessionStartTime', JSON.stringify(sessionTime));
     const completedRun = makeRun({ startTime: new Date().toISOString(), state: TaskState.COMPLETED });
@@ -355,20 +355,20 @@ describe('App', () => {
 
     render(<App />);
 
-    expect(screen.getByText('Return to Client Selection')).toBeTruthy();
+    expect(screen.getByText('Return to Worker Selection')).toBeTruthy();
     expect(screen.queryByText('Stop')).toBeNull();
   });
 
-  it('clicking Return to Client Selection calls handleStopClient(true)', async () => {
+  it('clicking Return to Worker Selection calls handleStopWorker(true)', async () => {
     const sessionTime = new Date(Date.now() - 5000).toISOString();
     localStorage.setItem('currentSessionStartTime', JSON.stringify(sessionTime));
     const completedRun = makeRun({ startTime: new Date().toISOString(), state: TaskState.COMPLETED });
     setupMocks({ runs: [completedRun] });
 
     render(<App />);
-    fireEvent.click(screen.getByText('Return to Client Selection'));
+    fireEvent.click(screen.getByText('Return to Worker Selection'));
 
-    expect(mockHandleStopClient).toHaveBeenCalledWith(true);
+    expect(mockHandleStopWorker).toHaveBeenCalledWith(true);
   });
 
   // ── Stop confirmation dialog ───────────────────────────────────────────────
@@ -384,7 +384,7 @@ describe('App', () => {
     expect(screen.getByText('Confirm Stop')).toBeTruthy();
   });
 
-  it('confirming stop calls handleStopClient()', () => {
+  it('confirming stop calls handleStopWorker()', () => {
     const sessionTime = new Date(Date.now() - 5000).toISOString();
     localStorage.setItem('currentSessionStartTime', JSON.stringify(sessionTime));
     setupMocks({ runs: [makeRun({ startTime: new Date().toISOString(), state: TaskState.RUNNING })] });
@@ -393,11 +393,11 @@ describe('App', () => {
     fireEvent.click(screen.getByText('Stop'));
     fireEvent.click(screen.getByText('Stop', { selector: 'button.flex-1' }));
 
-    expect(mockHandleStopClient).toHaveBeenCalledTimes(1);
-    expect(mockHandleStopClient).not.toHaveBeenCalledWith(true);
+    expect(mockHandleStopWorker).toHaveBeenCalledTimes(1);
+    expect(mockHandleStopWorker).not.toHaveBeenCalledWith(true);
   });
 
-  it('cancelling stop dialog closes it without calling handleStopClient', () => {
+  it('cancelling stop dialog closes it without calling handleStopWorker', () => {
     const sessionTime = new Date(Date.now() - 5000).toISOString();
     localStorage.setItem('currentSessionStartTime', JSON.stringify(sessionTime));
     setupMocks({ runs: [makeRun({ startTime: new Date().toISOString(), state: TaskState.RUNNING })] });
@@ -406,49 +406,49 @@ describe('App', () => {
     fireEvent.click(screen.getByText('Stop'));
     fireEvent.click(screen.getByText('Cancel'));
 
-    expect(mockHandleStopClient).not.toHaveBeenCalled();
+    expect(mockHandleStopWorker).not.toHaveBeenCalled();
     expect(screen.queryByText('Confirm Stop')).toBeNull();
   });
 
-  // ── Client confirmation dialog ─────────────────────────────────────────────
+  // ── Worker confirmation dialog ─────────────────────────────────────────────
 
-  it('clicking a client card opens confirmation dialog', () => {
-    setupMocks({ availableClients: [MOCK_CLIENT, MOCK_CLIENT_2] });
+  it('clicking a worker card opens confirmation dialog', () => {
+    setupMocks({ availableWorkers: [MOCK_WORKER, MOCK_WORKER_2] });
 
     render(<App />);
-    fireEvent.click(screen.getByTestId('client-btn-c2'));
+    fireEvent.click(screen.getByTestId('worker-btn-c2'));
 
-    expect(screen.getByText('Confirm Client Selection')).toBeTruthy();
+    expect(screen.getByText('Confirm Worker Selection')).toBeTruthy();
   });
 
-  it('confirming client selection calls setSelectedClientId', () => {
-    setupMocks({ availableClients: [MOCK_CLIENT, MOCK_CLIENT_2] });
+  it('confirming worker selection calls setSelectedWorkerId', () => {
+    setupMocks({ availableWorkers: [MOCK_WORKER, MOCK_WORKER_2] });
 
     render(<App />);
-    fireEvent.click(screen.getByTestId('client-btn-c2'));
+    fireEvent.click(screen.getByTestId('worker-btn-c2'));
     fireEvent.click(screen.getByText('Confirm'));
 
-    expect(mockSetSelectedClientId).toHaveBeenCalledWith('c2');
+    expect(mockSetSelectedWorkerId).toHaveBeenCalledWith('c2');
   });
 
-  it('cancelling client dialog does not call setSelectedClientId', () => {
-    setupMocks({ availableClients: [MOCK_CLIENT, MOCK_CLIENT_2] });
+  it('cancelling worker dialog does not call setSelectedWorkerId', () => {
+    setupMocks({ availableWorkers: [MOCK_WORKER, MOCK_WORKER_2] });
 
     render(<App />);
-    fireEvent.click(screen.getByTestId('client-btn-c2'));
+    fireEvent.click(screen.getByTestId('worker-btn-c2'));
     fireEvent.click(screen.getByText('Cancel'));
 
-    expect(mockSetSelectedClientId).not.toHaveBeenCalled();
-    expect(screen.queryByText('Confirm Client Selection')).toBeNull();
+    expect(mockSetSelectedWorkerId).not.toHaveBeenCalled();
+    expect(screen.queryByText('Confirm Worker Selection')).toBeNull();
   });
 
-  it('clicking a client while running does not open dialog', () => {
-    setupMocks({ clientStatus: 'running', availableClients: [MOCK_CLIENT, MOCK_CLIENT_2] });
+  it('clicking a worker while running does not open dialog', () => {
+    setupMocks({ workerStatus: 'running', availableWorkers: [MOCK_WORKER, MOCK_WORKER_2] });
 
     render(<App />);
-    // ClientSelector mock doesn't render client buttons when running — but even if it did,
-    // the guard in handleClientClick prevents opening the dialog
-    expect(screen.queryByText('Confirm Client Selection')).toBeNull();
+    // WorkerSelector mock doesn't render worker buttons when running — but even if it did,
+    // the guard in handleWorkerClick prevents opening the dialog
+    expect(screen.queryByText('Confirm Worker Selection')).toBeNull();
   });
 
   // ── Statistics window ──────────────────────────────────────────────────────
@@ -517,17 +517,17 @@ describe('App', () => {
 
   // ── Theme color ────────────────────────────────────────────────────────────
 
-  it('theme defaults to activeClient color when no selected client matches', () => {
-    const activeClient = { ...MOCK_CLIENT, id: 'active-2', name: 'Fallback Client', color: '#ff0000' };
+  it('theme defaults to activeWorker color when no selected worker matches', () => {
+    const activeWorker = { ...MOCK_WORKER, id: 'active-2', name: 'Fallback Worker', color: '#ff0000' };
     setupMocks({
-      availableClients: [MOCK_CLIENT],
-      selectedClientId: 'nonexistent',
-      activeClient,
+      availableWorkers: [MOCK_WORKER],
+      selectedWorkerId: 'nonexistent',
+      activeWorker,
     });
 
     render(<App />);
-    // Active client indicator shows the fallback client name — no crash
-    expect(screen.getByText('Fallback Client')).toBeTruthy();
+    // Active worker indicator shows the fallback worker name — no crash
+    expect(screen.getByText('Fallback Worker')).toBeTruthy();
   });
 
   // ── Session persistence ────────────────────────────────────────────────────

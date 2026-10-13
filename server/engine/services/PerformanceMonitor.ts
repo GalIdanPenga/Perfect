@@ -12,7 +12,7 @@ export function isValidSensitivity(value: unknown): value is PerformanceSensitiv
 /** Default minimum overage, in ms, before any task can be flagged slow. */
 export const DEFAULT_MIN_OVERAGE_MS = 1000;
 
-/** True for a usable per-client minimum overage: a finite number >= 0. */
+/** True for a usable per-worker minimum overage: a finite number >= 0. */
 export function isValidMinOverageMs(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
@@ -54,7 +54,7 @@ export class PerformanceMonitor {
    *   An unknown level is treated as 'normal'.
    * @param minOverageMs - Absolute gate: the task must be at least this many
    *   ms slower than its average, on top of the sigma test (default: 1000).
-   *   Callers resolve the active client's value before passing it.
+   *   Callers resolve the active worker's value before passing it.
    * @returns PerformanceWarning if outlier detected, null otherwise
    */
   detectOutlier(
@@ -89,7 +89,7 @@ export class PerformanceMonitor {
     const zScore = diff / effectiveStdDevMs;
 
     // Get threshold based on sensitivity level and sample count. An unknown
-    // level (e.g. a typo in clients.json) must not throw inside the tick.
+    // level (e.g. a typo in workers.json) must not throw inside the tick.
     const thresholds = this.sensitivityThresholds[sensitivity] ?? this.sensitivityThresholds.normal;
     const threshold = sampleCount < this.sampleThreshold
       ? thresholds.lowSamples

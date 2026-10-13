@@ -42,7 +42,7 @@ def create_execution_handler(client: PerfectAPIClient, on_flow_complete: Callabl
                     break
 
             if not flow_def:
-                client.send_log(request.run_id, f"[Python Client] ❌ Flow '{request.flow_name}' not found")
+                client.send_log(request.run_id, f"[Worker] ❌ Flow '{request.flow_name}' not found")
                 if on_flow_complete:
                     on_flow_complete(request.flow_name)
                 return
@@ -50,11 +50,11 @@ def create_execution_handler(client: PerfectAPIClient, on_flow_complete: Callabl
             try:
                 # Simply call the flow function
                 # The SDK's @flow and @task decorators handle all tracking
-                client.send_log(request.run_id, f"[Python Client] Starting flow: {request.flow_name}")
+                client.send_log(request.run_id, f"[Worker] Starting flow: {request.flow_name}")
                 flow_def.func()
-                client.send_log(request.run_id, f"[Python Client] ✓ Flow completed: {request.flow_name}")
+                client.send_log(request.run_id, f"[Worker] ✓ Flow completed: {request.flow_name}")
             except Exception as e:
-                client.send_log(request.run_id, f"[Python Client] ❌ Flow failed: {str(e)}")
+                client.send_log(request.run_id, f"[Worker] ❌ Flow failed: {str(e)}")
 
             # Call completion callback if provided
             if on_flow_complete:

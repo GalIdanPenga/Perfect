@@ -2,11 +2,11 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { AppHeader } from './AppHeader';
-import { ClientConfig } from '../types';
+import { WorkerConfig } from '../types';
 
-const client: ClientConfig = {
+const worker: WorkerConfig = {
   id: 'c1',
-  name: 'My Client',
+  name: 'My Worker',
   description: '',
   workingDir: '.',
   command: 'python',
@@ -16,20 +16,20 @@ const client: ClientConfig = {
 
 describe('AppHeader', () => {
   it('renders the title and version', () => {
-    render(<AppHeader themeColor="#0ea5e9" activeClient={null} />);
+    render(<AppHeader themeColor="#0ea5e9" activeWorker={null} />);
     expect(screen.getByText('Perfect')).toBeTruthy();
     expect(screen.getByText('v2.0')).toBeTruthy();
   });
 
-  it('shows "System Online" when no client is active', () => {
-    render(<AppHeader themeColor="#0ea5e9" activeClient={null} />);
+  it('shows "System Online" when no worker is active', () => {
+    render(<AppHeader themeColor="#0ea5e9" activeWorker={null} />);
     expect(screen.getByText('System Online')).toBeTruthy();
-    expect(screen.queryByText('Client Active')).toBeNull();
+    expect(screen.queryByText('Worker Active')).toBeNull();
   });
 
-  it('shows "Client Active" when a client is active', () => {
-    render(<AppHeader themeColor="#0ea5e9" activeClient={client} />);
-    expect(screen.getByText('Client Active')).toBeTruthy();
+  it('shows "Worker Active" when a worker is active', () => {
+    render(<AppHeader themeColor="#0ea5e9" activeWorker={worker} />);
+    expect(screen.getByText('Worker Active')).toBeTruthy();
     expect(screen.queryByText('System Online')).toBeNull();
   });
 });

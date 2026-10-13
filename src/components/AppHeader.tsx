@@ -1,14 +1,14 @@
 import { Activity } from 'lucide-react';
-import { ClientConfig } from '../types';
+import { WorkerConfig } from '../types';
 import { PerfectLogo } from './PerfectLogo';
 
 interface AppHeaderProps {
   themeColor: string;
-  activeClient: ClientConfig | null;
+  activeWorker: WorkerConfig | null;
 }
 
-/** Top navigation bar: logo, title, version badge, and system/client status. */
-export function AppHeader({ themeColor, activeClient }: AppHeaderProps) {
+/** Top navigation bar: logo, title, version badge, and system/worker status. */
+export function AppHeader({ themeColor, activeWorker }: AppHeaderProps) {
   return (
     <header
       className="backdrop-blur-md border-b h-14 flex-none px-5 flex items-center justify-between shadow-sm z-20 relative transition-all duration-700"
@@ -38,9 +38,9 @@ export function AppHeader({ themeColor, activeClient }: AppHeaderProps) {
           ></span>
           <span
             className="transition-colors duration-700"
-            style={{ color: activeClient ? themeColor : '#64748b' }}
+            style={{ color: activeWorker ? themeColor : '#64748b' }}
           >
-            {activeClient ? 'Client Active' : 'System Online'}
+            {activeWorker ? 'Worker Active' : 'System Online'}
           </span>
         </div>
         <button

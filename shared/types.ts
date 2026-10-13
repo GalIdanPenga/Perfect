@@ -60,8 +60,8 @@ export interface TaskRun {
 
 export type PerformanceSensitivity = 'conservative' | 'normal' | 'aggressive';
 
-/** One entry of server/clients.json, also served to the UI by /api/client/configs. */
-export interface ClientConfig {
+/** One entry of server/workers.json, also served to the UI by /api/worker/configs. */
+export interface WorkerConfig {
   id: string;
   name: string;
   description: string;
@@ -77,7 +77,7 @@ export interface ClientConfig {
    */
   performanceMinOverageMs?: number;
   /**
-   * Whether the client sends heartbeats so the server can fail its runs if it
+   * Whether the worker sends heartbeats so the server can fail its runs if it
    * crashes. Defaults to true. Passed to the process as PERFECT_HEARTBEAT.
    */
   heartbeat?: boolean;

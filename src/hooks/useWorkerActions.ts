@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { API_BASE_URL } from '../constants';
 
-export const useClientActions = (
-  setClientStatus: (status: 'stopped' | 'starting' | 'running' | 'error') => void,
+export const useWorkerActions = (
+  setWorkerStatus: (status: 'stopped' | 'starting' | 'running' | 'error') => void,
   setSessionStartTime: (time: string | null) => void,
   refreshRuns?: () => Promise<void>
 ) => {
-  const [isStartingClient, setIsStartingClient] = useState(false);
+  const [isStartingWorker, setIsStartingWorker] = useState(false);
 
-  const handleStartClient = async (selectedClientId: string) => {
-    setIsStartingClient(true);
+  const handleStartWorker = async (selectedWorkerId: string) => {
+    setIsStartingWorker(true);
 
     // Set session start time immediately with a small buffer (2 seconds earlier)
     // to ensure we capture all flows that start around this time
@@ -19,33 +19,33 @@ export const useClientActions = (
     setSessionStartTime(sessionStart);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/client/start`, {
+      const response = await fetch(`${API_BASE_URL}/worker/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ clientId: selectedClientId })
+        body: JSON.stringify({ workerId: selectedWorkerId })
       });
       const data = await response.json();
       if (data.success) {
-        setClientStatus('starting');
+        setWorkerStatus('starting');
       }
     } catch (error) {
-      console.error('Failed to start client:', error);
-      setClientStatus('error');
+      console.error('Failed to start worker:', error);
+      setWorkerStatus('error');
       // Clear session start time on error
       setSessionStartTime(null);
     } finally {
-      setIsStartingClient(false);
+      setIsStartingWorker(false);
     }
   };
 
-  const handleStopClient = async (clearSession: boolean = false) => {
+  const handleStopWorker = async (clearSession: boolean = false) => {
     try {
-      await fetch(`${API_BASE_URL}/client/stop`, {
+      await fetch(`${API_BASE_URL}/worker/stop`, {
         method: 'POST'
       });
-      setClientStatus('stopped');
+      setWorkerStatus('stopped');
 
-      // Only clear session when explicitly requested (e.g., returning to client selection)
+      // Only clear session when explicitly requested (e.g., returning to worker selection)
       if (clearSession) {
         setSessionStartTime(null);
       }
@@ -57,9 +57,9 @@ export const useClientActions = (
         }, 200);
       }
     } catch (error) {
-      console.error('Failed to stop client:', error);
+      console.error('Failed to stop worker:', error);
     }
   };
 
-  return { isStartingClient, handleStartClient, handleStopClient };
+  return { isStartingWorker, handleStartWorker, handleStopWorker };
 };

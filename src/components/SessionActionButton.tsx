@@ -8,14 +8,14 @@ interface SessionActionButtonProps {
 }
 
 /**
- * The primary session action below the run cards: "Return to Client Selection"
+ * The primary session action below the run cards: "Return to Worker Selection"
  * once every flow has finished, otherwise a "Stop" button.
  */
 export function SessionActionButton({ allFlowsFinished, themeColor, onReturn, onStop }: SessionActionButtonProps) {
   return (
     <div className="flex justify-center mt-4 mb-6">
       {allFlowsFinished ? (
-        // Show "Return to Client Selection" when all flows are finished
+        // Show "Return to Worker Selection" when all flows are finished
         <button
           onClick={onReturn}
           className="group relative px-8 py-4 rounded-xl border-2 transition-all duration-300 hover:scale-105 active:scale-95"
@@ -35,7 +35,7 @@ export function SessionActionButton({ allFlowsFinished, themeColor, onReturn, on
               className="text-sm font-bold tracking-wide"
               style={{ color: themeColor }}
             >
-              Return to Client Selection
+              Return to Worker Selection
             </span>
             <ChevronRight
               size={20}
