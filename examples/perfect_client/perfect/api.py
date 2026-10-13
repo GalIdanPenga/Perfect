@@ -11,8 +11,10 @@ It handles:
 import requests
 import json
 import math
+import os
 import time
 import threading
+import weakref
 from typing import Dict, List, Callable, Optional
 from dataclasses import dataclass
 
@@ -23,6 +25,66 @@ class ExecutionRequest:
     run_id: str
     flow_name: str
     configuration: str
+
+
+class _FairRLock:
+    """
+    Re-entrant lock that hands off to waiters in arrival order.
+
+    threading.RLock makes no fairness promise: a thread that releases and
+    immediately re-acquires in a tight loop (the execution poll, or any caller
+    doing the same) can keep winning and starve every other thread, including
+    the heartbeat. Here each waiter takes a ticket and is served in order, so
+    the longest wait for the lock is one request by each thread ahead of it.
+
+    Supports the subset of the Lock API this client uses: `with`, acquire
+    (blocking or not; no timeout), release, and _is_owned().
+    """
+
+    def __init__(self):
+        self._cond = threading.Condition(threading.Lock())
+        self._owner: Optional[int] = None
+        self._count = 0
+        self._next_ticket = 0
+        self._serving = 0
+
+    def acquire(self, blocking: bool = True) -> bool:
+        me = threading.get_ident()
+        with self._cond:
+            if self._owner == me:
+                self._count += 1
+                return True
+            if not blocking:
+                if self._owner is None and self._next_ticket == self._serving:
+                    self._owner, self._count = me, 1
+                    return True
+                return False
+            ticket = self._next_ticket
+            self._next_ticket += 1
+            while not (self._owner is None and self._serving == ticket):
+                self._cond.wait()
+            self._owner, self._count = me, 1
+            self._serving += 1
+            return True
+
+    def release(self) -> None:
+        with self._cond:
+            if self._owner != threading.get_ident():
+                raise RuntimeError("cannot release un-acquired lock")
+            self._count -= 1
+            if self._count == 0:
+                self._owner = None
+                self._cond.notify_all()
+
+    def _is_owned(self) -> bool:
+        return self._owner == threading.get_ident()
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, *exc):
+        self.release()
 
 
 class PerfectAPIClient:
@@ -36,7 +98,20 @@ class PerfectAPIClient:
     - GET /api/execution-requests - Long-poll for execution requests
     - POST /api/flows/{run_id}/logs - Send logs for a running flow
     - WebSocket /ws - Real-time bidirectional communication
+
+    Thread safety: one client may be used from any number of threads. Every
+    exchange with the server is serialized behind a private re-entrant lock,
+    which is held only for the duration of a single HTTP call (each of which
+    has a bounded timeout) or the Session swap in stop_listening(). It is never
+    held while running user code (execution callbacks), parsing responses or
+    printing, so client methods may be called from callbacks, from parallel
+    flows, or from the heartbeat thread without deadlock. The lock is fair
+    (first come, first served), so a thread calling in a tight loop cannot
+    starve the others. The client survives pickling and os.fork(): both get a
+    fresh lock and Session in the copy.
     """
+
+    DEFAULT_FETCH_TIMEOUT_S = 10.0
 
     def __init__(self, base_url: str = "http://localhost:3000"):
         """
@@ -51,8 +126,9 @@ class PerfectAPIClient:
         # thread and the poll loop all share one Session, which requests does
         # not guarantee to be thread-safe, and stop_listening() swaps the
         # Session out from under them. Re-entrant so a locked method may call
-        # another locked method.
-        self._lock = threading.RLock()
+        # another locked method; fair so no caller can starve the heartbeat.
+        self._lock = _FairRLock()
+        self._register_fork_handler()
         self._execution_callback: Optional[Callable[[ExecutionRequest], None]] = None
         # The heartbeat thread and the stop Event it owns. Each thread gets its
         # own Event so a thread that outlives stop_heartbeat()'s join can never
@@ -103,6 +179,43 @@ class PerfectAPIClient:
             print(f"[ERROR] Failed to register flow {flow_definition['name']}: {e}")
             return None
 
+    # ------------------------------------------------------------------------
+    # Lock lifecycle: pickling and forking
+    # ------------------------------------------------------------------------
+
+    def _register_fork_handler(self):
+        """After a fork, the child must not inherit a lock another thread held."""
+        if not hasattr(os, "register_at_fork"):
+            return  # no fork on this platform
+        ref = weakref.ref(self)
+
+        def after_in_child():
+            client = ref()
+            if client is not None:
+                client._reset_runtime_state()
+
+        os.register_at_fork(after_in_child=after_in_child)
+
+    def _reset_runtime_state(self):
+        """Fresh lock, fresh Session, no threads: for a pickled copy or a forked child."""
+        self._lock = _FairRLock()
+        self.session = requests.Session()
+        self._heartbeat_thread = None
+        self._heartbeat_stop = None
+        self._listening = False
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        for key in ("_lock", "session", "_heartbeat_thread", "_heartbeat_stop"):
+            state.pop(key, None)
+        state["_listening"] = False
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._reset_runtime_state()
+        self._register_fork_handler()
+
     def create_run(self, flow_id: str, configuration: str = "development") -> Optional[str]:
         """
         Create a run for a client-initiated execution of a registered flow.
@@ -141,6 +254,9 @@ class PerfectAPIClient:
             The response text, or None on any request error
         """
         url = path if path.startswith("http") else f"{self.base_url}{path}"
+        # The lock is held for the whole request, so its timeout must be bounded.
+        if not (isinstance(timeout, (int, float)) and math.isfinite(timeout) and timeout > 0):
+            timeout = self.DEFAULT_FETCH_TIMEOUT_S
         try:
             with self._lock:
                 response = self.session.get(url, timeout=timeout)

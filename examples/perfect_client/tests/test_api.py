@@ -4,6 +4,7 @@ Tests for PerfectAPIClient (perfect.api).
 All HTTP calls are mocked — no real server required.
 """
 
+import os
 import threading
 import time
 import pytest
@@ -626,3 +627,237 @@ class TestFetchText:
         client = _make_client()
         with patch.object(client.session, "get", side_effect=requests.exceptions.RequestException("down")):
             assert client.fetch_text("/x") is None
+
+
+# ---------------------------------------------------------------------------
+# Lock safety: no deadlocks, nothing else disturbed, robust to other callers
+# ---------------------------------------------------------------------------
+
+def _run_with_deadline(fn, seconds: float):
+    """Run fn in a thread; fail if it hasn't returned within `seconds`."""
+    done = threading.Event()
+    err: list = []
+
+    def target():
+        try:
+            fn()
+        except BaseException as e:  # noqa: BLE001
+            err.append(e)
+        finally:
+            done.set()
+
+    t = threading.Thread(target=target, daemon=True)
+    t.start()
+    assert done.wait(seconds), f"deadlock or hang: did not finish within {seconds}s"
+    if err:
+        raise err[0]
+
+
+class TestLockSafety:
+    def test_source_every_server_call_is_locked_and_bounded(self):
+        """Guards future edits: each session.get/post in api.py sits under the lock
+        and carries a timeout, so the lock can never be held indefinitely."""
+        import inspect, re
+        import perfect.api as api
+        src = inspect.getsource(api.PerfectAPIClient)
+        calls = list(re.finditer(r"self\.session\.(get|post)\(", src))
+        assert calls, "no server calls found"
+        for m in calls:
+            before = src[max(0, m.start() - 200):m.start()]
+            assert "with self._lock:" in before, f"unlocked server call near: {src[m.start():m.start()+60]!r}"
+            call_text = src[m.start():src.index(")", m.start() + 1) + 1]
+            # allow the timeout to come via a variable only in fetch_text, which clamps it
+            assert "timeout=" in call_text, f"server call without timeout: {call_text!r}"
+
+    def test_callback_may_call_the_client_without_deadlock(self):
+        client = _make_client()
+        seen: list = []
+        polls = {"n": 0}
+
+        def get(url, **kwargs):
+            polls["n"] += 1
+            if polls["n"] == 1:
+                return _ok_response({"run_id": "r1", "flow_name": "F", "configuration": "dev"})
+            client._listening = False
+            raise requests.exceptions.Timeout()
+
+        def callback(req):
+            # user code runs outside the lock, so it can talk to the server freely
+            seen.append(client.send_log(req.run_id, "from callback"))
+            seen.append(client.update_task_state(req.run_id, 0, "RUNNING"))
+
+        client.on_execution_request(callback)
+        with patch.object(client.session, "get", side_effect=get), \
+             patch.object(client.session, "post", return_value=_ok_response({})):
+            _run_with_deadline(lambda: client.listen_for_executions(heartbeat=False), 5.0)
+        assert seen == [True, True]
+
+    def test_heartbeats_keep_flowing_while_polling_continuously(self):
+        client = _make_client()
+        beats = {"n": 0}
+        stop_at = time.monotonic() + 0.6
+
+        def get(url, **kwargs):
+            time.sleep(0.02)                     # each poll holds the lock briefly
+            if time.monotonic() > stop_at:
+                client._listening = False
+            raise requests.exceptions.Timeout()
+
+        def post(url, **kwargs):
+            beats["n"] += 1
+            return _ok_response({})
+
+        client.on_execution_request(lambda req: None)
+        with patch.object(client.session, "get", side_effect=get), \
+             patch.object(client.session, "post", side_effect=post):
+            _run_with_deadline(lambda: client.listen_for_executions(heartbeat=True, heartbeat_interval=0.02), 5.0)
+        assert beats["n"] >= 5, f"heartbeats starved by the poll loop: {beats['n']}"
+
+    def test_close_while_heartbeat_is_mid_request_returns_promptly(self):
+        client = _make_client()
+        in_call = threading.Event()
+
+        def slow_post(url, **kwargs):
+            in_call.set()
+            time.sleep(0.3)
+            return _ok_response({})
+
+        with patch.object(client.session, "post", side_effect=slow_post):
+            client.start_heartbeat(60.0)
+            assert in_call.wait(1.0)
+            started = time.monotonic()
+            _run_with_deadline(client.close, 5.0)
+            assert time.monotonic() - started < 2.0
+        assert client.heartbeat_active is False
+
+    def test_many_threads_mixed_calls_finish_and_leave_the_lock_free(self):
+        client = _make_client()
+        errors: list = []
+
+        def ok(url, **kwargs):
+            time.sleep(0.001)
+            r = _ok_response({"flow": {}, "runId": "r", "success": True, "report": {}, "reports": []})
+            r.text = ""
+            return r
+
+        def worker(i):
+            try:
+                for _ in range(10):
+                    client.send_log("r", "x")
+                    client.update_task_state("r", 0, "RUNNING", progress=i)
+                    client.send_heartbeat()
+                    client.get_report("r")
+                    client.fetch_text("/x")
+            except Exception as e:  # noqa: BLE001
+                errors.append(e)
+
+        with patch.object(client.session, "post", side_effect=ok), \
+             patch.object(client.session, "get", side_effect=ok):
+            threads = [threading.Thread(target=worker, args=(i,)) for i in range(12)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join(10.0)
+                assert not t.is_alive(), "worker hung"
+        assert errors == []
+        assert client._lock.acquire(blocking=False)
+        client._lock.release()
+
+    @pytest.mark.parametrize("bad", [None, 0, -1, float("inf"), float("nan"), "10"])
+    def test_fetch_text_never_holds_the_lock_without_a_bounded_timeout(self, bad):
+        client = _make_client()
+        resp = _ok_response({})
+        resp.text = "x"
+        with patch.object(client.session, "get", return_value=resp) as mock_get:
+            client.fetch_text("/x", timeout=bad)
+        assert mock_get.call_args[1]["timeout"] == client.DEFAULT_FETCH_TIMEOUT_S
+
+    def test_pickled_copy_gets_a_fresh_lock_and_works(self):
+        import pickle
+        client = _make_client()
+        # patch the Session (dropped from the pickled state), not the client itself
+        with patch.object(client.session, "post", return_value=_ok_response({})):
+            client.start_heartbeat(0.05)
+            copy = pickle.loads(pickle.dumps(client))   # pickled while a thread is running
+            client.stop_heartbeat()
+        assert copy.base_url == client.base_url
+        assert copy._lock is not client._lock
+        assert copy.heartbeat_active is False
+        with patch.object(copy.session, "post", return_value=_ok_response({})):
+            assert copy.send_heartbeat() is True
+
+    @pytest.mark.skipif(not hasattr(os, "fork"), reason="no fork on this platform")
+    def test_forked_child_is_not_stuck_on_a_lock_the_parent_holds(self):
+        client = _make_client()
+        with client._lock:                       # parent holds the lock across the fork
+            pid = os.fork()
+        if pid == 0:                             # child
+            try:
+                got = client._lock.acquire(blocking=False)
+                os._exit(0 if got else 3)
+            except BaseException:  # noqa: BLE001
+                os._exit(4)
+        _, status = os.waitpid(pid, 0)
+        assert os.WEXITSTATUS(status) == 0, "child inherited a held lock"
+
+
+class TestFairLock:
+    def test_hands_off_in_arrival_order(self):
+        from perfect.api import _FairRLock
+        lock = _FairRLock()
+        order: list = []
+        gates = [threading.Event() for _ in range(3)]
+
+        def waiter(i):
+            gates[i].wait()
+            with lock:
+                order.append(i)
+
+        with lock:
+            threads = [threading.Thread(target=waiter, args=(i,)) for i in range(3)]
+            for t in threads:
+                t.start()
+            for i in range(3):           # line them up in a known order
+                gates[i].set()
+                time.sleep(0.03)
+        for t in threads:
+            t.join(2.0)
+        assert order == [0, 1, 2]
+
+    def test_reentrant_and_non_blocking_semantics(self):
+        from perfect.api import _FairRLock
+        lock = _FairRLock()
+        assert lock.acquire(blocking=False)
+        assert lock.acquire(blocking=False)      # re-entrant on the same thread
+        assert lock._is_owned()
+        other: list = []
+        t = threading.Thread(target=lambda: other.append(lock.acquire(blocking=False)))
+        t.start(); t.join()
+        assert other == [False]                  # another thread can't take it
+        lock.release()
+        assert lock._is_owned()                  # still held once
+        lock.release()
+        assert not lock._is_owned()
+        with pytest.raises(RuntimeError):
+            lock.release()
+
+    def test_a_tight_loop_cannot_starve_a_waiter(self):
+        from perfect.api import _FairRLock
+        lock = _FairRLock()
+        stop = threading.Event()
+        got = threading.Event()
+
+        def hog():
+            while not stop.is_set():
+                with lock:
+                    time.sleep(0.005)
+
+        def waiter():
+            with lock:
+                got.set()
+
+        h = threading.Thread(target=hog, daemon=True); h.start()
+        time.sleep(0.02)
+        w = threading.Thread(target=waiter); w.start()
+        assert got.wait(1.0), "waiter starved by the hogging thread"
+        stop.set(); h.join(1.0); w.join(1.0)
