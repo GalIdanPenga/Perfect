@@ -1,5 +1,17 @@
 import { Db } from './schema';
 
+interface Stats { avgDurationMs: number; stdDevDurationMs: number; sampleCount: number }
+
+/** Convert a statistics row (Welford running mean + m2) to avg/stdDev/count. */
+function toStats(row: { avg_duration_ms: number; sample_count: number; m2: number }): Stats {
+  const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
+  return {
+    avgDurationMs: row.avg_duration_ms,
+    stdDevDurationMs: Math.sqrt(variance),
+    sampleCount: row.sample_count
+  };
+}
+
 export function createStatsDb(db: Db) {
   return {
     updateTaskStats(flowName: string, taskName: string, durationMs: number) {
@@ -25,32 +37,20 @@ export function createStatsDb(db: Db) {
       }
     },
 
-    getTaskStats(flowName: string, taskName: string): { avgDurationMs: number; stdDevDurationMs: number; sampleCount: number } | undefined {
+    getTaskStats(flowName: string, taskName: string): Stats | undefined {
       const row = db.prepare(
         'SELECT avg_duration_ms, sample_count, m2 FROM task_statistics WHERE flow_name = ? AND task_name = ?'
       ).get(flowName, taskName) as any;
       if (!row) return undefined;
-      const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
-      return {
-        avgDurationMs: row.avg_duration_ms,
-        stdDevDurationMs: Math.sqrt(variance),
-        sampleCount: row.sample_count
-      };
+      return toStats(row);
     },
 
-    getFlowStats(flowName: string): Map<string, { avgDurationMs: number; stdDevDurationMs: number; sampleCount: number }> {
+    getFlowStats(flowName: string): Map<string, Stats> {
       const rows = db.prepare(
         'SELECT task_name, avg_duration_ms, sample_count, m2 FROM task_statistics WHERE flow_name = ?'
       ).all(flowName) as any[];
-      const statsMap = new Map<string, { avgDurationMs: number; stdDevDurationMs: number; sampleCount: number }>();
-      rows.forEach(row => {
-        const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
-        statsMap.set(row.task_name, {
-          avgDurationMs: row.avg_duration_ms,
-          stdDevDurationMs: Math.sqrt(variance),
-          sampleCount: row.sample_count
-        });
-      });
+      const statsMap = new Map<string, Stats>();
+      rows.forEach(row => statsMap.set(row.task_name, toStats(row)));
       return statsMap;
     },
 
@@ -58,17 +58,7 @@ export function createStatsDb(db: Db) {
       const rows = db.prepare(
         'SELECT flow_name, task_name, avg_duration_ms, sample_count, m2, last_updated FROM task_statistics ORDER BY flow_name, task_name'
       ).all() as any[];
-      return rows.map(row => {
-        const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
-        return {
-          flowName: row.flow_name,
-          taskName: row.task_name,
-          avgDurationMs: row.avg_duration_ms,
-          stdDevDurationMs: Math.sqrt(variance),
-          sampleCount: row.sample_count,
-          lastUpdated: row.last_updated
-        };
-      });
+      return rows.map(row => ({ flowName: row.flow_name, taskName: row.task_name, ...toStats(row), lastUpdated: row.last_updated }));
     },
 
     updateFlowStats(flowName: string, durationMs: number) {
@@ -94,33 +84,19 @@ export function createStatsDb(db: Db) {
       }
     },
 
-    getFlowStatsForFlow(flowName: string): { avgDurationMs: number; stdDevDurationMs: number; sampleCount: number } | undefined {
+    getFlowStatsForFlow(flowName: string): Stats | undefined {
       const row = db.prepare(
         'SELECT avg_duration_ms, sample_count, m2 FROM flow_statistics WHERE flow_name = ?'
       ).get(flowName) as any;
       if (!row) return undefined;
-      const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
-      return {
-        avgDurationMs: row.avg_duration_ms,
-        stdDevDurationMs: Math.sqrt(variance),
-        sampleCount: row.sample_count
-      };
+      return toStats(row);
     },
 
     getAllFlowStats(): Array<{ flowName: string; avgDurationMs: number; stdDevDurationMs: number; sampleCount: number; lastUpdated: string }> {
       const rows = db.prepare(
         'SELECT flow_name, avg_duration_ms, sample_count, m2, last_updated FROM flow_statistics ORDER BY flow_name'
       ).all() as any[];
-      return rows.map(row => {
-        const variance = row.sample_count > 1 ? row.m2 / (row.sample_count - 1) : 0;
-        return {
-          flowName: row.flow_name,
-          avgDurationMs: row.avg_duration_ms,
-          stdDevDurationMs: Math.sqrt(variance),
-          sampleCount: row.sample_count,
-          lastUpdated: row.last_updated
-        };
-      });
+      return rows.map(row => ({ flowName: row.flow_name, ...toStats(row), lastUpdated: row.last_updated }));
     },
 
     getTaskHistory(flowName: string, taskName: string, limit: number = 100): Array<{ runId: string; timestamp: string; durationMs: number }> {

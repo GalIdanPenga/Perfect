@@ -461,3 +461,24 @@ class TestHeartbeatThreadOwnership:
     def test_rejects_non_finite_or_non_positive_interval(self, bad):
         with pytest.raises(ValueError):
             _make_client().start_heartbeat(bad)
+
+
+class TestHeartbeatThreadResilience:
+    def test_loop_survives_an_unexpected_exception(self, capsys):
+        client = _make_client()
+        calls = {"n": 0}
+        second = threading.Event()
+
+        def flaky_send():
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("adapter torn down")
+            second.set()
+            return True
+
+        with patch.object(client, "send_heartbeat", side_effect=flaky_send):
+            client.start_heartbeat(0.01)
+            assert second.wait(2.0), "thread died after the first error"
+            assert client.heartbeat_active is True
+            client.stop_heartbeat()
+        assert "Heartbeat error" in capsys.readouterr().out

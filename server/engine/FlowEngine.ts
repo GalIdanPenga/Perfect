@@ -772,11 +772,11 @@ export class FlowEngine {
             task: '[System] Task failed: Lost connection to Python client'
           }, { includePending: true });
 
-          // Save the failed run to database
+          // Generate the report first so its path is persisted with the run
+          if (!run.reportPath) {
+            run.reportPath = generateFlowReport(run, run.clientName || 'default') || undefined;
+          }
           this.runDb.saveRun(run);
-
-          // Generate report for the failed flow
-          generateFlowReport(run, run.clientName || 'default');
         });
 
         this.notifyStateChange();
@@ -789,23 +789,23 @@ export class FlowEngine {
   }
 
   /**
-   * Manually fail all running flows (e.g., when user clicks Stop button)
-   * Only the currently running task in each flow will be marked as failed.
+   * Fail all running flows, e.g. when the user clicks Stop or the client
+   * process dies. By default only the currently running task in each flow is
+   * marked failed; pass includePending to fail queued tasks too.
    */
-  failAllRunningFlows(): void {
+  failAllRunningFlows(reason: string = 'User stopped the client', options: { includePending?: boolean } = {}): void {
     const runningRuns = this.runs.filter(
       r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING
     );
 
     if (runningRuns.length > 0) {
-      console.log(`[FlowEngine] Manually failing ${runningRuns.length} running flows due to stop request`);
+      console.log(`[FlowEngine] Failing ${runningRuns.length} running flows: ${reason}`);
 
       runningRuns.forEach(run => {
-        // Only fail the currently running task, not pending tasks
         markRunFailed(run, {
-          flow: '[System] Flow failed: User stopped the client',
-          task: '[System] Task failed: User stopped the client'
-        }, { includePending: false });
+          flow: `[System] Flow failed: ${reason}`,
+          task: `[System] Task failed: ${reason}`
+        }, { includePending: options.includePending ?? false });
 
         // Generate report for the failed flow (only if not already generated)
         if (!run.reportPath) {

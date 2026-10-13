@@ -570,3 +570,31 @@ test('legacy NULL crucial_pass reads back as true (default)', () => {
   expect(runDb.getAllRuns()[0].tasks[0].crucialPass).toBe(true)
   expect(runDb.getRunById('run-legacy')!.tasks[0].crucialPass).toBe(true)
 })
+
+
+describe('run persistence round trip', () => {
+  it('keeps clientName and clientColor across save and reload', () => {
+    const { runDb } = createDatabase(':memory:')
+    runDb.saveRun({
+      id: 'run-1', flowId: 'flow-1', flowName: 'F', state: 'COMPLETED' as any,
+      startTime: '2026-01-01T00:00:00.000Z', endTime: '2026-01-01T00:01:00.000Z',
+      configuration: 'development', tags: {}, logs: ['hello'], progress: 100,
+      clientColor: '#00D9FF', clientName: 'Perfect Example Flows', reportPath: '/r.html',
+      tasks: [{ id: 't-1', taskId: 'task-1', taskName: 't', state: 'COMPLETED' as any, weight: 1, estimatedTime: 100, progress: 100, logs: [], crucialPass: true }],
+    })
+    const run = runDb.getRunById('run-1')!
+    expect(run.clientName).toBe('Perfect Example Flows')
+    expect(run.clientColor).toBe('#00D9FF')
+    expect(run.reportPath).toBe('/r.html')
+    expect(runDb.getAllRuns()[0].clientName).toBe('Perfect Example Flows')
+  })
+
+  it('maps a missing client name to undefined, not null', () => {
+    const { runDb } = createDatabase(':memory:')
+    runDb.saveRun({
+      id: 'run-2', flowId: 'flow-1', flowName: 'F', state: 'COMPLETED' as any,
+      startTime: '2026-01-01T00:00:00.000Z', configuration: 'development', logs: [], progress: 100, tasks: [],
+    })
+    expect(runDb.getRunById('run-2')!.clientName).toBeUndefined()
+  })
+})

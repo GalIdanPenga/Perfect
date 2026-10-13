@@ -307,6 +307,10 @@ class WorkflowRegistry:
         """
         if heartbeat_interval is not None and not (math.isfinite(heartbeat_interval) and heartbeat_interval > 0):
             raise ValueError("heartbeat_interval must be a finite number greater than 0")
+        if mock is not None and mock != self._mock and self._client is not None:
+            # The client object is built for one mode; swapping it under running
+            # flows would strand their run context. Decide before the first flow.
+            raise ValueError("mock mode cannot be changed after the client has connected")
 
         if backend_url is not None:
             self._backend_url = backend_url

@@ -3,17 +3,19 @@ import { Db } from './schema';
 import { mapRunRow } from './mappers';
 
 export function createRunDb(db: Db) {
-  return {
-    saveRun(run: FlowRun) {
+  // One transaction per save: the run row, its tasks and its logs are replaced
+  // atomically (a crash mid-save can't leave a run with no tasks), and the
+  // many small writes commit once instead of once each.
+  const saveRunTx = db.transaction((run: FlowRun) => {
       const stmt = db.prepare(`
         INSERT OR REPLACE INTO flow_runs
-        (id, flow_id, flow_name, state, start_time, end_time, configuration, tags, progress, client_color, report_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, flow_id, flow_name, state, start_time, end_time, configuration, tags, progress, client_color, client_name, report_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       stmt.run(
         run.id, run.flowId, run.flowName, run.state, run.startTime,
         run.endTime || null, run.configuration, JSON.stringify(run.tags || {}),
-        run.progress, run.clientColor || null, run.reportPath || null
+        run.progress, run.clientColor || null, run.clientName || null, run.reportPath || null
       );
 
       db.prepare('DELETE FROM task_runs WHERE run_id = ?').run(run.id);
@@ -50,6 +52,11 @@ export function createRunDb(db: Db) {
           logStmt.run(run.id, log);
         }
       }
+  });
+
+  return {
+    saveRun(run: FlowRun) {
+      saveRunTx(run);
     },
 
     getAllRuns(): FlowRun[] {

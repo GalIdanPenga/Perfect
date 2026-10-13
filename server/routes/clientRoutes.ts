@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { flowEngine } from '../engine/FlowEngine';
+import { ClientConfig } from '../types';
 import { PerformanceSensitivity, DEFAULT_MIN_OVERAGE_MS, SENSITIVITY_LEVELS, isValidMinOverageMs, isValidSensitivity } from '../engine/services/PerformanceMonitor';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,32 +17,14 @@ let pythonProcess: ChildProcess | null = null;
 let clientStatus: 'stopped' | 'starting' | 'running' | 'error' = 'stopped';
 let clientLogs: string[] = [];
 let activeClient: ClientConfig | null = null;
+// Set by /stop before the process is killed, so the exit handler can tell a
+// requested stop from a crash.
+let stopRequested = false;
 
 // Performance sensitivity levels - imported from PerformanceMonitor service
 export type { PerformanceSensitivity };
 
-// Load client configurations
-interface ClientConfig {
-  id: string;
-  name: string;
-  description: string;
-  workingDir: string;
-  command: string;
-  args: string[];
-  color?: string;
-  performanceSensitivity?: PerformanceSensitivity;
-  /**
-   * Absolute threshold for slow-task warnings: a task must be at least this
-   * many ms slower than its average, on top of the sigma test. Defaults to
-   * DEFAULT_MIN_OVERAGE_MS (1000).
-   */
-  performanceMinOverageMs?: number;
-  /**
-   * Whether the client sends heartbeats so the server can fail its runs if it
-   * crashes. Defaults to true. Passed to the process as PERFECT_HEARTBEAT.
-   */
-  heartbeat?: boolean;
-}
+// Client configurations (shape defined once in shared/types.ts)
 
 /**
  * Drop invalid performance settings so the engine falls back to its defaults,
@@ -146,12 +129,13 @@ router.post('/start', (req, res) => {
       clientLogs.push('[Server] Heartbeat disabled: runs will not be failed automatically if the client crashes');
     }
 
-    // Disarm the watchdog so a previous client's heartbeat can't affect this
-    // one. Not while runs are still active: those belong to a client that may
-    // have just crashed, and the pending timeout is what will fail them.
-    if (!flowEngine.hasActiveRuns()) {
-      flowEngine.resetHeartbeat();
-    }
+    // Disarm the watchdog so a previous client's stale heartbeat can't fail
+    // this client's runs. A managed client that crashed has already had its
+    // runs failed by the exit handler below. (The watchdog is a single global
+    // timestamp, so it cannot tell two clients' runs apart; a run left behind
+    // by an external client is failed by the Stop button, not by this.)
+    stopRequested = false;
+    flowEngine.resetHeartbeat();
 
     // Resolve working directory relative to project root
     const workingDir = path.join(__dirname, '../..', selectedClient.workingDir);
@@ -202,8 +186,17 @@ router.post('/start', (req, res) => {
       clientStatus = 'stopped';
       pythonProcess = null;
       activeClient = null;
-      // Don't reset the heartbeat here: after a crash the watchdog must still
-      // time out and fail the runs the client left behind.
+
+      // The server watched this process die. If nobody asked for it, fail the
+      // runs it left behind right now instead of waiting on the heartbeat
+      // watchdog (which a client with heartbeats off would never trigger).
+      if (!stopRequested && flowEngine.hasActiveRuns()) {
+        const reason = signal
+          ? `Python client was killed (${signal})`
+          : `Python client exited unexpectedly (code ${code})`;
+        clientLogs.push(`[Server] ${reason}; failing its running flows`);
+        flowEngine.failAllRunningFlows(reason, { includePending: true });
+      }
     });
 
     res.json({
@@ -247,6 +240,7 @@ router.post('/stop', (req, res) => {
     const processToKill = pythonProcess;
 
     // Kill the process first to stop it from sending more updates
+    stopRequested = true;
     processToKill.kill('SIGTERM');
 
     // Force kill after 5 seconds if still running

@@ -65,6 +65,7 @@ export function mapRunRow(db: Db, run: any): FlowRun {
     tags: run.tags ? JSON.parse(run.tags) : {},
     progress: run.progress,
     clientColor: run.client_color,
+    clientName: run.client_name ?? undefined,
     reportPath: run.report_path,
     logs: logs.map((l: any) => l.log_entry),
     tasks: tasks.map((task: any) => mapTaskRunRow(db, task)),

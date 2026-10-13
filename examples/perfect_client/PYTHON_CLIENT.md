@@ -124,7 +124,7 @@ To run without heartbeat checks, turn them off in any of these ways:
 
 `PERFECT_HEARTBEAT_INTERVAL` sets the interval from the environment. Keep it well below 10 seconds.
 
-Without heartbeats, a crashed client's flows stay RUNNING until you press Stop in the UI or restart the backend.
+Without heartbeats, a crashed client's flows stay RUNNING until you press Stop in the UI or restart the backend. The exception is a client started from the UI: the backend owns that process and fails its flows the moment it exits unexpectedly, whatever the heartbeat setting.
 
 ### Listen Function
 

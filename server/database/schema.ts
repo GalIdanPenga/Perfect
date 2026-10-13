@@ -43,9 +43,17 @@ export function initializeSchema(db: Db) {
       tags TEXT,
       progress REAL NOT NULL DEFAULT 0,
       client_color TEXT,
+      client_name TEXT,
       report_path TEXT
     )
   `);
+
+  // Migration: Add client_name column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE flow_runs ADD COLUMN client_name TEXT`);
+  } catch (e: any) {
+    if (!e.message.includes('duplicate column name')) throw e;
+  }
 
   // Migration: Add client_color column if it doesn't exist
   try {

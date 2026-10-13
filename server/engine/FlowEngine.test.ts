@@ -3,6 +3,7 @@ import { FlowEngine, flowEngine } from './FlowEngine';
 import { createDatabase } from '../database/db';
 import { TaskState, FlowRegistrationPayload } from '../types';
 import { getActiveClient } from '../routes/clientRoutes';
+import { generateFlowReport } from '../utils/reportGenerator';
 
 // ---------------------------------------------------------------------------
 // Module mocks (hoisted)
@@ -355,6 +356,19 @@ describe('FlowEngine', () => {
 
       const run = engine.getRuns().find(r => r.id === runId)!;
       expect(run.state).toBe(TaskState.FAILED);
+    });
+
+    it('persists the report path of a heartbeat-failed run', () => {
+      vi.mocked(generateFlowReport).mockReturnValueOnce('/Reports/x.html');
+      const flow = engine.registerFlow(makePayload('ReportFlow', 1));
+      const runId = engine.createRun(flow.id)!;
+
+      engine.updateHeartbeat();
+      vi.setSystemTime(Date.now() + 11_000);
+      (engine as any).checkHeartbeat();
+
+      expect(engine.getRun(runId)!.reportPath).toBe('/Reports/x.html');
+      expect(engine.getRun(runId)!.state).toBe(TaskState.FAILED);
     });
 
     it('resetHeartbeat() disarms the watchdog so a stale heartbeat cannot fail runs', () => {

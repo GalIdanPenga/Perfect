@@ -69,21 +69,40 @@ describe('client process lifecycle and the heartbeat watchdog', () => {
     expect(lastHeartbeat()).toBeNull();
   });
 
-  it('keeps the watchdog armed on start while a previous client\'s runs are still active', async () => {
-    // Client A crashed mid-run; its heartbeat is stale and its run is still RUNNING.
-    const flow = flowEngine.registerFlow({ name: 'Orphan', description: '', tasks: [{ name: 't', estimatedTime: 100 }] });
+  it('fails the running flows immediately when the client process dies without a stop request', async () => {
+    await request(app).post('/api/client/start').send({ clientId: 'perfect_example' });
+    const flow = flowEngine.registerFlow({ name: 'Orphan', description: '', tasks: [{ name: 't1', estimatedTime: 100 }, { name: 't2', estimatedTime: 100 }] });
     const runId = flowEngine.createRun(flow.id)!;
-    flowEngine.updateHeartbeat();
-    spawned[spawned.length - 1].emit('exit', null, 'SIGKILL');
+    expect(flowEngine.getRun(runId)!.state).toBe('RUNNING');
 
-    // User starts client B within the 10s window.
-    const res = await request(app).post('/api/client/start').send({ clientId: 'perfect_example' });
-    expect(res.body.success).toBe(true);
-    expect(lastHeartbeat()).not.toBeNull();   // pending timeout survives, so A's run will be failed
+    spawned[spawned.length - 1].emit('exit', null, 'SIGKILL');   // crash
 
-    flowEngine.failAllRunningFlows();
-    expect(flowEngine.getRun(runId)!.state).toBe('FAILED');
-    spawned[spawned.length - 1].emit('exit', null, 'SIGTERM');
+    const run = flowEngine.getRun(runId)!;
+    expect(run.state).toBe('FAILED');
+    expect(run.tasks.every(t => t.state === 'FAILED')).toBe(true);   // pending tasks too
+    expect(run.logs.some(l => l.includes('killed (SIGKILL)'))).toBe(true);
+    const status = await request(app).get('/api/client/status');
+    expect(status.body.logs.some((l: string) => l.includes('failing its running flows'))).toBe(true);
+  });
+
+  it('does not touch runs when the process exits after a requested stop', async () => {
+    await request(app).post('/api/client/start').send({ clientId: 'perfect_example' });
+    const flow = flowEngine.registerFlow({ name: 'Stopped', description: '', tasks: [{ name: 't', estimatedTime: 100 }] });
+    const runId = flowEngine.createRun(flow.id)!;
+
+    await request(app).post('/api/client/stop');                 // /stop fails the run itself ...
+    const afterStop = flowEngine.getRun(runId)!;
+    expect(afterStop.state).toBe('FAILED');
+    expect(afterStop.logs.some(l => l.includes('User stopped the client'))).toBe(true);
+
+    spawned[spawned.length - 1].emit('exit', null, 'SIGTERM');   // ... and the exit that follows adds nothing
+    expect(flowEngine.getRun(runId)!.logs.some(l => l.includes('killed'))).toBe(false);
+  });
+
+  it('a clean exit with nothing running is harmless', async () => {
+    await request(app).post('/api/client/start').send({ clientId: 'perfect_example' });
+    expect(() => spawned[spawned.length - 1].emit('exit', 0, null)).not.toThrow();
+    expect(flowEngine.hasActiveRuns()).toBe(false);
   });
 
   it('keeps the watchdog armed when the client process exits, so a crash is still detected', () => {

@@ -1,6 +1,6 @@
-import { PerformanceWarning } from '../../types';
+import { PerformanceWarning, PerformanceSensitivity } from '../../types';
 
-export type PerformanceSensitivity = 'conservative' | 'normal' | 'aggressive';
+export type { PerformanceSensitivity };
 
 export const SENSITIVITY_LEVELS: readonly PerformanceSensitivity[] = ['conservative', 'normal', 'aggressive'];
 

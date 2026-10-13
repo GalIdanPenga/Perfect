@@ -58,6 +58,31 @@ export interface TaskRun {
   crucialPass: boolean; // If true, task failure fails the entire flow (default: true)
 }
 
+export type PerformanceSensitivity = 'conservative' | 'normal' | 'aggressive';
+
+/** One entry of server/clients.json, also served to the UI by /api/client/configs. */
+export interface ClientConfig {
+  id: string;
+  name: string;
+  description: string;
+  workingDir: string;
+  command: string;
+  args: string[];
+  color?: string;
+  performanceSensitivity?: PerformanceSensitivity;
+  /**
+   * Absolute threshold for slow-task warnings: a task must be at least this
+   * many ms slower than its average, on top of the sigma test. Defaults to
+   * 1000 (DEFAULT_MIN_OVERAGE_MS on the server).
+   */
+  performanceMinOverageMs?: number;
+  /**
+   * Whether the client sends heartbeats so the server can fail its runs if it
+   * crashes. Defaults to true. Passed to the process as PERFECT_HEARTBEAT.
+   */
+  heartbeat?: boolean;
+}
+
 export interface FlowRun {
   id: string;
   flowId: string;

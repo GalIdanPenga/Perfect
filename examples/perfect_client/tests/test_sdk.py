@@ -342,11 +342,14 @@ class TestHeartbeatSettingsReachTheListener:
         monkeypatch.delenv("PERFECT_HEARTBEAT", raising=False)
         monkeypatch.delenv("PERFECT_HEARTBEAT_INTERVAL", raising=False)
 
-    def test_switching_to_mock_after_connect_stops_the_real_heartbeat(self):
+    def test_mock_mode_cannot_change_after_connect(self):
         registry = WorkflowRegistry()
         with patch("perfect.api.PerfectAPIClient") as client_cls:
             registry._ensure_client()
-            registry.configure(mock=True)
+            with pytest.raises(ValueError, match="mock mode"):
+                registry.configure(mock=True)
+            registry.configure(mock=False)          # same value is fine
+            registry.configure(heartbeat=False)     # other settings still apply
         client_cls.return_value.stop_heartbeat.assert_called_once()
 
     def test_auto_listener_uses_the_registry_settings(self):

@@ -264,8 +264,17 @@ class PerfectAPIClient:
             interval: How often to send heartbeats (seconds)
             stop: Event set by stop_heartbeat() to end this thread
         """
+        warned = False
         while not stop.is_set():
-            self.send_heartbeat()
+            try:
+                self.send_heartbeat()
+            except Exception as e:  # noqa: BLE001 - the thread must survive anything
+                # send_heartbeat() handles request errors itself; anything else
+                # (e.g. the session being swapped by stop_listening() mid-call)
+                # must not kill the thread, or the backend would fail every run.
+                if not warned:
+                    print(f"[Perfect Client] Heartbeat error (will keep trying): {e!r}")
+                    warned = True
             if stop.wait(interval):
                 return
 
