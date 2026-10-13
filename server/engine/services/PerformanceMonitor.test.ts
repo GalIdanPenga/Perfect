@@ -11,6 +11,12 @@ import { PerformanceMonitor } from './PerformanceMonitor'
 //
 // minSamples=2: sampleCount < 2 → null
 // sampleThreshold=20: n < 20 uses lowSamples, n >= 20 uses highSamples
+//
+// Noise floor: the stdDev used for the z-score is
+//   max(stdDev, 10% of avg, 100ms)
+// so a handful of near-identical samples can't turn jitter into many sigma.
+// Every existing case below uses avg=1000, stdDev=100, where the floor equals
+// the measured stdDev and changes nothing.
 // ---------------------------------------------------------------------------
 
 describe('PerformanceMonitor.detectOutlier', () => {
@@ -22,8 +28,11 @@ describe('PerformanceMonitor.detectOutlier', () => {
     expect(monitor.detectOutlier(2000, 1000, 100, 1)).toBeNull()
   })
 
-  it('returns null when stdDevMs === 0 (prevents division by zero)', () => {
-    expect(monitor.detectOutlier(2000, 1000, 0, 5)).toBeNull()
+  it('still scores when stdDevMs === 0, using the noise floor instead of dividing by zero', () => {
+    // avg=1000, stdDev=0 → floor=100; actual=2000 → diff=1000, zScore=10 > 5 → warning
+    expect(monitor.detectOutlier(2000, 1000, 0, 5, 'normal')).not.toBeNull()
+    // actual=1200 → diff=200, zScore=2.0 < 5 → null
+    expect(monitor.detectOutlier(1200, 1000, 0, 5, 'normal')).toBeNull()
   })
 
   it('returns null when actual is faster than average (diff <= 0)', () => {
@@ -73,6 +82,40 @@ describe('PerformanceMonitor.detectOutlier', () => {
     expect(result).not.toBeNull()
   })
 
+  // ---- Noise floor (false-positive guard) ---------------------------------
+
+  it('does not flag ordinary jitter when the measured stdDev is tiny', () => {
+    // Seen live: a 2.0s task with two samples 2ms apart was reported as 6.4σ slow.
+    // avg=2000, stdDev=2 → floor=200; actual=2014 → diff=14, zScore=0.07 → null
+    expect(monitor.detectOutlier(2014, 2000, 2, 2, 'normal')).toBeNull()
+    expect(monitor.detectOutlier(2014, 2000, 2, 2, 'aggressive')).toBeNull()
+  })
+
+  it('still flags a genuinely slow run when the measured stdDev is tiny', () => {
+    // avg=2000, stdDev=2 → floor=200; actual=3100 → diff=1100, zScore=5.5 > 5 → warning
+    expect(monitor.detectOutlier(3100, 2000, 2, 2, 'normal')).not.toBeNull()
+  })
+
+  it('uses the relative floor (10% of avg) for long tasks', () => {
+    // avg=60000, stdDev=50 → floor=6000; under normal n<20 warns above 5σ = 30s over
+    expect(monitor.detectOutlier(89000, 60000, 50, 5, 'normal')).toBeNull()
+    expect(monitor.detectOutlier(91000, 60000, 50, 5, 'normal')).not.toBeNull()
+  })
+
+  it('uses the absolute floor (100ms) for very short tasks', () => {
+    // avg=50, stdDev=1 → floor=100 (10% of avg is only 5ms); under normal n<20 warns above 500ms over
+    expect(monitor.detectOutlier(500, 50, 1, 5, 'normal')).toBeNull()
+    expect(monitor.detectOutlier(600, 50, 1, 5, 'normal')).not.toBeNull()
+  })
+
+  it('leaves a wide measured stdDev untouched', () => {
+    expect(monitor.effectiveStdDev(1000, 400)).toBe(400)
+    expect(monitor.effectiveStdDev(1000, 100)).toBe(100)
+    expect(monitor.effectiveStdDev(1000, 3)).toBe(100)
+    expect(monitor.effectiveStdDev(5000, 3)).toBe(500)
+    expect(monitor.effectiveStdDev(50, 0)).toBe(100)
+  })
+
   // ---- Warning shape -------------------------------------------------------
 
   it('returned warning has type="slow" and severity="warning"', () => {
@@ -82,11 +125,12 @@ describe('PerformanceMonitor.detectOutlier', () => {
   })
 
   it('warning message contains the actual duration in seconds and the avg in seconds', () => {
-    // actual=1600ms → "1.6s", avg=1000ms → "1.0s avg"
-    // full message: "1.6s (6.0σ from 1.0s avg, n=5)"
+    // actual=1600ms → "1.6s", avg=1000ms → "1.0s avg", 60% slower
+    // full message: "1.6s (+60%, 6.0σ from 1.0s avg, n=5)"
     const result = monitor.detectOutlier(1600, 1000, 100, 5, 'normal')
     expect(result).not.toBeNull()
     expect(result!.message).toContain('1.6s')
     expect(result!.message).toContain('1.0s')
+    expect(result!.message).toContain('+60%')
   })
 })

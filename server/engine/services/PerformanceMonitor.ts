@@ -16,6 +16,14 @@ export class PerformanceMonitor {
   private readonly minSamples = 2;
   private readonly sampleThreshold = 20;
 
+  // Noise floor for the standard deviation. With only a few samples of a
+  // deterministic task, the measured deviation can be a couple of
+  // milliseconds, and then ordinary jitter shows up as many sigma. The
+  // deviation used for the z-score is never smaller than these floors, so a
+  // task must be meaningfully slower than its average before it can warn.
+  private readonly minStdDevRatio = 0.10;   // 10% of the average duration
+  private readonly minStdDevMs = 100;       // absolute floor for very short tasks
+
   /**
    * Detect if a task duration is an outlier based on statistical analysis
    *
@@ -37,7 +45,7 @@ export class PerformanceMonitor {
     sensitivity: PerformanceSensitivity = 'normal'
   ): PerformanceWarning | null {
     // Need at least minimum samples to calculate variance
-    if (sampleCount < this.minSamples || stdDevMs === 0) {
+    if (sampleCount < this.minSamples) {
       return null;
     }
 
@@ -49,8 +57,10 @@ export class PerformanceMonitor {
       return null;
     }
 
-    // Calculate z-score: how many standard deviations SLOWER than mean
-    const zScore = diff / stdDevMs;
+    // Calculate z-score: how many standard deviations SLOWER than mean,
+    // using a deviation that is never below the noise floor.
+    const effectiveStdDevMs = this.effectiveStdDev(avgMs, stdDevMs);
+    const zScore = diff / effectiveStdDevMs;
 
     // Get threshold based on sensitivity level and sample count
     const thresholds = this.sensitivityThresholds[sensitivity];
@@ -59,13 +69,22 @@ export class PerformanceMonitor {
       : thresholds.highSamples;
 
     if (zScore > threshold) {
+      const percentSlower = avgMs > 0 ? Math.round((diff / avgMs) * 100) : 0;
       return {
         type: 'slow',
         severity: 'warning',
-        message: `${(actualMs / 1000).toFixed(1)}s (${zScore.toFixed(1)}σ from ${(avgMs / 1000).toFixed(1)}s avg, n=${sampleCount})`
+        message: `${(actualMs / 1000).toFixed(1)}s (+${percentSlower}%, ${zScore.toFixed(1)}σ from ${(avgMs / 1000).toFixed(1)}s avg, n=${sampleCount})`
       };
     }
 
     return null;
+  }
+
+  /**
+   * The standard deviation used for scoring: the measured one, but never
+   * below 10% of the average or 100ms, whichever is larger.
+   */
+  effectiveStdDev(avgMs: number, stdDevMs: number): number {
+    return Math.max(stdDevMs, avgMs * this.minStdDevRatio, this.minStdDevMs);
   }
 }
