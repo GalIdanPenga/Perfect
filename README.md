@@ -240,6 +240,8 @@ Configure per-client in `server/clients.json` using the `performanceSensitivity`
 
 **Noise Floor**: The standard deviation used for scoring is never smaller than 10% of the task's average duration or 100ms, whichever is larger. A task whose first few runs were nearly identical would otherwise have a deviation of a few milliseconds, and normal jitter would read as many σ. In practice a task must be at least 25–70% slower than its average (depending on sensitivity and sample count) before it is flagged.
 
+**Absolute Threshold**: On top of the σ test, a task must be at least **1 second** slower than its average. Both conditions have to hold. This keeps short tasks from being flagged over overages nobody would notice, however many σ they represent. The value is `DEFAULT_MIN_OVERAGE_MS` in `server/engine/services/PerformanceMonitor.ts`.
+
 ### Performance Warning Display
 
 Performance warnings appear in multiple locations:

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PerformanceMonitor } from './PerformanceMonitor'
+import { PerformanceMonitor, DEFAULT_MIN_OVERAGE_MS } from './PerformanceMonitor'
 
 // ---------------------------------------------------------------------------
 // PerformanceMonitor.detectOutlier
@@ -17,10 +17,14 @@ import { PerformanceMonitor } from './PerformanceMonitor'
 // so a handful of near-identical samples can't turn jitter into many sigma.
 // Every existing case below uses avg=1000, stdDev=100, where the floor equals
 // the measured stdDev and changes nothing.
+//
+// Absolute gate: diff must also be >= minOverageMs (default 1000ms). The
+// sigma cases below construct the monitor with minOverageMs=0 so they test
+// the z-score alone; the gate has its own section.
 // ---------------------------------------------------------------------------
 
 describe('PerformanceMonitor.detectOutlier', () => {
-  const monitor = new PerformanceMonitor()
+  const monitor = new PerformanceMonitor({ minOverageMs: 0 })
 
   // ---- Early-exit guards ---------------------------------------------------
 
@@ -114,6 +118,60 @@ describe('PerformanceMonitor.detectOutlier', () => {
     expect(monitor.effectiveStdDev(1000, 3)).toBe(100)
     expect(monitor.effectiveStdDev(5000, 3)).toBe(500)
     expect(monitor.effectiveStdDev(50, 0)).toBe(100)
+  })
+
+  // ---- Absolute gate (minOverageMs) ---------------------------------------
+
+  describe('absolute overage gate', () => {
+    it('defaults to 1000ms', () => {
+      expect(DEFAULT_MIN_OVERAGE_MS).toBe(1000)
+    })
+
+    it('blocks a warning that clears the sigma threshold but not the absolute one', () => {
+      const gated = new PerformanceMonitor()
+      // avg=50, stdDev=1 → floor=100; actual=600 → diff=550, zScore=5.5 > 5
+      // sigma says slow, but 550ms < 1000ms → null
+      expect(gated.detectOutlier(600, 50, 1, 5, 'normal')).toBeNull()
+      // same inputs with the gate off → warning
+      expect(monitor.detectOutlier(600, 50, 1, 5, 'normal')).not.toBeNull()
+    })
+
+    it('blocks a warning that clears the absolute threshold but not the sigma one', () => {
+      const gated = new PerformanceMonitor()
+      // avg=60000, stdDev=50 → floor=6000; actual=62000 → diff=2000 >= 1000ms
+      // but zScore=0.33 < 5 → null
+      expect(gated.detectOutlier(62000, 60000, 50, 5, 'normal')).toBeNull()
+    })
+
+    it('warns only when both are exceeded', () => {
+      const gated = new PerformanceMonitor()
+      // avg=2000, stdDev=2 → floor=200; threshold 5σ = 1000ms over
+      expect(gated.detectOutlier(2999, 2000, 2, 5, 'normal')).toBeNull()      // 999ms: fails absolute
+      expect(gated.detectOutlier(3001, 2000, 2, 5, 'normal')).not.toBeNull()  // 1001ms: both pass
+    })
+
+    it('treats the absolute threshold as inclusive', () => {
+      const gated = new PerformanceMonitor({ minOverageMs: 500 })
+      // avg=1000, stdDev=100; actual=1500 → diff=500, zScore=5.0, not > 5.0 → null (sigma)
+      expect(gated.detectOutlier(1500, 1000, 100, 5, 'normal')).toBeNull()
+      // actual=1600 → diff=600 >= 500 and zScore=6.0 > 5.0 → warning
+      expect(gated.detectOutlier(1600, 1000, 100, 5, 'normal')).not.toBeNull()
+      // actual=1600 with minOverageMs=600 → diff=600 >= 600 → warning (inclusive)
+      expect(new PerformanceMonitor({ minOverageMs: 600 }).detectOutlier(1600, 1000, 100, 5, 'normal')).not.toBeNull()
+      expect(new PerformanceMonitor({ minOverageMs: 601 }).detectOutlier(1600, 1000, 100, 5, 'normal')).toBeNull()
+    })
+
+    it('is configurable through the constructor', () => {
+      const loose = new PerformanceMonitor({ minOverageMs: 100 })
+      const strict = new PerformanceMonitor({ minOverageMs: 5000 })
+      // avg=1000, stdDev=100, actual=1600 → diff=600, zScore=6.0
+      expect(loose.detectOutlier(1600, 1000, 100, 5, 'normal')).not.toBeNull()
+      expect(strict.detectOutlier(1600, 1000, 100, 5, 'normal')).toBeNull()
+    })
+
+    it('rejects a negative threshold', () => {
+      expect(() => new PerformanceMonitor({ minOverageMs: -1 })).toThrow()
+    })
   })
 
   // ---- Warning shape -------------------------------------------------------
