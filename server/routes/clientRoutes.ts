@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { flowEngine } from '../engine/FlowEngine';
-import { PerformanceSensitivity } from '../engine/services/PerformanceMonitor';
+import { PerformanceSensitivity, DEFAULT_MIN_OVERAGE_MS, SENSITIVITY_LEVELS, isValidMinOverageMs, isValidSensitivity } from '../engine/services/PerformanceMonitor';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,10 +31,32 @@ interface ClientConfig {
   color?: string;
   performanceSensitivity?: PerformanceSensitivity;
   /**
+   * Absolute threshold for slow-task warnings: a task must be at least this
+   * many ms slower than its average, on top of the sigma test. Defaults to
+   * DEFAULT_MIN_OVERAGE_MS (1000).
+   */
+  performanceMinOverageMs?: number;
+  /**
    * Whether the client sends heartbeats so the server can fail its runs if it
    * crashes. Defaults to true. Passed to the process as PERFECT_HEARTBEAT.
    */
   heartbeat?: boolean;
+}
+
+/**
+ * Drop invalid performance settings so the engine falls back to its defaults,
+ * and say so in the log. Returns the same config object, mutated.
+ */
+export function sanitizeClientConfig(client: ClientConfig): ClientConfig {
+  if (client.performanceSensitivity !== undefined && !isValidSensitivity(client.performanceSensitivity)) {
+    console.warn(`[Server] Client '${client.id}': ignoring performanceSensitivity=${JSON.stringify(client.performanceSensitivity)} (expected one of ${SENSITIVITY_LEVELS.join(', ')}); using 'normal'`);
+    delete client.performanceSensitivity;
+  }
+  if (client.performanceMinOverageMs !== undefined && !isValidMinOverageMs(client.performanceMinOverageMs)) {
+    console.warn(`[Server] Client '${client.id}': ignoring performanceMinOverageMs=${JSON.stringify(client.performanceMinOverageMs)} (expected a number >= 0); using default ${DEFAULT_MIN_OVERAGE_MS}ms`);
+    delete client.performanceMinOverageMs;
+  }
+  return client;
 }
 
 /**
@@ -58,6 +80,7 @@ try {
   const configPath = path.join(__dirname, '../clients.json');
   const configData = fs.readFileSync(configPath, 'utf-8');
   clientsConfig = JSON.parse(configData);
+  clientsConfig.clients.forEach(sanitizeClientConfig);
   console.log(`[Server] Loaded ${clientsConfig.clients.length} client configurations`);
 } catch (error) {
   console.error('[Server] Failed to load clients.json, using default config');

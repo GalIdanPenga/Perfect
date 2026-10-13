@@ -9,7 +9,8 @@
       "args": ["example_flows.py"],
       "color": "#00D9FF",
       "performanceSensitivity": "normal",
-      "heartbeat": true
+      "heartbeat": true,
+      "performanceMinOverageMs": 1000
     },
     {
       "id": "custom_python",
@@ -20,7 +21,8 @@
       "args": ["example_flows.py", "--config", "dev"],
       "color": "#FF0000",
       "performanceSensitivity": "aggressive",
-      "heartbeat": true
+      "heartbeat": true,
+      "performanceMinOverageMs": 500
     },
     {
       "id": "python_venv",
@@ -31,7 +33,8 @@
       "args": ["example_flows.py"],
       "color": "#00FF94",
       "performanceSensitivity": "conservative",
-      "heartbeat": true
+      "heartbeat": true,
+      "performanceMinOverageMs": 2000
     }
   ]
 }
