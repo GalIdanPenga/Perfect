@@ -482,3 +482,147 @@ class TestHeartbeatThreadResilience:
             assert client.heartbeat_active is True
             client.stop_heartbeat()
         assert "Heartbeat error" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Server lock: every exchange with the server is serialized
+# ---------------------------------------------------------------------------
+
+class TestServerLock:
+    def test_every_server_call_holds_the_lock(self):
+        client = _make_client()
+        held: list = []
+
+        def post(url, **kwargs):
+            held.append(client._lock._is_owned())
+            return _ok_response({"flow": {}, "runId": "r1", "success": True})
+
+        def get(url, **kwargs):
+            held.append(client._lock._is_owned())
+            resp = _ok_response({"success": True, "report": {"runId": "r1"}, "reports": []})
+            resp.text = "<html></html>"
+            return resp
+
+        with patch.object(client.session, "post", side_effect=post), \
+             patch.object(client.session, "get", side_effect=get):
+            client.register_flow({"name": "F", "tasks": []})
+            client.send_log("r1", "hi")
+            client.update_task_state("r1", 0, "RUNNING")
+            client.complete_flow("r1", 1)
+            client.send_heartbeat()
+            client.create_run("flow-1")
+            client.fetch_text("/Reports/F/x.html")
+            client.get_flow_reports("F")
+            client.get_report("r1")
+
+        assert len(held) == 9
+        assert all(held), "a server call ran without the lock"
+        assert not client._lock._is_owned(), "lock leaked after the calls"
+
+    def test_calls_from_parallel_threads_never_overlap(self):
+        client = _make_client()
+        inside = {"now": 0, "max": 0}
+        guard = threading.Lock()
+        go = threading.Event()
+
+        def post(url, **kwargs):
+            with guard:
+                inside["now"] += 1
+                inside["max"] = max(inside["max"], inside["now"])
+            time.sleep(0.01)
+            with guard:
+                inside["now"] -= 1
+            return _ok_response({})
+
+        def worker():
+            go.wait()
+            client.send_log("r1", "x")
+
+        with patch.object(client.session, "post", side_effect=post):
+            threads = [threading.Thread(target=worker) for _ in range(8)]
+            for t in threads:
+                t.start()
+            go.set()
+            for t in threads:
+                t.join()
+
+        assert inside["max"] == 1
+
+    def test_lock_is_reentrant(self):
+        client = _make_client()
+        with patch.object(client.session, "post", return_value=_ok_response({})):
+            with client._lock:
+                assert client.send_heartbeat() is True
+
+    def test_session_swap_in_stop_listening_waits_for_in_flight_call(self):
+        client = _make_client()
+        in_call = threading.Event()
+        release = threading.Event()
+        original = client.session
+
+        def slow_post(url, **kwargs):
+            in_call.set()
+            release.wait(2.0)
+            return _ok_response({})
+
+        with patch.object(client.session, "post", side_effect=slow_post):
+            t = threading.Thread(target=lambda: client.send_log("r1", "x"))
+            t.start()
+            assert in_call.wait(1.0)
+            swapped = threading.Thread(target=client.stop_listening)
+            swapped.start()
+            time.sleep(0.05)
+            assert client.session is original          # swap is blocked behind the call
+            release.set()
+            t.join(2.0)
+            swapped.join(2.0)
+        assert client.session is not original          # ... and happens once it returns
+
+
+# ---------------------------------------------------------------------------
+# create_run / fetch_text
+# ---------------------------------------------------------------------------
+
+class TestCreateRun:
+    def test_returns_run_id_and_posts_configuration(self):
+        client = _make_client()
+        with patch.object(client.session, "post", return_value=_ok_response({"success": True, "runId": "run-9"})) as mock_post:
+            assert client.create_run("flow-1", "release") == "run-9"
+        assert "/api/engine/run/flow-1" in mock_post.call_args[0][0]
+        assert mock_post.call_args[1]["json"] == {"configuration": "release"}
+
+    def test_non_ok_response_returns_none(self):
+        client = _make_client()
+        resp = _ok_response({})
+        resp.ok = False
+        resp.status_code = 400
+        with patch.object(client.session, "post", return_value=resp):
+            assert client.create_run("flow-1") is None
+
+    def test_request_exception_returns_none(self):
+        client = _make_client()
+        with patch.object(client.session, "post", side_effect=requests.exceptions.RequestException("down")):
+            assert client.create_run("flow-1") is None
+
+
+class TestFetchText:
+    def test_relative_path_is_joined_to_base_url(self):
+        client = _make_client()
+        resp = _ok_response({})
+        resp.text = "<html>r</html>"
+        with patch.object(client.session, "get", return_value=resp) as mock_get:
+            assert client.fetch_text("/Reports/F/x.html") == "<html>r</html>"
+        assert mock_get.call_args[0][0] == "http://test-server:3000/Reports/F/x.html"
+
+    def test_absolute_url_is_used_as_is(self):
+        client = _make_client()
+        resp = _ok_response({})
+        resp.text = "x"
+        with patch.object(client.session, "get", return_value=resp) as mock_get:
+            client.fetch_text("http://elsewhere/x.html")
+        assert mock_get.call_args[0][0] == "http://elsewhere/x.html"
+
+    def test_request_exception_returns_none(self):
+        client = _make_client()
+        with patch.object(client.session, "get", side_effect=requests.exceptions.RequestException("down")):
+            assert client.fetch_text("/x") is None

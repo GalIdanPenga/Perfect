@@ -694,56 +694,45 @@ class WorkflowRegistry:
                 print(f"[Flow] Starting {name}...")
 
                 if self._client and flow_id:
-                    # Create a run on the server for UI tracking
-                    try:
-                        import requests
-                        # Create run for client-initiated execution
-                        response = requests.post(
-                            f"{self._client.base_url}/api/engine/run/{flow_id}",
-                            json={"configuration": "development"},
-                            timeout=2
-                        )
-                        if response.ok:
-                            run_id = response.json().get('runId')
-                            print(f"[Flow] Created run: {run_id}")
+                    # Create a run on the server for UI tracking. All server
+                    # traffic goes through the client, which serializes it.
+                    run_id = self._client.create_run(flow_id, "development")
+                    if run_id:
+                        print(f"[Flow] Created run: {run_id}")
 
-                            # Set execution context for task tracking
-                            self._current_run_id = run_id
-                            self._current_task_index = 0
+                        # Set execution context for task tracking
+                        self._current_run_id = run_id
+                        self._current_task_index = 0
 
-                            # Install thread-aware stdout if not already done
-                            _ensure_thread_aware_stdout()
+                        # Install thread-aware stdout if not already done
+                        _ensure_thread_aware_stdout()
 
-                            # Create log capture for this flow and start capturing for this thread
-                            log_capture = LogCapture(self._client, run_id)
-                            log_capture.start_capture()
+                        # Create log capture for this flow and start capturing for this thread
+                        log_capture = LogCapture(self._client, run_id)
+                        log_capture.start_capture()
 
-                            try:
-                                # Execute the actual flow function
-                                result = func(*args, **kwargs)
-
-                                # Signal flow completion with actual task count
-                                actual_task_count = self._current_task_index
-                                self._client.complete_flow(run_id, actual_task_count)
-                                print(f"[Flow] Completed {name} with {actual_task_count} tasks")
-                                # Return both the flow result and run_id as a tuple
-                                return (result, run_id)
-                            except Exception as e:
-                                print(f"[Flow] Flow {name} failed: {e}")
-                                raise
-                            finally:
-                                # Stop capturing logs for this thread
-                                log_capture.stop_capture()
-                                # Clear execution context
-                                self._current_run_id = None
-                                self._current_task_index = 0
-                        else:
-                            print(f"[Flow] Warning: Create run failed, executing without tracking")
+                        try:
+                            # Execute the actual flow function
                             result = func(*args, **kwargs)
-                    except requests.exceptions.RequestException as e:
-                        # Only catch network/connection errors - not flow execution errors
-                        print(f"[Flow] Warning: Backend tracking failed: {e}")
-                        # Fallback to direct execution
+
+                            # Signal flow completion with actual task count
+                            actual_task_count = self._current_task_index
+                            self._client.complete_flow(run_id, actual_task_count)
+                            print(f"[Flow] Completed {name} with {actual_task_count} tasks")
+                            # Return both the flow result and run_id as a tuple
+                            return (result, run_id)
+                        except Exception as e:
+                            print(f"[Flow] Flow {name} failed: {e}")
+                            raise
+                        finally:
+                            # Stop capturing logs for this thread
+                            log_capture.stop_capture()
+                            # Clear execution context
+                            self._current_run_id = None
+                            self._current_task_index = 0
+                    else:
+                        # Server refused or unreachable: run without tracking
+                        print(f"[Flow] Warning: Create run failed, executing without tracking")
                         self._current_run_id = None
                         self._current_task_index = 0
                         result = func(*args, **kwargs)
@@ -844,7 +833,6 @@ class WorkflowRegistry:
             Local file path if successful, None otherwise
         """
         import os
-        import requests
 
         # Get report metadata
         report = self.get_report(run_id)
@@ -852,13 +840,11 @@ class WorkflowRegistry:
             print(f"[Perfect SDK] No report available for run: {run_id}")
             return None
 
-        # Download the report HTML file
-        report_url = f"{self._backend_url}{report['url']}"
-        try:
-            response = requests.get(report_url, timeout=10)
-            response.raise_for_status()
-        except requests.exceptions.RequestException as e:
-            print(f"[Perfect SDK] Failed to download report: {e}")
+        # Download the report HTML through the client (serialized with all
+        # other server traffic)
+        html = self._client.fetch_text(report['url'], timeout=10)
+        if html is None:
+            print(f"[Perfect SDK] Failed to download report for run: {run_id}")
             return None
 
         # Create local directory structure matching server (Reports/FlowName/)
@@ -869,7 +855,7 @@ class WorkflowRegistry:
         local_path = os.path.join(output_dir, *report['path'].split('/')[1:])
         try:
             with open(local_path, 'w', encoding='utf-8') as f:
-                f.write(response.text)
+                f.write(html)
             print(f"[Perfect SDK] Report saved: {local_path} ({report['size'] / 1024:.2f} KB)")
             return local_path
         except IOError as e:

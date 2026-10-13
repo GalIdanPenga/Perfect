@@ -383,3 +383,61 @@ class TestHeartbeatSettingsReachTheListener:
             sdk.run(client_id="other")
             assert registry._backend_url == "http://localhost:3000"
             assert registry._client_id == "other"
+
+
+class TestFlowTrackingGoesThroughTheClient:
+    def _registry_with_client(self, create_run_result):
+        from unittest.mock import MagicMock
+        registry = WorkflowRegistry()
+        registry._auto_connect_enabled = False
+        client = MagicMock()
+        client.register_flow.return_value = {"id": "flow-1"}
+        client.create_run.return_value = create_run_result
+        registry._client = client
+        return registry, client
+
+    def test_flow_creates_its_run_through_the_client(self):
+        registry, client = self._registry_with_client("run-9")
+
+        @registry.flow(name="Tracked")
+        def tracked():
+            return 42
+
+        assert tracked() == (42, "run-9")
+        client.create_run.assert_called_once_with("flow-1", "development")
+        client.complete_flow.assert_called_once()
+        assert client.complete_flow.call_args[0][0] == "run-9"
+
+    def test_flow_still_runs_untracked_when_run_creation_fails(self):
+        registry, client = self._registry_with_client(None)
+
+        @registry.flow(name="Untracked")
+        def untracked():
+            return 7
+
+        assert untracked() == 7
+        client.complete_flow.assert_not_called()
+
+    def test_download_report_fetches_through_the_client(self, tmp_path):
+        from unittest.mock import MagicMock
+        registry = WorkflowRegistry()
+        client = MagicMock()
+        client.get_report.return_value = {"url": "/Reports/F/x.html", "path": "Reports/F/x.html", "size": 2048}
+        client.fetch_text.return_value = "<html>report</html>"
+        registry._client = client
+
+        local = registry.download_report("run-1", output_dir=str(tmp_path))
+
+        client.fetch_text.assert_called_once_with("/Reports/F/x.html", timeout=10)
+        assert local == str(tmp_path / "F" / "x.html")
+        assert (tmp_path / "F" / "x.html").read_text() == "<html>report</html>"
+
+    def test_download_report_returns_none_when_fetch_fails(self, tmp_path):
+        from unittest.mock import MagicMock
+        registry = WorkflowRegistry()
+        client = MagicMock()
+        client.get_report.return_value = {"url": "/Reports/F/x.html", "path": "Reports/F/x.html", "size": 1}
+        client.fetch_text.return_value = None
+        registry._client = client
+        assert registry.download_report("run-1", output_dir=str(tmp_path)) is None
+        assert not (tmp_path / "F").exists()

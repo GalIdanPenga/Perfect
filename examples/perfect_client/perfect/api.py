@@ -47,6 +47,12 @@ class PerfectAPIClient:
         """
         self.base_url = base_url
         self.session = requests.Session()
+        # Serializes every exchange with the server. Flow threads, the heartbeat
+        # thread and the poll loop all share one Session, which requests does
+        # not guarantee to be thread-safe, and stop_listening() swaps the
+        # Session out from under them. Re-entrant so a locked method may call
+        # another locked method.
+        self._lock = threading.RLock()
         self._execution_callback: Optional[Callable[[ExecutionRequest], None]] = None
         # The heartbeat thread and the stop Event it owns. Each thread gets its
         # own Event so a thread that outlives stop_heartbeat()'s join can never
@@ -79,11 +85,12 @@ class PerfectAPIClient:
                 "autoTriggerConfig": configuration
             }
 
-            response = self.session.post(
-                f"{self.base_url}/api/flows",
-                json=payload,
-                timeout=5
-            )
+            with self._lock:
+                response = self.session.post(
+                    f"{self.base_url}/api/flows",
+                    json=payload,
+                    timeout=5
+                )
             response.raise_for_status()
 
             result = response.json()
@@ -94,6 +101,53 @@ class PerfectAPIClient:
             return flow
         except requests.exceptions.RequestException as e:
             print(f"[ERROR] Failed to register flow {flow_definition['name']}: {e}")
+            return None
+
+    def create_run(self, flow_id: str, configuration: str = "development") -> Optional[str]:
+        """
+        Create a run for a client-initiated execution of a registered flow.
+
+        Args:
+            flow_id: The id returned by register_flow()
+            configuration: Configuration name for the run
+
+        Returns:
+            The run id, or None if the server refused or could not be reached
+        """
+        try:
+            with self._lock:
+                response = self.session.post(
+                    f"{self.base_url}/api/engine/run/{flow_id}",
+                    json={"configuration": configuration},
+                    timeout=2
+                )
+            if not response.ok:
+                print(f"[ERROR] Failed to create run: {response.status_code}")
+                return None
+            return response.json().get('runId')
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Failed to create run: {e}")
+            return None
+
+    def fetch_text(self, path: str, timeout: float = 10) -> Optional[str]:
+        """
+        GET a server path (e.g. a report under /Reports/...) and return its body.
+
+        Args:
+            path: Absolute URL, or a path relative to base_url
+            timeout: Request timeout in seconds
+
+        Returns:
+            The response text, or None on any request error
+        """
+        url = path if path.startswith("http") else f"{self.base_url}{path}"
+        try:
+            with self._lock:
+                response = self.session.get(url, timeout=timeout)
+            response.raise_for_status()
+            return response.text
+        except requests.exceptions.RequestException as e:
+            print(f"[ERROR] Failed to fetch {url}: {e}")
             return None
 
     def send_log(self, run_id: str, log_message: str) -> bool:
@@ -108,11 +162,12 @@ class PerfectAPIClient:
             True if log sent successfully, False otherwise
         """
         try:
-            response = self.session.post(
-                f"{self.base_url}/api/flows/{run_id}/logs",
-                json={"log": log_message},
-                timeout=5
-            )
+            with self._lock:
+                response = self.session.post(
+                    f"{self.base_url}/api/flows/{run_id}/logs",
+                    json={"log": log_message},
+                    timeout=5
+                )
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException as e:
@@ -152,11 +207,12 @@ class PerfectAPIClient:
             if crucial_pass is not None:
                 payload["crucialPass"] = crucial_pass
 
-            response = self.session.post(
-                f"{self.base_url}/api/runs/{run_id}/tasks/{task_index}/state",
-                json=payload,
-                timeout=5
-            )
+            with self._lock:
+                response = self.session.post(
+                    f"{self.base_url}/api/runs/{run_id}/tasks/{task_index}/state",
+                    json=payload,
+                    timeout=5
+                )
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException as e:
@@ -176,11 +232,12 @@ class PerfectAPIClient:
             True if successful, False otherwise
         """
         try:
-            response = self.session.post(
-                f"{self.base_url}/api/runs/{run_id}/complete",
-                json={"taskCount": task_count},
-                timeout=5
-            )
+            with self._lock:
+                response = self.session.post(
+                    f"{self.base_url}/api/runs/{run_id}/complete",
+                    json={"taskCount": task_count},
+                    timeout=5
+                )
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException as e:
@@ -195,10 +252,11 @@ class PerfectAPIClient:
             True if heartbeat sent successfully, False otherwise
         """
         try:
-            response = self.session.post(
-                f"{self.base_url}/api/heartbeat",
-                timeout=5
-            )
+            with self._lock:
+                response = self.session.post(
+                    f"{self.base_url}/api/heartbeat",
+                    timeout=5
+                )
             response.raise_for_status()
             return True
         except requests.exceptions.RequestException:
@@ -321,10 +379,11 @@ class PerfectAPIClient:
             while self._listening:
                 try:
                     # Very short timeout to allow quick shutdown
-                    response = self.session.get(
-                        f"{self.base_url}/api/execution-requests",
-                        timeout=0.5  # 500ms timeout for near-instant shutdown
-                    )
+                    with self._lock:
+                        response = self.session.get(
+                            f"{self.base_url}/api/execution-requests",
+                            timeout=0.5  # 500ms timeout for near-instant shutdown
+                        )
 
                     if response.status_code == 200:
                         data = response.json()
@@ -355,15 +414,17 @@ class PerfectAPIClient:
     def stop_listening(self):
         """Stop listening for execution requests. Leaves any heartbeat running."""
         self._listening = False
-        # Close session to immediately abort any ongoing requests
-        self.session.close()
-        # Create a new session for cleanup operations
-        self.session = requests.Session()
+        with self._lock:
+            # Close session to abort the poll, then replace it for cleanup calls.
+            # Under the lock, so no other thread sees a half-closed Session.
+            self.session.close()
+            self.session = requests.Session()
 
     def close(self):
         """Close the API client and cleanup resources"""
         self.stop_heartbeat()
-        self.session.close()
+        with self._lock:
+            self.session.close()
 
     # Report Management API
 
@@ -388,10 +449,11 @@ class PerfectAPIClient:
             - tags: Flow tags dictionary
         """
         try:
-            response = self.session.get(
-                f"{self.base_url}/api/reports/flow/{flow_name}",
-                timeout=5
-            )
+            with self._lock:
+                response = self.session.get(
+                    f"{self.base_url}/api/reports/flow/{flow_name}",
+                    timeout=5
+                )
             response.raise_for_status()
 
             result = response.json()
@@ -415,10 +477,11 @@ class PerfectAPIClient:
             Report dictionary or None if not found
         """
         try:
-            response = self.session.get(
-                f"{self.base_url}/api/reports/run/{run_id}",
-                timeout=5
-            )
+            with self._lock:
+                response = self.session.get(
+                    f"{self.base_url}/api/reports/run/{run_id}",
+                    timeout=5
+                )
             response.raise_for_status()
 
             result = response.json()
