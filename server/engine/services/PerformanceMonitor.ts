@@ -2,11 +2,13 @@ import { PerformanceWarning } from '../../types';
 
 export type PerformanceSensitivity = 'conservative' | 'normal' | 'aggressive';
 
-/**
- * PerformanceMonitor Service
- *
- * Handles performance outlier detection using statistical analysis.
- */
+export const SENSITIVITY_LEVELS: readonly PerformanceSensitivity[] = ['conservative', 'normal', 'aggressive'];
+
+/** True for one of the three known sensitivity levels. */
+export function isValidSensitivity(value: unknown): value is PerformanceSensitivity {
+  return typeof value === 'string' && (SENSITIVITY_LEVELS as readonly string[]).includes(value);
+}
+
 /** Default minimum overage, in ms, before any task can be flagged slow. */
 export const DEFAULT_MIN_OVERAGE_MS = 1000;
 
@@ -15,6 +17,11 @@ export function isValidMinOverageMs(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
+/**
+ * PerformanceMonitor Service
+ *
+ * Handles performance outlier detection using statistical analysis.
+ */
 export class PerformanceMonitor {
   private readonly sensitivityThresholds = {
     conservative: { lowSamples: 7.0, highSamples: 5.0 },
@@ -32,20 +39,6 @@ export class PerformanceMonitor {
   private readonly minStdDevRatio = 0.10;   // 10% of the average duration
   private readonly minStdDevMs = 100;       // absolute floor for very short tasks
 
-  // Absolute gate. A task must be over its sigma threshold AND at least this
-  // many milliseconds slower than its average. This keeps short tasks from
-  // warning over overages nobody would notice, however many sigma they are.
-  // This is the default; each call may pass its own (the active client's).
-  private readonly minOverageMs: number;
-
-  constructor(options: { minOverageMs?: number } = {}) {
-    const minOverageMs = options.minOverageMs ?? DEFAULT_MIN_OVERAGE_MS;
-    if (!isValidMinOverageMs(minOverageMs)) {
-      throw new Error(`minOverageMs must be a finite number >= 0, got ${minOverageMs}`);
-    }
-    this.minOverageMs = minOverageMs;
-  }
-
   /**
    * Detect if a task duration is an outlier based on statistical analysis
    *
@@ -57,9 +50,11 @@ export class PerformanceMonitor {
    * @param avgMs - Average duration from historical data
    * @param stdDevMs - Standard deviation from historical data
    * @param sampleCount - Number of historical samples
-   * @param sensitivity - Sensitivity level for detection (default: 'normal')
-   * @param minOverageMs - Absolute threshold for this call, in ms. Falls back
-   *   to the monitor's default when omitted or invalid.
+   * @param sensitivity - Sensitivity level for detection (default: 'normal').
+   *   An unknown level is treated as 'normal'.
+   * @param minOverageMs - Absolute gate: the task must be at least this many
+   *   ms slower than its average, on top of the sigma test (default: 1000).
+   *   Callers resolve the active client's value before passing it.
    * @returns PerformanceWarning if outlier detected, null otherwise
    */
   detectOutlier(
@@ -68,7 +63,7 @@ export class PerformanceMonitor {
     stdDevMs: number,
     sampleCount: number,
     sensitivity: PerformanceSensitivity = 'normal',
-    minOverageMs?: number
+    minOverageMs: number = DEFAULT_MIN_OVERAGE_MS
   ): PerformanceWarning | null {
     // Need at least minimum samples to calculate variance
     if (sampleCount < this.minSamples) {
@@ -84,8 +79,7 @@ export class PerformanceMonitor {
     }
 
     // Absolute gate: small overages are never worth a warning
-    const minOverage = isValidMinOverageMs(minOverageMs) ? minOverageMs : this.minOverageMs;
-    if (diff < minOverage) {
+    if (diff < minOverageMs) {
       return null;
     }
 
@@ -94,18 +88,20 @@ export class PerformanceMonitor {
     const effectiveStdDevMs = this.effectiveStdDev(avgMs, stdDevMs);
     const zScore = diff / effectiveStdDevMs;
 
-    // Get threshold based on sensitivity level and sample count
-    const thresholds = this.sensitivityThresholds[sensitivity];
+    // Get threshold based on sensitivity level and sample count. An unknown
+    // level (e.g. a typo in clients.json) must not throw inside the tick.
+    const thresholds = this.sensitivityThresholds[sensitivity] ?? this.sensitivityThresholds.normal;
     const threshold = sampleCount < this.sampleThreshold
       ? thresholds.lowSamples
       : thresholds.highSamples;
 
     if (zScore > threshold) {
-      const percentSlower = avgMs > 0 ? Math.round((diff / avgMs) * 100) : 0;
+      // A percentage is meaningless against a 0ms average; leave it out then.
+      const percent = avgMs > 0 ? `+${Math.round((diff / avgMs) * 100)}%, ` : '';
       return {
         type: 'slow',
         severity: 'warning',
-        message: `${(actualMs / 1000).toFixed(1)}s (+${percentSlower}%, ${zScore.toFixed(1)}σ from ${(avgMs / 1000).toFixed(1)}s avg, n=${sampleCount})`
+        message: `${(actualMs / 1000).toFixed(1)}s (${percent}${zScore.toFixed(1)}σ from ${(avgMs / 1000).toFixed(1)}s avg, n=${sampleCount})`
       };
     }
 

@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { flowEngine } from '../engine/FlowEngine';
-import { PerformanceSensitivity, DEFAULT_MIN_OVERAGE_MS, isValidMinOverageMs } from '../engine/services/PerformanceMonitor';
+import { PerformanceSensitivity, DEFAULT_MIN_OVERAGE_MS, SENSITIVITY_LEVELS, isValidMinOverageMs, isValidSensitivity } from '../engine/services/PerformanceMonitor';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,10 +39,14 @@ interface ClientConfig {
 }
 
 /**
- * Drop an invalid performanceMinOverageMs so the engine falls back to the
- * default, and say so in the log. Returns the same config object, mutated.
+ * Drop invalid performance settings so the engine falls back to its defaults,
+ * and say so in the log. Returns the same config object, mutated.
  */
 export function sanitizeClientConfig(client: ClientConfig): ClientConfig {
+  if (client.performanceSensitivity !== undefined && !isValidSensitivity(client.performanceSensitivity)) {
+    console.warn(`[Server] Client '${client.id}': ignoring performanceSensitivity=${JSON.stringify(client.performanceSensitivity)} (expected one of ${SENSITIVITY_LEVELS.join(', ')}); using 'normal'`);
+    delete client.performanceSensitivity;
+  }
   if (client.performanceMinOverageMs !== undefined && !isValidMinOverageMs(client.performanceMinOverageMs)) {
     console.warn(`[Server] Client '${client.id}': ignoring performanceMinOverageMs=${JSON.stringify(client.performanceMinOverageMs)} (expected a number >= 0); using default ${DEFAULT_MIN_OVERAGE_MS}ms`);
     delete client.performanceMinOverageMs;

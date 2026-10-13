@@ -21,6 +21,16 @@ describe('sanitizeClientConfig', () => {
     expect('performanceMinOverageMs' in sanitizeClientConfig({ ...base })).toBe(false);
   });
 
+  it('keeps a valid performanceSensitivity and drops an unknown one with a warning', () => {
+    expect(sanitizeClientConfig({ ...base, performanceSensitivity: 'aggressive' }).performanceSensitivity).toBe('aggressive');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const client = sanitizeClientConfig({ ...base, performanceSensitivity: 'high' as any });
+    expect(client.performanceSensitivity).toBeUndefined();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('performanceSensitivity');
+    warn.mockRestore();
+  });
+
   it('drops an invalid value and warns, so the engine uses the default', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     for (const bad of [-1, NaN, '1000', null, true]) {

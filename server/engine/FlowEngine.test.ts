@@ -377,8 +377,8 @@ describe('FlowEngine', () => {
       eng.destroy();
       return task.performanceWarning;
     };
-    const withClient = (performanceMinOverageMs: unknown) =>
-      vi.mocked(getActiveClient).mockReturnValue({ id: 'c', name: 'C', performanceSensitivity: 'normal', performanceMinOverageMs } as any);
+    const withClient = (performanceMinOverageMs: unknown, performanceSensitivity: unknown = 'normal') =>
+      vi.mocked(getActiveClient).mockReturnValue({ id: 'c', name: 'C', performanceSensitivity, performanceMinOverageMs } as any);
 
     afterEach(() => {
       vi.mocked(getActiveClient).mockReturnValue(null);
@@ -403,6 +403,15 @@ describe('FlowEngine', () => {
       expect(completeAt(1600)).toBeUndefined();
       withClient('500');
       expect(completeAt(1600)).toBeUndefined();
+    });
+
+    it('treats an unknown sensitivity as normal instead of throwing inside the engine', () => {
+      withClient(0, 'high');
+      // zScore=6.0 at 1600: warns under normal, so an unknown level behaves like normal
+      expect(() => completeAt(1600)).not.toThrow();
+      expect(completeAt(1600)).toBeDefined();
+      // zScore=4.0 at 1400: below normal's 5.0 (aggressive would warn)
+      expect(completeAt(1400)).toBeUndefined();
     });
   });
 

@@ -238,7 +238,7 @@ Configure per-client in `server/clients.json` using the `performanceSensitivity`
 
 **Sample-Size Adaptation**: Higher thresholds for small sample sizes prevent false positives when historical data is limited. As more samples accumulate (≥20), thresholds lower for more reliable detection.
 
-**Noise Floor**: The standard deviation used for scoring is never smaller than 10% of the task's average duration or 100ms, whichever is larger. A task whose first few runs were nearly identical would otherwise have a deviation of a few milliseconds, and normal jitter would read as many σ. In practice a task must be at least 25–70% slower than its average (depending on sensitivity and sample count) before it is flagged.
+**Noise Floor**: The standard deviation used for scoring is never smaller than 10% of the task's average duration or 100ms, whichever is larger. A task whose first few runs were nearly identical would otherwise have a deviation of a few milliseconds, and normal jitter would read as many σ. For tasks of a second or more, this means a task must be at least 25–70% slower than its average (depending on sensitivity and sample count) before it is flagged; shorter tasks are governed by the 100ms floor and the absolute threshold below, which require a far larger relative overage.
 
 **Absolute Threshold**: On top of the σ test, a task must be at least `performanceMinOverageMs` milliseconds slower than its average (default **1000**). Both conditions have to hold. This keeps short tasks from being flagged over overages nobody would notice, however many σ they represent. Set it per client in `server/clients.json`; an invalid value is logged and the default is used.
 
