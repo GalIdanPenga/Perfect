@@ -25,6 +25,7 @@ Usage:
 """
 
 import functools
+import math
 import os
 import sys
 import threading
@@ -187,7 +188,9 @@ def _ensure_thread_aware_stdout():
 # Heartbeat settings from the environment
 # ============================================================================
 
-# The backend fails a client's running flows when its heartbeats stop for 10s.
+# The backend fails a client's running flows when its heartbeats stop for this
+# long. Keep in sync with HEARTBEAT_TIMEOUT_MS in server/engine/FlowEngine.ts;
+# the SDK only uses it to warn about an interval that is too long.
 HEARTBEAT_SERVER_TIMEOUT_S = 10.0
 DEFAULT_HEARTBEAT_INTERVAL_S = 3.0
 
@@ -219,8 +222,8 @@ def _env_positive_float(name: str, default: float) -> float:
         value = float(raw)
     except ValueError:
         value = 0.0
-    if value <= 0:
-        print(f"[Perfect SDK] Ignoring {name}={raw!r}: expected a number greater than 0")
+    if not math.isfinite(value) or value <= 0:
+        print(f"[Perfect SDK] Ignoring {name}={raw!r}: expected a finite number greater than 0")
         return default
     return value
 
@@ -302,8 +305,8 @@ class WorkflowRegistry:
 
         Heartbeat changes made after the client has connected take effect immediately.
         """
-        if heartbeat_interval is not None and heartbeat_interval <= 0:
-            raise ValueError("heartbeat_interval must be greater than 0")
+        if heartbeat_interval is not None and not (math.isfinite(heartbeat_interval) and heartbeat_interval > 0):
+            raise ValueError("heartbeat_interval must be a finite number greater than 0")
 
         if backend_url is not None:
             self._backend_url = backend_url
@@ -320,9 +323,10 @@ class WorkflowRegistry:
         if heartbeat_interval is not None:
             self._heartbeat_interval = heartbeat_interval
 
-        # Apply to an already-connected client
-        if self._client is not None and not self._mock:
-            if not self._heartbeat_enabled:
+        # Apply to an already-connected client. A real client that is switched
+        # to mock mode must stop heartbeating too.
+        if self._client is not None:
+            if not self._heartbeat_enabled or self._mock:
                 self._client.stop_heartbeat()
             else:
                 if interval_changed:
@@ -452,7 +456,10 @@ class WorkflowRegistry:
                 handler = create_execution_handler(self._client, on_flow_complete)
                 self._client.on_execution_request(handler)
                 self._listening = True
-                self._client.listen_for_executions()
+                self._client.listen_for_executions(
+                    heartbeat=self._heartbeat_enabled,
+                    heartbeat_interval=self._heartbeat_interval,
+                )
             except KeyboardInterrupt:
                 print("\n[Perfect] Shutting down...")
             finally:
@@ -1009,7 +1016,10 @@ def listen():
     try:
         handler = create_execution_handler(client, on_flow_complete)
         client.on_execution_request(handler)
-        client.listen_for_executions()
+        client.listen_for_executions(
+            heartbeat=_default_registry.heartbeat_enabled,
+            heartbeat_interval=_default_registry._heartbeat_interval,
+        )
     except KeyboardInterrupt:
         print("\n\n[Perfect Client] Shutting down...")
     finally:
@@ -1017,14 +1027,15 @@ def listen():
 
 
 def connect(
-    backend_url: str = "http://localhost:3001",
-    client_id: str = "perfect_example",
-    mock: bool = False
+    backend_url: Optional[str] = None,
+    client_id: Optional[str] = None,
+    mock: Optional[bool] = None
 ):
     """
     Configure and start listening (convenience function).
 
-    Equivalent to: configure() + listen()
+    Equivalent to: configure() + listen(). Arguments left as None keep the
+    current settings (backend http://localhost:3000 by default).
 
     Args:
         backend_url: URL of the Perfect backend server
@@ -1040,9 +1051,9 @@ def connect(
 
 
 def run(
-    backend_url: str = "http://localhost:3001",
-    client_id: str = "perfect_example",
-    mock: bool = False
+    backend_url: Optional[str] = None,
+    client_id: Optional[str] = None,
+    mock: Optional[bool] = None
 ):
     """
     Alias for connect() (kept for backward compatibility).

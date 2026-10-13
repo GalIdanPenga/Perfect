@@ -29,6 +29,7 @@ export class FlowEngine {
   private readonly TICK_INTERVAL_MS = 100;
   private simulationEnabled: boolean = false;
   private lastClientHeartbeat: number | null = null;
+  // Keep in sync with HEARTBEAT_SERVER_TIMEOUT_S in examples/perfect_client/perfect/sdk.py
   private readonly HEARTBEAT_TIMEOUT_MS = 10000;
   private heartbeatCheckInterval: NodeJS.Timeout;
   private performanceMonitor: PerformanceMonitor;
@@ -706,6 +707,13 @@ export class FlowEngine {
 
       this.notifyStateChange();
     }
+  }
+
+  /**
+   * True while any run is RUNNING or PENDING.
+   */
+  hasActiveRuns(): boolean {
+    return this.runs.some(r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING);
   }
 
   /**

@@ -123,8 +123,12 @@ router.post('/start', (req, res) => {
       clientLogs.push('[Server] Heartbeat disabled: runs will not be failed automatically if the client crashes');
     }
 
-    // Disarm the watchdog so a previous client's heartbeat can't affect this one
-    flowEngine.resetHeartbeat();
+    // Disarm the watchdog so a previous client's heartbeat can't affect this
+    // one. Not while runs are still active: those belong to a client that may
+    // have just crashed, and the pending timeout is what will fail them.
+    if (!flowEngine.hasActiveRuns()) {
+      flowEngine.resetHeartbeat();
+    }
 
     // Resolve working directory relative to project root
     const workingDir = path.join(__dirname, '../..', selectedClient.workingDir);

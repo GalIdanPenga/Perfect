@@ -62,11 +62,28 @@ describe('buildClientEnv', () => {
 describe('client process lifecycle and the heartbeat watchdog', () => {
   const lastHeartbeat = () => (flowEngine as any).lastClientHeartbeat;
 
-  it('disarms a stale heartbeat when a client starts', async () => {
+  it('disarms a stale heartbeat when a client starts and nothing is running', async () => {
     flowEngine.updateHeartbeat();               // left over from a previous client
     const res = await request(app).post('/api/client/start').send({ clientId: 'perfect_example' });
     expect(res.body.success).toBe(true);
     expect(lastHeartbeat()).toBeNull();
+  });
+
+  it('keeps the watchdog armed on start while a previous client\'s runs are still active', async () => {
+    // Client A crashed mid-run; its heartbeat is stale and its run is still RUNNING.
+    const flow = flowEngine.registerFlow({ name: 'Orphan', description: '', tasks: [{ name: 't', estimatedTime: 100 }] });
+    const runId = flowEngine.createRun(flow.id)!;
+    flowEngine.updateHeartbeat();
+    spawned[spawned.length - 1].emit('exit', null, 'SIGKILL');
+
+    // User starts client B within the 10s window.
+    const res = await request(app).post('/api/client/start').send({ clientId: 'perfect_example' });
+    expect(res.body.success).toBe(true);
+    expect(lastHeartbeat()).not.toBeNull();   // pending timeout survives, so A's run will be failed
+
+    flowEngine.failAllRunningFlows();
+    expect(flowEngine.getRun(runId)!.state).toBe('FAILED');
+    spawned[spawned.length - 1].emit('exit', null, 'SIGTERM');
   });
 
   it('keeps the watchdog armed when the client process exits, so a crash is still detected', () => {

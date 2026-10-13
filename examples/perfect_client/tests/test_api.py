@@ -380,3 +380,84 @@ class TestHeartbeatThread:
             client.listen_for_executions(heartbeat=False)
 
         start.assert_not_called()
+
+
+class TestHeartbeatThreadOwnership:
+    def test_stale_thread_is_never_revived_by_a_later_start(self):
+        """A thread that outlives stop_heartbeat()'s join must exit on its own."""
+        client = _make_client()
+        release = threading.Event()
+        senders: list = []
+
+        def slow_send():
+            senders.append(threading.current_thread())
+            release.wait(5.0)  # first beat blocks, like a slow backend
+            return True
+
+        with patch.object(client, "send_heartbeat", side_effect=slow_send):
+            client.start_heartbeat(0.01)
+            old = client._heartbeat_thread
+            client.stop_heartbeat()              # join times out, old thread still inside send
+            assert old.is_alive()
+            assert client.start_heartbeat(0.01) is True
+            new = client._heartbeat_thread
+            assert new is not old
+            release.set()                        # old thread finishes its request
+            old.join(2.0)
+            assert not old.is_alive()            # ... and exits, because its own stop was set
+            client.stop_heartbeat()
+
+    def test_listen_leaves_an_existing_heartbeat_running(self):
+        client = _make_client()
+        client.on_execution_request(lambda req: None)
+
+        def get_side_effect(url, **kwargs):
+            client._listening = False
+            raise requests.exceptions.Timeout()
+
+        with patch.object(client, "send_heartbeat", return_value=True), \
+             patch.object(client.session, "get", side_effect=get_side_effect):
+            client.start_heartbeat(0.05)         # the SDK started this one
+            client.listen_for_executions()
+            assert client.heartbeat_active is True
+            client.stop_heartbeat()
+
+    def test_listen_stops_only_the_heartbeat_it_started(self):
+        client = _make_client()
+        client.on_execution_request(lambda req: None)
+
+        def get_side_effect(url, **kwargs):
+            assert client.heartbeat_active is True
+            client._listening = False
+            raise requests.exceptions.Timeout()
+
+        with patch.object(client, "send_heartbeat", return_value=True), \
+             patch.object(client.session, "get", side_effect=get_side_effect):
+            client.listen_for_executions(heartbeat_interval=0.05)
+        assert client.heartbeat_active is False
+
+    def test_listen_passes_the_interval_through(self):
+        client = _make_client()
+        client.on_execution_request(lambda req: None)
+
+        def get_side_effect(url, **kwargs):
+            client._listening = False
+            raise requests.exceptions.Timeout()
+
+        with patch.object(client.session, "get", side_effect=get_side_effect), \
+             patch.object(client, "start_heartbeat", return_value=True) as start:
+            client.listen_for_executions(heartbeat=True, heartbeat_interval=2.0)
+        start.assert_called_once_with(2.0)
+
+    def test_stop_listening_does_not_touch_the_heartbeat(self):
+        client = _make_client()
+        with patch.object(client, "send_heartbeat", return_value=True):
+            client.start_heartbeat(0.05)
+            client.stop_listening()
+            assert client.heartbeat_active is True
+            client.stop_heartbeat()
+
+    @pytest.mark.parametrize("bad", [float("inf"), float("nan"), 0, -1])
+    def test_rejects_non_finite_or_non_positive_interval(self, bad):
+        with pytest.raises(ValueError):
+            _make_client().start_heartbeat(bad)
