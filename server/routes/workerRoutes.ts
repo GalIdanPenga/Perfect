@@ -58,16 +58,33 @@ interface WorkersConfig {
   workers: WorkerConfig[];
 }
 
-let workersConfig: WorkersConfig;
-try {
-  const configPath = path.join(__dirname, '../workers.json');
-  const configData = fs.readFileSync(configPath, 'utf-8');
-  workersConfig = JSON.parse(configData);
-  workersConfig.workers.forEach(sanitizeWorkerConfig);
-  console.log(`[Server] Loaded ${workersConfig.workers.length} worker configurations`);
-} catch (error) {
-  console.error('[Server] Failed to load workers.json, using default config');
-  workersConfig = {
+/**
+ * Load the worker definitions. server/workers.json is gitignored (it holds
+ * machine-specific paths), so a fresh checkout falls back to the committed
+ * workers.example.json; a missing or unparsable workers.json is reported.
+ */
+export function loadWorkersConfig(dir: string): WorkersConfig {
+  const candidates = ['workers.json', 'workers.example.json'];
+  for (const name of candidates) {
+    const file = path.join(dir, name);
+    if (!fs.existsSync(file)) {
+      if (name === 'workers.json') {
+        console.log('[Server] server/workers.json not found; using workers.example.json. Copy it to workers.json to customize.');
+      }
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(fs.readFileSync(file, 'utf-8')) as WorkersConfig;
+      if (!Array.isArray(parsed.workers)) throw new Error('expected a top-level "workers" array');
+      parsed.workers.forEach(sanitizeWorkerConfig);
+      console.log(`[Server] Loaded ${parsed.workers.length} worker configurations from ${name}`);
+      return parsed;
+    } catch (error: any) {
+      console.error(`[Server] Failed to load ${name}: ${error.message}`);
+    }
+  }
+  console.error('[Server] No usable workers file; using the built-in default worker');
+  return {
     workers: [
       {
         id: 'perfect_example',
@@ -80,6 +97,8 @@ try {
     ]
   };
 }
+
+let workersConfig: WorkersConfig = loadWorkersConfig(path.join(__dirname, '..'));
 
 /**
  * GET /api/worker/configs

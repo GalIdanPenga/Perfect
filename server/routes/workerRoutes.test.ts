@@ -2,8 +2,11 @@ import { describe, it, expect, afterAll, vi } from 'vitest';
 import { EventEmitter } from 'events';
 import express from 'express';
 import request from 'supertest';
-import workerRoutes, { buildWorkerEnv, sanitizeWorkerConfig } from './workerRoutes';
+import workerRoutes, { buildWorkerEnv, sanitizeWorkerConfig, loadWorkersConfig } from './workerRoutes';
 import { flowEngine } from '../engine/FlowEngine';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 
 // Fake child process so the start route never launches Python.
 const spawned: Array<EventEmitter & { kill: () => void; stdout: EventEmitter; stderr: EventEmitter; env?: NodeJS.ProcessEnv }> = [];
@@ -155,6 +158,67 @@ describe('sanitizeWorkerConfig', () => {
     expect(warn).toHaveBeenCalledTimes(5);
     expect(warn.mock.calls[0][0]).toContain("Worker 'c1'");
     warn.mockRestore();
+  });
+});
+
+describe('loadWorkersConfig', () => {
+  const quiet = () => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  };
+  const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'perfect-workers-'));
+  const write = (dir: string, name: string, body: unknown) =>
+    fs.writeFileSync(path.join(dir, name), typeof body === 'string' ? body : JSON.stringify(body));
+  const one = (id: string) => ({ workers: [{ ...base, id }] });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('prefers workers.json when present', () => {
+    quiet();
+    const dir = tmp();
+    write(dir, 'workers.json', one('mine'));
+    write(dir, 'workers.example.json', one('example'));
+    expect(loadWorkersConfig(dir).workers.map(w => w.id)).toEqual(['mine']);
+  });
+
+  it('falls back to workers.example.json and says how to customize', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const dir = tmp();
+    write(dir, 'workers.example.json', one('example'));
+    expect(loadWorkersConfig(dir).workers.map(w => w.id)).toEqual(['example']);
+    expect(log.mock.calls.some(c => String(c[0]).includes('Copy it to workers.json'))).toBe(true);
+  });
+
+  it('skips an unparsable workers.json and reports it', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    const dir = tmp();
+    write(dir, 'workers.json', '{ not json');
+    write(dir, 'workers.example.json', one('example'));
+    expect(loadWorkersConfig(dir).workers.map(w => w.id)).toEqual(['example']);
+    expect(error.mock.calls.some(c => String(c[0]).includes('Failed to load workers.json'))).toBe(true);
+  });
+
+  it('rejects a file without a workers array', () => {
+    quiet();
+    const dir = tmp();
+    write(dir, 'workers.json', { clients: [] });
+    write(dir, 'workers.example.json', one('example'));
+    expect(loadWorkersConfig(dir).workers.map(w => w.id)).toEqual(['example']);
+  });
+
+  it('uses the built-in default when neither file exists', () => {
+    quiet();
+    const cfg = loadWorkersConfig(tmp());
+    expect(cfg.workers).toHaveLength(1);
+    expect(cfg.workers[0].id).toBe('perfect_example');
+  });
+
+  it('sanitizes what it loads', () => {
+    quiet();
+    const dir = tmp();
+    write(dir, 'workers.json', { workers: [{ ...base, id: 'w', performanceMinOverageMs: -1 }] });
+    expect(loadWorkersConfig(dir).workers[0].performanceMinOverageMs).toBeUndefined();
   });
 });
 

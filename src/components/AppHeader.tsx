@@ -1,4 +1,5 @@
 import { Activity } from 'lucide-react';
+import { APP_VERSION } from '../constants';
 import { WorkerConfig } from '../types';
 import { PerfectLogo } from './PerfectLogo';
 
@@ -28,7 +29,7 @@ export function AppHeader({ themeColor, activeWorker }: AppHeaderProps) {
             color: themeColor,
             borderColor: `${themeColor}50`
           }}
-        >v2.0</span>
+        >{APP_VERSION}</span>
       </div>
       <div className="flex items-center gap-4">
         <div className="hidden md:flex items-center gap-2 text-xs text-slate-500 font-mono">

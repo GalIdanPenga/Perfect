@@ -21,6 +21,16 @@ describe('AppHeader', () => {
     expect(screen.getByText('v2.0')).toBeTruthy();
   });
 
+  it('shows VITE_APP_VERSION from the environment when set', async () => {
+    vi.stubEnv('VITE_APP_VERSION', ' v9.9-test ');
+    vi.resetModules();
+    const { AppHeader: FreshHeader } = await import('./AppHeader');
+    render(<FreshHeader themeColor="#0ea5e9" activeWorker={null} />);
+    expect(screen.getByText('v9.9-test')).toBeTruthy();
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
   it('shows "System Online" when no worker is active', () => {
     render(<AppHeader themeColor="#0ea5e9" activeWorker={null} />);
     expect(screen.getByText('System Online')).toBeTruthy();

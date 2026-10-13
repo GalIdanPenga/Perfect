@@ -30,6 +30,10 @@ examples/venv/
 examples/.venv
 examples/wheels/
 
+# Local configuration (copy the *.example files to create these)
+server/workers.json
+.env.local
+
 # Database
 server/database/flows.db
 server/database/flows.db-shm

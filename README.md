@@ -36,6 +36,17 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
 
 3. Open http://localhost:5173 in your browser
 
+### Local Configuration
+
+Two files hold machine-specific settings and are gitignored. Create each from its committed example:
+
+```bash
+cp server/workers.example.json server/workers.json   # worker definitions (paths, commands, sensitivity)
+cp .env.example .env.local                           # VITE_APP_VERSION, the version shown in the header
+```
+
+Without `server/workers.json` the backend uses `workers.example.json` and says so in its log. Without `.env.local` the header shows `v2.0`. Restart `npm run dev:all` after editing either file.
+
 ### Worker
 
 1. The Python SDK has no external dependencies (uses only standard library)
@@ -219,7 +230,7 @@ Tasks are flagged with performance warnings using statistical analysis (z-score 
 
 #### Sensitivity Levels
 
-Configure per-worker in `server/workers.json` using the `performanceSensitivity` field:
+Configure per-worker in `server/workers.json` (see Local Configuration above) using the `performanceSensitivity` field:
 
 - **Conservative** (fewer alerts, higher confidence)
   - Samples < 20: Requires 7σ deviation
