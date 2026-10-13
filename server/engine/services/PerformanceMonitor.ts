@@ -10,6 +10,11 @@ export type PerformanceSensitivity = 'conservative' | 'normal' | 'aggressive';
 /** Default minimum overage, in ms, before any task can be flagged slow. */
 export const DEFAULT_MIN_OVERAGE_MS = 1000;
 
+/** True for a usable per-client minimum overage: a finite number >= 0. */
+export function isValidMinOverageMs(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+}
+
 export class PerformanceMonitor {
   private readonly sensitivityThresholds = {
     conservative: { lowSamples: 7.0, highSamples: 5.0 },
@@ -30,12 +35,13 @@ export class PerformanceMonitor {
   // Absolute gate. A task must be over its sigma threshold AND at least this
   // many milliseconds slower than its average. This keeps short tasks from
   // warning over overages nobody would notice, however many sigma they are.
+  // This is the default; each call may pass its own (the active client's).
   private readonly minOverageMs: number;
 
   constructor(options: { minOverageMs?: number } = {}) {
     const minOverageMs = options.minOverageMs ?? DEFAULT_MIN_OVERAGE_MS;
-    if (minOverageMs < 0) {
-      throw new Error(`minOverageMs must be >= 0, got ${minOverageMs}`);
+    if (!isValidMinOverageMs(minOverageMs)) {
+      throw new Error(`minOverageMs must be a finite number >= 0, got ${minOverageMs}`);
     }
     this.minOverageMs = minOverageMs;
   }
@@ -52,6 +58,8 @@ export class PerformanceMonitor {
    * @param stdDevMs - Standard deviation from historical data
    * @param sampleCount - Number of historical samples
    * @param sensitivity - Sensitivity level for detection (default: 'normal')
+   * @param minOverageMs - Absolute threshold for this call, in ms. Falls back
+   *   to the monitor's default when omitted or invalid.
    * @returns PerformanceWarning if outlier detected, null otherwise
    */
   detectOutlier(
@@ -59,7 +67,8 @@ export class PerformanceMonitor {
     avgMs: number,
     stdDevMs: number,
     sampleCount: number,
-    sensitivity: PerformanceSensitivity = 'normal'
+    sensitivity: PerformanceSensitivity = 'normal',
+    minOverageMs?: number
   ): PerformanceWarning | null {
     // Need at least minimum samples to calculate variance
     if (sampleCount < this.minSamples) {
@@ -75,7 +84,8 @@ export class PerformanceMonitor {
     }
 
     // Absolute gate: small overages are never worth a warning
-    if (diff < this.minOverageMs) {
+    const minOverage = isValidMinOverageMs(minOverageMs) ? minOverageMs : this.minOverageMs;
+    if (diff < minOverage) {
       return null;
     }
 

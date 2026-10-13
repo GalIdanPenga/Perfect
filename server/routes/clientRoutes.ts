@@ -4,7 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { flowEngine } from '../engine/FlowEngine';
-import { PerformanceSensitivity } from '../engine/services/PerformanceMonitor';
+import { PerformanceSensitivity, DEFAULT_MIN_OVERAGE_MS, isValidMinOverageMs } from '../engine/services/PerformanceMonitor';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +30,24 @@ interface ClientConfig {
   args: string[];
   color?: string;
   performanceSensitivity?: PerformanceSensitivity;
+  /**
+   * Absolute threshold for slow-task warnings: a task must be at least this
+   * many ms slower than its average, on top of the sigma test. Defaults to
+   * DEFAULT_MIN_OVERAGE_MS (1000).
+   */
+  performanceMinOverageMs?: number;
+}
+
+/**
+ * Drop an invalid performanceMinOverageMs so the engine falls back to the
+ * default, and say so in the log. Returns the same config object, mutated.
+ */
+export function sanitizeClientConfig(client: ClientConfig): ClientConfig {
+  if (client.performanceMinOverageMs !== undefined && !isValidMinOverageMs(client.performanceMinOverageMs)) {
+    console.warn(`[Server] Client '${client.id}': ignoring performanceMinOverageMs=${JSON.stringify(client.performanceMinOverageMs)} (expected a number >= 0); using default ${DEFAULT_MIN_OVERAGE_MS}ms`);
+    delete client.performanceMinOverageMs;
+  }
+  return client;
 }
 
 interface ClientsConfig {
@@ -41,6 +59,7 @@ try {
   const configPath = path.join(__dirname, '../clients.json');
   const configData = fs.readFileSync(configPath, 'utf-8');
   clientsConfig = JSON.parse(configData);
+  clientsConfig.clients.forEach(sanitizeClientConfig);
   console.log(`[Server] Loaded ${clientsConfig.clients.length} client configurations`);
 } catch (error) {
   console.error('[Server] Failed to load clients.json, using default config');

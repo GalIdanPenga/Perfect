@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll, afterEach, vi } 
 import { FlowEngine, flowEngine } from './FlowEngine';
 import { createDatabase } from '../database/db';
 import { TaskState, FlowRegistrationPayload } from '../types';
+import { getActiveClient } from '../routes/clientRoutes';
 
 // ---------------------------------------------------------------------------
 // Module mocks (hoisted)
@@ -354,6 +355,54 @@ describe('FlowEngine', () => {
 
       const run = engine.getRuns().find(r => r.id === runId)!;
       expect(run.state).toBe(TaskState.FAILED);
+    });
+  });
+
+  // ── Slow-task detection uses the active client's settings ──────────────────
+
+  describe('slow-task detection settings', () => {
+    // Seed two 1000ms samples so avg=1000, stdDev=0 → floor 100ms. A 1600ms
+    // completion is then 600ms over (6σ): past the sigma test, but under the
+    // 1000ms default absolute threshold.
+    const completeAt = (durationMs: number) => {
+      const dbDeps = createDatabase(':memory:');
+      const eng = new FlowEngine(false, dbDeps);
+      dbDeps.statsDb.updateTaskStats('GateFlow', 'Task 1', 1000);
+      dbDeps.statsDb.updateTaskStats('GateFlow', 'Task 1', 1000);
+      const flow = eng.registerFlow(makePayload('GateFlow', 1));
+      const runId = eng.createRun(flow.id)!;
+      eng.updateTaskState(runId, 0, TaskState.RUNNING);
+      eng.updateTaskState(runId, 0, TaskState.COMPLETED, 100, durationMs);
+      const task = eng.getRun(runId)!.tasks[0];
+      eng.destroy();
+      return task.performanceWarning;
+    };
+    const withClient = (performanceMinOverageMs: unknown) =>
+      vi.mocked(getActiveClient).mockReturnValue({ id: 'c', name: 'C', performanceSensitivity: 'normal', performanceMinOverageMs } as any);
+
+    afterEach(() => {
+      vi.mocked(getActiveClient).mockReturnValue(null);
+    });
+
+    it('falls back to the 1000ms default with no active client', () => {
+      expect(completeAt(1600)).toBeUndefined();
+      expect(completeAt(2100)).toBeDefined();
+    });
+
+    it("uses the active client's performanceMinOverageMs", () => {
+      withClient(500);
+      expect(completeAt(1600)).toBeDefined();
+      withClient(1000);
+      expect(completeAt(1600)).toBeUndefined();
+      withClient(0);
+      expect(completeAt(1600)).toBeDefined();
+    });
+
+    it('falls back to the default when the client value is invalid', () => {
+      withClient(-5);
+      expect(completeAt(1600)).toBeUndefined();
+      withClient('500');
+      expect(completeAt(1600)).toBeUndefined();
     });
   });
 

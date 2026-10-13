@@ -240,7 +240,7 @@ Configure per-client in `server/clients.json` using the `performanceSensitivity`
 
 **Noise Floor**: The standard deviation used for scoring is never smaller than 10% of the task's average duration or 100ms, whichever is larger. A task whose first few runs were nearly identical would otherwise have a deviation of a few milliseconds, and normal jitter would read as many σ. In practice a task must be at least 25–70% slower than its average (depending on sensitivity and sample count) before it is flagged.
 
-**Absolute Threshold**: On top of the σ test, a task must be at least **1 second** slower than its average. Both conditions have to hold. This keeps short tasks from being flagged over overages nobody would notice, however many σ they represent. The value is `DEFAULT_MIN_OVERAGE_MS` in `server/engine/services/PerformanceMonitor.ts`.
+**Absolute Threshold**: On top of the σ test, a task must be at least `performanceMinOverageMs` milliseconds slower than its average (default **1000**). Both conditions have to hold. This keeps short tasks from being flagged over overages nobody would notice, however many σ they represent. Set it per client in `server/clients.json`; an invalid value is logged and the default is used.
 
 ### Performance Warning Display
 
@@ -255,7 +255,7 @@ Performance warnings appear in multiple locations:
 
 ### Configuration
 
-Configure sensitivity per client in `server/clients.json`:
+Configure sensitivity and the absolute threshold per client in `server/clients.json`:
 
 ```json
 {
@@ -263,10 +263,13 @@ Configure sensitivity per client in `server/clients.json`:
     {
       "id": "perfect_example",
       "name": "Perfect Example Flows",
-      "performanceSensitivity": "normal"
+      "performanceSensitivity": "normal",
+      "performanceMinOverageMs": 1000
     }
   ]
 }
 ```
+
+`performanceMinOverageMs` is optional. Leave it out to use the 1 second default, or set `0` to rely on the σ test alone.
 
 Advanced users can modify the σ thresholds and the noise floor in `server/engine/services/PerformanceMonitor.ts`.

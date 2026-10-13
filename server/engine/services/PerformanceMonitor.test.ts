@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { PerformanceMonitor, DEFAULT_MIN_OVERAGE_MS } from './PerformanceMonitor'
+import { PerformanceMonitor, DEFAULT_MIN_OVERAGE_MS, isValidMinOverageMs } from './PerformanceMonitor'
 
 // ---------------------------------------------------------------------------
 // PerformanceMonitor.detectOutlier
@@ -171,6 +171,34 @@ describe('PerformanceMonitor.detectOutlier', () => {
 
     it('rejects a negative threshold', () => {
       expect(() => new PerformanceMonitor({ minOverageMs: -1 })).toThrow()
+    })
+
+    it('a per-call threshold overrides the constructor default', () => {
+      const gated = new PerformanceMonitor()  // default 1000ms
+      // avg=1000, stdDev=100, actual=1600 → diff=600, zScore=6.0 > 5
+      expect(gated.detectOutlier(1600, 1000, 100, 5, 'normal')).toBeNull()          // 600 < 1000 default
+      expect(gated.detectOutlier(1600, 1000, 100, 5, 'normal', 500)).not.toBeNull() // 600 >= 500 override
+      expect(gated.detectOutlier(1600, 1000, 100, 5, 'normal', 0)).not.toBeNull()   // 0 = sigma test alone
+      expect(monitor.detectOutlier(1600, 1000, 100, 5, 'normal', 2000)).toBeNull()  // override can tighten too
+    })
+
+    it('an invalid per-call threshold falls back to the constructor default', () => {
+      const gated = new PerformanceMonitor()
+      for (const bad of [-1, NaN, Infinity, undefined]) {
+        expect(gated.detectOutlier(1600, 1000, 100, 5, 'normal', bad as any)).toBeNull()
+      }
+      expect(gated.detectOutlier(2100, 1000, 100, 5, 'normal', NaN)).not.toBeNull() // 1100 >= 1000
+    })
+  })
+
+  describe('isValidMinOverageMs', () => {
+    it('accepts finite numbers >= 0', () => {
+      for (const ok of [0, 1, 500, 1000.5]) expect(isValidMinOverageMs(ok)).toBe(true)
+    })
+    it('rejects negatives, non-finite values and non-numbers', () => {
+      for (const bad of [-1, NaN, Infinity, -Infinity, '1000', null, undefined, true, {}]) {
+        expect(isValidMinOverageMs(bad)).toBe(false)
+      }
     })
   })
 

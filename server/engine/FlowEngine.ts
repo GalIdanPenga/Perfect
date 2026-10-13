@@ -9,7 +9,7 @@ import {
 import { flowDb as defaultFlowDb, runDb as defaultRunDb, statsDb as defaultStatsDb, DatabaseDeps } from '../database/db';
 import { generateFlowReport } from '../utils/reportGenerator';
 import { getActiveClient } from '../routes/clientRoutes';
-import { PerformanceMonitor } from './services/PerformanceMonitor';
+import { PerformanceMonitor, PerformanceSensitivity } from './services/PerformanceMonitor';
 import { generateId, buildNewRun } from './runFactory';
 import { markRunFailed } from './failureHandler';
 import { updateRunProgress } from './progress';
@@ -264,9 +264,8 @@ export class FlowEngine {
         const stats = this.statsDb.getTaskStats(run.flowName, task.taskName);
 
         if (stats) {
-          const activeClient = getActiveClient();
-          const sensitivity = activeClient?.performanceSensitivity || 'normal';
-          const warning = this.performanceMonitor.detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
+          const { sensitivity, minOverageMs } = this.outlierSettings();
+          const warning = this.performanceMonitor.detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity, minOverageMs);
 
           // Only log when warning status changes
           const hadWarning = task.performanceWarning !== undefined;
@@ -294,8 +293,7 @@ export class FlowEngine {
 
         if (durationMs !== undefined) {
           const stats = this.statsDb.getTaskStats(run.flowName, task.taskName);
-          const activeClient = getActiveClient();
-          const sensitivity = activeClient?.performanceSensitivity || 'normal';
+          const { sensitivity, minOverageMs } = this.outlierSettings();
 
           // Always record stats - outlier detection is for warnings only, not for excluding data
           try {
@@ -307,7 +305,7 @@ export class FlowEngine {
 
           // Set performance warning independently of stats recording
           if (stats) {
-            const warning = this.performanceMonitor.detectOutlier(durationMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
+            const warning = this.performanceMonitor.detectOutlier(durationMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity, minOverageMs);
             task.performanceWarning = warning || undefined;
             if (warning) {
               console.log(`[FlowEngine] ⚠️  Performance warning: ${run.flowName}/${task.taskName} - ${warning.message}`);
@@ -557,9 +555,8 @@ export class FlowEngine {
           const stats = this.statsDb.getTaskStats(run.flowName, task.taskName);
 
           if (stats) {
-            const activeClient = getActiveClient();
-            const sensitivity = activeClient?.performanceSensitivity || 'normal';
-            const warning = this.performanceMonitor.detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity);
+            const { sensitivity, minOverageMs } = this.outlierSettings();
+            const warning = this.performanceMonitor.detectOutlier(elapsedMs, stats.avgDurationMs, stats.stdDevDurationMs, stats.sampleCount, sensitivity, minOverageMs);
 
             // Only log when warning status changes
             const hadWarning = task.performanceWarning !== undefined;
@@ -706,6 +703,18 @@ export class FlowEngine {
 
       this.notifyStateChange();
     }
+  }
+
+  /**
+   * Outlier-detection settings of the active client. Absent or invalid values
+   * fall back to the defaults ('normal', DEFAULT_MIN_OVERAGE_MS).
+   */
+  private outlierSettings(): { sensitivity: PerformanceSensitivity; minOverageMs: number | undefined } {
+    const activeClient = getActiveClient();
+    return {
+      sensitivity: activeClient?.performanceSensitivity || 'normal',
+      minOverageMs: activeClient?.performanceMinOverageMs
+    };
   }
 
   /**

@@ -13,4 +13,6 @@ export interface ClientConfig {
   args: string[];
   color?: string;
   performanceSensitivity?: PerformanceSensitivity;
+  /** Minimum ms over average before a task can be flagged slow. Defaults to 1000. */
+  performanceMinOverageMs?: number;
 }

@@ -8,7 +8,8 @@
       "command": "../.venv/bin/python",
       "args": ["example_flows.py"],
       "color": "#00D9FF",
-      "performanceSensitivity": "normal"
+      "performanceSensitivity": "normal",
+      "performanceMinOverageMs": 1000
     },
     {
       "id": "custom_python",
@@ -18,7 +19,8 @@
       "command": "../.venv/bin/python",
       "args": ["example_flows.py", "--config", "dev"],
       "color": "#FF0000",
-      "performanceSensitivity": "aggressive"
+      "performanceSensitivity": "aggressive",
+      "performanceMinOverageMs": 500
     },
     {
       "id": "python_venv",
@@ -28,7 +30,8 @@
       "command": "../.venv/bin/python",
       "args": ["example_flows.py"],
       "color": "#00FF94",
-      "performanceSensitivity": "conservative"
+      "performanceSensitivity": "conservative",
+      "performanceMinOverageMs": 2000
     }
   ]
 }
