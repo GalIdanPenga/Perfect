@@ -27,7 +27,7 @@ A modern workflow orchestration platform for Python flows. Monitor, trigger, and
 
 2. Start the development server (runs both frontend and backend):
    ```bash
-   npm run dev
+   npm run dev:all
    ```
 
    This will start:
@@ -161,7 +161,7 @@ See [PYTHON_CLIENT.md](./examples/perfect_client/PYTHON_CLIENT.md) for detailed 
 6. **Execute & Report** - Client executes tasks and sends progress updates back to the server
 7. **Real-Time Updates** - UI displays live execution progress with weighted progress bars
 8. **Persistent History** - All flows and runs are stored in SQLite database
-9. **Heartbeat Monitoring** - Client sends heartbeats; flows marked failed if client disconnects
+9. **Heartbeat Monitoring** - Client sends heartbeats; flows marked failed if client disconnects. Set `"heartbeat": false` on a client in `server/clients.json`, or `PERFECT_HEARTBEAT=0` for a client you run yourself, to turn this off. See `examples/perfect_client/PYTHON_CLIENT.md`.
 
 ## Architecture
 

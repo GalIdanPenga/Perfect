@@ -275,9 +275,11 @@ Tasks have a `crucial_pass` flag:
 
 ### Heartbeat
 
-Client sends heartbeat every 3 seconds:
+The SDK starts a heartbeat thread when it first connects, sending one every 3 seconds:
 - Backend fails flows if no heartbeat for 10 seconds
 - Prevents stuck flows when client crashes
+- The backend's watchdog only arms after the first heartbeat, so a client with heartbeats off is never failed by it
+- Disable with `PERFECT_HEARTBEAT=0`, `configure(heartbeat=False)`, or `"heartbeat": false` in `server/clients.json`
 
 ### Parallel Flow Execution
 

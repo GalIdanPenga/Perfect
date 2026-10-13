@@ -25,6 +25,7 @@ Usage:
 """
 
 import functools
+import os
 import sys
 import threading
 import atexit
@@ -183,6 +184,48 @@ def _ensure_thread_aware_stdout():
 
 
 # ============================================================================
+# Heartbeat settings from the environment
+# ============================================================================
+
+# The backend fails a client's running flows when its heartbeats stop for 10s.
+HEARTBEAT_SERVER_TIMEOUT_S = 10.0
+DEFAULT_HEARTBEAT_INTERVAL_S = 3.0
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    """Read a boolean env var such as PERFECT_HEARTBEAT=0. Unknown values keep the default."""
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    value = raw.strip().lower()
+    if value in _TRUE_VALUES:
+        return True
+    if value in _FALSE_VALUES:
+        return False
+    print(f"[Perfect SDK] Ignoring {name}={raw!r}: expected one of "
+          f"{sorted(_TRUE_VALUES | _FALSE_VALUES)}")
+    return default
+
+
+def _env_positive_float(name: str, default: float) -> float:
+    """Read a positive float env var such as PERFECT_HEARTBEAT_INTERVAL=2. Bad values keep the default."""
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        value = 0.0
+    if value <= 0:
+        print(f"[Perfect SDK] Ignoring {name}={raw!r}: expected a number greater than 0")
+        return default
+    return value
+
+
+# ============================================================================
 # Workflow Registry (Core Engine)
 # ============================================================================
 
@@ -209,6 +252,15 @@ class WorkflowRegistry:
         self._auto_connect_enabled = True
         self._listener_started = False
         self._listening = False
+        # Several flows can start in parallel threads; only one may create the client
+        self._client_lock = threading.Lock()
+
+        # Heartbeat lets the backend detect a crashed client. On by default;
+        # PERFECT_HEARTBEAT=0 or configure(heartbeat=False) turns it off.
+        self._heartbeat_enabled = _env_flag("PERFECT_HEARTBEAT", True)
+        self._heartbeat_interval = _env_positive_float(
+            "PERFECT_HEARTBEAT_INTERVAL", DEFAULT_HEARTBEAT_INTERVAL_S
+        )
 
         # Execution context (thread-local for parallel flow support)
         self._execution_context = threading.local()
@@ -239,14 +291,59 @@ class WorkflowRegistry:
 
     def configure(
         self,
-        backend_url: str = "http://localhost:3001",
-        client_id: str = "perfect_example",
-        mock: bool = False
+        backend_url: Optional[str] = None,
+        client_id: Optional[str] = None,
+        mock: Optional[bool] = None,
+        heartbeat: Optional[bool] = None,
+        heartbeat_interval: Optional[float] = None,
     ):
-        """Configure Perfect client settings"""
-        self._backend_url = backend_url
-        self._client_id = client_id
-        self._mock = mock
+        """
+        Configure Perfect client settings. Arguments left as None keep their current value.
+
+        Heartbeat changes made after the client has connected take effect immediately.
+        """
+        if heartbeat_interval is not None and heartbeat_interval <= 0:
+            raise ValueError("heartbeat_interval must be greater than 0")
+
+        if backend_url is not None:
+            self._backend_url = backend_url
+        if client_id is not None:
+            self._client_id = client_id
+        if mock is not None:
+            self._mock = mock
+
+        interval_changed = (
+            heartbeat_interval is not None and heartbeat_interval != self._heartbeat_interval
+        )
+        if heartbeat is not None:
+            self._heartbeat_enabled = heartbeat
+        if heartbeat_interval is not None:
+            self._heartbeat_interval = heartbeat_interval
+
+        # Apply to an already-connected client
+        if self._client is not None and not self._mock:
+            if not self._heartbeat_enabled:
+                self._client.stop_heartbeat()
+            else:
+                if interval_changed:
+                    self._client.stop_heartbeat()
+                self._start_heartbeat()
+
+    @property
+    def heartbeat_enabled(self) -> bool:
+        """Whether this client sends heartbeats to the backend."""
+        return self._heartbeat_enabled
+
+    def _start_heartbeat(self):
+        """Start heartbeats on the connected client if enabled. Safe to call repeatedly."""
+        if not self._client or self._mock or not self._heartbeat_enabled:
+            return
+        if self._heartbeat_interval >= HEARTBEAT_SERVER_TIMEOUT_S:
+            print(f"[Perfect SDK] Warning: heartbeat interval {self._heartbeat_interval}s is not "
+                  f"below the backend's {HEARTBEAT_SERVER_TIMEOUT_S:.0f}s timeout; "
+                  f"running flows may be failed as disconnected")
+        if self._client.start_heartbeat(self._heartbeat_interval):
+            print(f"[Perfect SDK] Sending heartbeats every {self._heartbeat_interval:g}s")
 
     # ------------------------------------------------------------------------
     # Client Connection (Auto)
@@ -257,15 +354,25 @@ class WorkflowRegistry:
         if self._client or not self._auto_connect_enabled:
             return
 
-        print("\n[Perfect SDK] Auto-connecting to backend...")
-        from perfect.api import create_client, PerfectAPIClient
+        with self._client_lock:
+            # Another flow thread may have connected while we waited for the lock
+            if self._client:
+                return
 
-        if self._mock:
-            self._client = create_client(mock=True)
-        else:
-            self._client = PerfectAPIClient(base_url=self._backend_url)
+            print("\n[Perfect SDK] Auto-connecting to backend...")
+            from perfect.api import create_client, PerfectAPIClient
 
-        self._register_pending_flows()
+            if self._mock:
+                self._client = create_client(mock=True)
+            else:
+                self._client = PerfectAPIClient(base_url=self._backend_url)
+
+            if self._heartbeat_enabled:
+                self._start_heartbeat()
+            elif not self._mock:
+                print("[Perfect SDK] Heartbeat disabled: the backend will not detect if this client crashes")
+
+            self._register_pending_flows()
 
     def _register_pending_flows(self):
         """Register all pending flows with backend"""
@@ -781,28 +888,40 @@ def get_registry() -> WorkflowRegistry:
 # ============================================================================
 
 def configure(
-    backend_url: str = "http://localhost:3001",
-    client_id: str = "perfect_example",
-    mock: bool = False
+    backend_url: Optional[str] = None,
+    client_id: Optional[str] = None,
+    mock: Optional[bool] = None,
+    heartbeat: Optional[bool] = None,
+    heartbeat_interval: Optional[float] = None,
 ):
     """
     Configure Perfect client settings (optional).
 
-    Call before calling any flows if you need custom settings.
-    Defaults: backend_url="http://localhost:3001", client_id="perfect_example"
+    Call before calling any flows if you need custom settings. Any argument
+    left as None keeps its current value.
+    Defaults: backend_url="http://localhost:3000", client_id="perfect_example",
+    heartbeat on every 3 seconds.
 
     Args:
         backend_url: URL of the Perfect backend server
         client_id: Unique identifier for this client
         mock: If True, run in mock mode without backend
+        heartbeat: If False, send no heartbeats. The backend then cannot detect
+            a crashed client, and its running flows stay RUNNING until stopped
+            from the UI. Also settable with the PERFECT_HEARTBEAT env var.
+        heartbeat_interval: Seconds between heartbeats. Must stay below the
+            backend's 10 second timeout. Also settable with PERFECT_HEARTBEAT_INTERVAL.
 
     Example:
-        configure(backend_url="http://localhost:3001", client_id="my_app")
+        configure(heartbeat=False)
+        configure(backend_url="http://localhost:3000", client_id="my_app")
     """
     _default_registry.configure(
         backend_url=backend_url,
         client_id=client_id,
-        mock=mock
+        mock=mock,
+        heartbeat=heartbeat,
+        heartbeat_interval=heartbeat_interval,
     )
 
 

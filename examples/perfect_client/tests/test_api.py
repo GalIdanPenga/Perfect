@@ -5,6 +5,7 @@ All HTTP calls are mocked — no real server required.
 """
 
 import threading
+import time
 import pytest
 import requests
 from unittest.mock import patch, Mock, call
@@ -305,3 +306,77 @@ class TestListenForExecutions:
             client.listen_for_executions()
 
         assert client._listening is False
+
+
+# ---------------------------------------------------------------------------
+# start_heartbeat / stop_heartbeat
+# ---------------------------------------------------------------------------
+
+class TestHeartbeatThread:
+    def test_start_sends_heartbeats_until_stopped(self):
+        client = _make_client()
+        sent = threading.Event()
+
+        def fake_send():
+            sent.set()
+            return True
+
+        with patch.object(client, "send_heartbeat", side_effect=fake_send):
+            assert client.start_heartbeat(0.01) is True
+            assert sent.wait(1.0), "no heartbeat was sent"
+            assert client.heartbeat_active is True
+            client.stop_heartbeat()
+
+        assert client.heartbeat_active is False
+
+    def test_start_is_idempotent(self):
+        client = _make_client()
+        with patch.object(client, "send_heartbeat", return_value=True):
+            assert client.start_heartbeat(0.05) is True
+            first = client._heartbeat_thread
+            assert client.start_heartbeat(0.05) is False
+            assert client._heartbeat_thread is first
+            client.stop_heartbeat()
+
+    def test_stop_returns_promptly_with_long_interval(self):
+        client = _make_client()
+        with patch.object(client, "send_heartbeat", return_value=True):
+            client.start_heartbeat(60.0)
+            started = time.monotonic()
+            client.stop_heartbeat()
+            assert time.monotonic() - started < 1.0
+
+    def test_can_restart_after_stop(self):
+        client = _make_client()
+        with patch.object(client, "send_heartbeat", return_value=True):
+            client.start_heartbeat(0.05)
+            client.stop_heartbeat()
+            assert client.start_heartbeat(0.05) is True
+            assert client.heartbeat_active is True
+            client.stop_heartbeat()
+
+    def test_rejects_non_positive_interval(self):
+        client = _make_client()
+        with pytest.raises(ValueError):
+            client.start_heartbeat(0)
+
+    def test_close_stops_heartbeat(self):
+        client = _make_client()
+        with patch.object(client, "send_heartbeat", return_value=True):
+            client.start_heartbeat(0.05)
+            client.close()
+        assert client.heartbeat_active is False
+
+    def test_listen_without_heartbeat_starts_no_thread(self):
+        client = _make_client()
+        client.on_execution_request(lambda req: None)
+
+        def get_side_effect(url, **kwargs):
+            client._listening = False
+            raise requests.exceptions.Timeout()
+
+        with patch.object(client.session, "get", side_effect=get_side_effect), \
+             patch.object(client, "start_heartbeat") as start:
+            client.listen_for_executions(heartbeat=False)
+
+        start.assert_not_called()

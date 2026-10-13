@@ -716,6 +716,16 @@ export class FlowEngine {
   }
 
   /**
+   * Forget the last heartbeat so the watchdog is disarmed until a new one arrives.
+   * Called when a client starts, so a previous client's stale heartbeat can't
+   * fail the runs of a client that has heartbeats turned off. Not called on exit:
+   * after a crash the watchdog must still time out and fail the leftover runs.
+   */
+  resetHeartbeat(): void {
+    this.lastClientHeartbeat = null;
+  }
+
+  /**
    * Check if client heartbeat is stale and fail all running flows
    */
   private checkHeartbeat(): void {
@@ -750,9 +760,11 @@ export class FlowEngine {
         });
 
         this.notifyStateChange();
-        // Reset heartbeat to avoid repeated failure notifications
-        this.lastClientHeartbeat = null;
       }
+
+      // The client is gone either way. Disarm until a new heartbeat arrives, so
+      // this stale timestamp can't fail a later client that sends no heartbeats.
+      this.lastClientHeartbeat = null;
     }
   }
 

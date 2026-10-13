@@ -30,6 +30,23 @@ interface ClientConfig {
   args: string[];
   color?: string;
   performanceSensitivity?: PerformanceSensitivity;
+  /**
+   * Whether the client sends heartbeats so the server can fail its runs if it
+   * crashes. Defaults to true. Passed to the process as PERFECT_HEARTBEAT.
+   */
+  heartbeat?: boolean;
+}
+
+/**
+ * Build the spawned client's environment. PERFECT_HEARTBEAT is only set when
+ * the client config states it, so an inherited value is otherwise respected.
+ */
+export function buildClientEnv(client: Pick<ClientConfig, 'heartbeat'>, baseEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...baseEnv, PYTHONUNBUFFERED: '1' };
+  if (client.heartbeat !== undefined) {
+    env.PERFECT_HEARTBEAT = client.heartbeat ? '1' : '0';
+  }
+  return env;
 }
 
 interface ClientsConfig {
@@ -102,6 +119,12 @@ router.post('/start', (req, res) => {
     clientLogs.push(`[Server] Starting Python client: ${selectedClient.name}...`);
     clientLogs.push(`[Server] Working directory: ${selectedClient.workingDir}`);
     clientLogs.push(`[Server] Command: ${selectedClient.command} ${selectedClient.args.join(' ')}`);
+    if (selectedClient.heartbeat === false) {
+      clientLogs.push('[Server] Heartbeat disabled: runs will not be failed automatically if the client crashes');
+    }
+
+    // Disarm the watchdog so a previous client's heartbeat can't affect this one
+    flowEngine.resetHeartbeat();
 
     // Resolve working directory relative to project root
     const workingDir = path.join(__dirname, '../..', selectedClient.workingDir);
@@ -113,7 +136,7 @@ router.post('/start', (req, res) => {
 
     pythonProcess = spawn(selectedClient.command, commandArgs, {
       cwd: workingDir,
-      env: { ...process.env, PYTHONUNBUFFERED: '1' }
+      env: buildClientEnv(selectedClient)
     });
 
     pythonProcess.stdout?.on('data', (data) => {
@@ -152,6 +175,8 @@ router.post('/start', (req, res) => {
       clientStatus = 'stopped';
       pythonProcess = null;
       activeClient = null;
+      // Don't reset the heartbeat here: after a crash the watchdog must still
+      // time out and fail the runs the client left behind.
     });
 
     res.json({

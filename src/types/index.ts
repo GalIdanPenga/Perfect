@@ -13,4 +13,6 @@ export interface ClientConfig {
   args: string[];
   color?: string;
   performanceSensitivity?: PerformanceSensitivity;
+  /** Whether the client sends heartbeats so crashes are detected. Defaults to true. */
+  heartbeat?: boolean;
 }

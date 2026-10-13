@@ -102,11 +102,29 @@ from perfect.sdk import configure
 configure(
     backend_url="http://localhost:3000",  # Perfect backend URL
     client_id="my_custom_client",         # Unique client identifier
-    mock=False                             # Set to True for testing without backend
+    mock=False,                            # Set to True for testing without backend
+    heartbeat=True,                        # Set to False to skip crash detection
+    heartbeat_interval=3.0                 # Seconds between heartbeats
 )
 ```
 
-Call `configure()` before calling any flows if you need custom settings.
+Call `configure()` before calling any flows if you need custom settings. Any argument you leave out keeps its current value.
+
+### Heartbeat
+
+When the SDK first connects, it starts sending a heartbeat to the backend every 3 seconds. If heartbeats stop for 10 seconds, the backend marks this client's running flows as failed. That is how a crashed or killed client gets detected.
+
+To run without heartbeat checks, turn them off in any of these ways:
+
+| Where | Setting |
+|---|---|
+| Environment | `PERFECT_HEARTBEAT=0` |
+| Code | `configure(heartbeat=False)` |
+| UI-launched client | `"heartbeat": false` in `server/clients.json` |
+
+`PERFECT_HEARTBEAT_INTERVAL` sets the interval from the environment. Keep it well below 10 seconds.
+
+Without heartbeats, a crashed client's flows stay RUNNING until you press Stop in the UI or restart the backend.
 
 ### Listen Function
 
