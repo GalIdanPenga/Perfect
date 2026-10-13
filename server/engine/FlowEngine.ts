@@ -29,6 +29,7 @@ export class FlowEngine {
   private readonly TICK_INTERVAL_MS = 100;
   private simulationEnabled: boolean = false;
   private lastClientHeartbeat: number | null = null;
+  // Keep in sync with HEARTBEAT_SERVER_TIMEOUT_S in examples/perfect_client/perfect/sdk.py
   private readonly HEARTBEAT_TIMEOUT_MS = 10000;
   private heartbeatCheckInterval: NodeJS.Timeout;
   private performanceMonitor: PerformanceMonitor;
@@ -709,10 +710,27 @@ export class FlowEngine {
   }
 
   /**
+   * True while any run is RUNNING or PENDING.
+   */
+  hasActiveRuns(): boolean {
+    return this.runs.some(r => r.state === TaskState.RUNNING || r.state === TaskState.PENDING);
+  }
+
+  /**
    * Update the client heartbeat timestamp
    */
   updateHeartbeat(): void {
     this.lastClientHeartbeat = Date.now();
+  }
+
+  /**
+   * Forget the last heartbeat so the watchdog is disarmed until a new one arrives.
+   * Called when a client starts, so a previous client's stale heartbeat can't
+   * fail the runs of a client that has heartbeats turned off. Not called on exit:
+   * after a crash the watchdog must still time out and fail the leftover runs.
+   */
+  resetHeartbeat(): void {
+    this.lastClientHeartbeat = null;
   }
 
   /**
@@ -750,9 +768,11 @@ export class FlowEngine {
         });
 
         this.notifyStateChange();
-        // Reset heartbeat to avoid repeated failure notifications
-        this.lastClientHeartbeat = null;
       }
+
+      // The client is gone either way. Disarm until a new heartbeat arrives, so
+      // this stale timestamp can't fail a later client that sends no heartbeats.
+      this.lastClientHeartbeat = null;
     }
   }
 

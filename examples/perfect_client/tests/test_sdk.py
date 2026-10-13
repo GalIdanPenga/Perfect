@@ -222,3 +222,161 @@ class TestWorkflowRegistry:
         task_entry = d["tasks"][0]
         assert task_entry["estimatedTime"] == 1500
         assert task_entry["crucialPass"] is False
+
+
+# ---------------------------------------------------------------------------
+# Heartbeat configuration
+# ---------------------------------------------------------------------------
+
+class TestHeartbeatConfig:
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch):
+        monkeypatch.delenv("PERFECT_HEARTBEAT", raising=False)
+        monkeypatch.delenv("PERFECT_HEARTBEAT_INTERVAL", raising=False)
+
+    def test_enabled_by_default(self):
+        registry = WorkflowRegistry()
+        assert registry.heartbeat_enabled is True
+        assert registry._heartbeat_interval == 3.0
+
+    @pytest.mark.parametrize("value", ["0", "false", "OFF", "no"])
+    def test_env_var_disables(self, monkeypatch, value):
+        monkeypatch.setenv("PERFECT_HEARTBEAT", value)
+        assert WorkflowRegistry().heartbeat_enabled is False
+
+    @pytest.mark.parametrize("value", ["1", "true", "On", "yes"])
+    def test_env_var_enables(self, monkeypatch, value):
+        monkeypatch.setenv("PERFECT_HEARTBEAT", value)
+        assert WorkflowRegistry().heartbeat_enabled is True
+
+    def test_unknown_env_value_keeps_default(self, monkeypatch):
+        monkeypatch.setenv("PERFECT_HEARTBEAT", "maybe")
+        assert WorkflowRegistry().heartbeat_enabled is True
+
+    def test_env_interval(self, monkeypatch):
+        monkeypatch.setenv("PERFECT_HEARTBEAT_INTERVAL", "1.5")
+        assert WorkflowRegistry()._heartbeat_interval == 1.5
+
+    @pytest.mark.parametrize("value", ["abc", "0", "-2", "inf", "nan", "-inf"])
+    def test_bad_env_interval_keeps_default(self, monkeypatch, value):
+        monkeypatch.setenv("PERFECT_HEARTBEAT_INTERVAL", value)
+        assert WorkflowRegistry()._heartbeat_interval == 3.0
+
+    def test_configure_overrides_env(self, monkeypatch):
+        monkeypatch.setenv("PERFECT_HEARTBEAT", "0")
+        registry = WorkflowRegistry()
+        registry.configure(heartbeat=True)
+        assert registry.heartbeat_enabled is True
+
+    def test_configure_only_changes_given_settings(self):
+        registry = WorkflowRegistry()
+        registry.configure(heartbeat=False)
+        assert registry._backend_url == "http://localhost:3000"
+        assert registry._client_id == "perfect_example"
+        assert registry._mock is False
+
+    @pytest.mark.parametrize("bad", [0, -1, float("inf"), float("nan")])
+    def test_configure_rejects_non_positive_or_non_finite_interval(self, bad):
+        with pytest.raises(ValueError):
+            WorkflowRegistry().configure(heartbeat_interval=bad)
+
+    def test_connect_starts_heartbeat_when_enabled(self):
+        registry = WorkflowRegistry()
+        registry.configure(heartbeat_interval=2.0)
+        with patch("perfect.api.PerfectAPIClient") as client_cls:
+            registry._ensure_client()
+        client_cls.return_value.start_heartbeat.assert_called_once_with(2.0)
+
+    def test_connect_skips_heartbeat_when_disabled(self):
+        registry = WorkflowRegistry()
+        registry.configure(heartbeat=False)
+        with patch("perfect.api.PerfectAPIClient") as client_cls:
+            registry._ensure_client()
+        client_cls.return_value.start_heartbeat.assert_not_called()
+
+    def test_connect_skips_heartbeat_in_mock_mode(self):
+        registry = WorkflowRegistry()
+        registry.configure(mock=True)
+        registry._ensure_client()
+        assert registry._client is not None
+        assert registry._client.heartbeat_active is False
+
+    def test_parallel_flows_create_one_client(self):
+        import threading
+        registry = WorkflowRegistry()
+        barrier = threading.Barrier(8)
+
+        def connect():
+            barrier.wait()
+            registry._ensure_client()
+
+        with patch("perfect.api.PerfectAPIClient") as client_cls:
+            threads = [threading.Thread(target=connect) for _ in range(8)]
+            for t in threads:
+                t.start()
+            for t in threads:
+                t.join()
+        assert client_cls.call_count == 1
+        client_cls.return_value.start_heartbeat.assert_called_once()
+
+    def test_disabling_after_connect_stops_heartbeat(self):
+        registry = WorkflowRegistry()
+        with patch("perfect.api.PerfectAPIClient") as client_cls:
+            registry._ensure_client()
+            registry.configure(heartbeat=False)
+        client_cls.return_value.stop_heartbeat.assert_called_once()
+
+    def test_changing_interval_after_connect_restarts_heartbeat(self):
+        registry = WorkflowRegistry()
+        with patch("perfect.api.PerfectAPIClient") as client_cls:
+            registry._ensure_client()
+            registry.configure(heartbeat_interval=1.0)
+        client = client_cls.return_value
+        client.stop_heartbeat.assert_called_once()
+        assert client.start_heartbeat.call_args_list[-1].args == (1.0,)
+
+
+class TestHeartbeatSettingsReachTheListener:
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch):
+        monkeypatch.delenv("PERFECT_HEARTBEAT", raising=False)
+        monkeypatch.delenv("PERFECT_HEARTBEAT_INTERVAL", raising=False)
+
+    def test_switching_to_mock_after_connect_stops_the_real_heartbeat(self):
+        registry = WorkflowRegistry()
+        with patch("perfect.api.PerfectAPIClient") as client_cls:
+            registry._ensure_client()
+            registry.configure(mock=True)
+        client_cls.return_value.stop_heartbeat.assert_called_once()
+
+    def test_auto_listener_uses_the_registry_settings(self):
+        registry = WorkflowRegistry()
+        registry.configure(heartbeat=False, heartbeat_interval=1.5)
+        with patch("perfect.api.PerfectAPIClient") as client_cls:
+            registry._ensure_client()
+            registry._auto_start_listener()
+            # the listener runs in a non-daemon thread; wait for it to call through
+            for _ in range(50):
+                if client_cls.return_value.listen_for_executions.called:
+                    break
+                import time; time.sleep(0.02)
+        client_cls.return_value.listen_for_executions.assert_called_once_with(heartbeat=False, heartbeat_interval=1.5)
+
+    def test_public_listen_uses_the_registry_settings(self):
+        import perfect.sdk as sdk
+        registry = WorkflowRegistry()
+        registry.configure(heartbeat=False, heartbeat_interval=2.5)
+        with patch("perfect.api.PerfectAPIClient") as client_cls, \
+             patch.object(sdk, "_default_registry", registry):
+            sdk.listen()
+        client_cls.return_value.listen_for_executions.assert_called_once_with(heartbeat=False, heartbeat_interval=2.5)
+
+    def test_connect_without_arguments_keeps_the_backend_url(self):
+        import perfect.sdk as sdk
+        registry = WorkflowRegistry()
+        with patch.object(sdk, "_default_registry", registry), patch.object(sdk, "listen"):
+            sdk.connect()
+            assert registry._backend_url == "http://localhost:3000"
+            sdk.run(client_id="other")
+            assert registry._backend_url == "http://localhost:3000"
+            assert registry._client_id == "other"

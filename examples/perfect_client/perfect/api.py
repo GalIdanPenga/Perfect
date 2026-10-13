@@ -10,6 +10,7 @@ It handles:
 
 import requests
 import json
+import math
 import time
 import threading
 from typing import Dict, List, Callable, Optional
@@ -47,8 +48,11 @@ class PerfectAPIClient:
         self.base_url = base_url
         self.session = requests.Session()
         self._execution_callback: Optional[Callable[[ExecutionRequest], None]] = None
-        self._heartbeat_running = False
-        self._heartbeat_thread = None
+        # The heartbeat thread and the stop Event it owns. Each thread gets its
+        # own Event so a thread that outlives stop_heartbeat()'s join can never
+        # be revived by a later start_heartbeat().
+        self._heartbeat_thread: Optional[threading.Thread] = None
+        self._heartbeat_stop: Optional[threading.Event] = None
         self._listening = False
 
     def register_flow(self, flow_definition: Dict, auto_trigger: bool = False, configuration: str = "development") -> Optional[Dict]:
@@ -201,16 +205,69 @@ class PerfectAPIClient:
             # Silently fail - heartbeat is just a keepalive
             return False
 
-    def _heartbeat_loop(self, interval: float = 3.0):
+    def start_heartbeat(self, interval: float = 3.0) -> bool:
+        """
+        Start sending heartbeats in a background daemon thread.
+
+        The backend fails this client's running flows when heartbeats stop
+        arriving, so this is what lets it detect a crashed or killed client.
+        Calling it while a heartbeat is already running does nothing.
+
+        Args:
+            interval: Seconds between heartbeats. Keep this well under the
+                backend's 10 second timeout.
+
+        Returns:
+            True if a new heartbeat thread was started, False if one was already running
+        """
+        if not (math.isfinite(interval) and interval > 0):
+            raise ValueError("Heartbeat interval must be a finite number greater than 0")
+        if self.heartbeat_active:
+            return False
+
+        stop = threading.Event()
+        thread = threading.Thread(
+            target=self._heartbeat_loop,
+            args=(interval, stop),
+            daemon=True,
+            name="perfect-heartbeat",
+        )
+        self._heartbeat_stop = stop
+        self._heartbeat_thread = thread
+        thread.start()
+        return True
+
+    def stop_heartbeat(self):
+        """Stop the heartbeat thread, if one is running. Returns promptly."""
+        thread, stop = self._heartbeat_thread, self._heartbeat_stop
+        self._heartbeat_thread = None
+        self._heartbeat_stop = None
+        if stop:
+            stop.set()
+        if thread and thread is not threading.current_thread():
+            thread.join(timeout=1.0)
+
+    @property
+    def heartbeat_active(self) -> bool:
+        """True while the heartbeat thread is running."""
+        return bool(self._heartbeat_thread and self._heartbeat_thread.is_alive())
+
+    def _heartbeat_loop(self, interval: float, stop: threading.Event):
         """
         Background thread that sends heartbeats periodically.
 
+        Sends one heartbeat immediately, then one every `interval` seconds.
+        Waits on the thread's own stop Event rather than sleeping, so
+        stop_heartbeat() returns at once and only ever stops this thread.
+
         Args:
             interval: How often to send heartbeats (seconds)
+            stop: Event set by stop_heartbeat() to end this thread
         """
-        while self._heartbeat_running:
+        while not stop.is_set():
             self.send_heartbeat()
-            time.sleep(interval)
+            if stop.wait(interval):
+                return
 
     def on_execution_request(self, callback: Callable[[ExecutionRequest], None]):
         """
@@ -221,13 +278,20 @@ class PerfectAPIClient:
         """
         self._execution_callback = callback
 
-    def listen_for_executions(self, poll_interval: float = 1.0):
+    def listen_for_executions(self, poll_interval: float = 1.0, heartbeat: bool = True,
+                              heartbeat_interval: float = 3.0):
         """
         Start listening for execution requests from Perfect.
         This runs in a loop and calls the registered callback when execution is requested.
 
+        If a heartbeat thread is already running (the SDK starts one on
+        connect), it is left alone. Only a heartbeat started here is stopped
+        when listening ends.
+
         Args:
             poll_interval: How often to poll for new requests (seconds)
+            heartbeat: If True, send heartbeats while listening
+            heartbeat_interval: Seconds between heartbeats started here
 
         Note:
             In production, this would use WebSockets for real-time communication
@@ -237,18 +301,12 @@ class PerfectAPIClient:
             raise ValueError("No execution callback registered. Call on_execution_request() first.")
 
         print(f"[Perfect Client] Listening for execution requests from {self.base_url}...")
-        print("[Perfect Client] Sending heartbeats every 3 seconds...")
+        started_heartbeat = heartbeat and self.start_heartbeat(heartbeat_interval)
+        if started_heartbeat:
+            print(f"[Perfect Client] Sending heartbeats every {heartbeat_interval:g} seconds...")
         print("[Perfect Client] Press Ctrl+C to stop")
 
-        # Start heartbeat thread
         self._listening = True
-        self._heartbeat_running = True
-        self._heartbeat_thread = threading.Thread(
-            target=self._heartbeat_loop,
-            args=(3.0,),  # Send heartbeat every 3 seconds
-            daemon=True
-        )
-        self._heartbeat_thread.start()
 
         try:
             while self._listening:
@@ -282,12 +340,12 @@ class PerfectAPIClient:
             print("\n[Perfect Client] Shutting down...")
         finally:
             self._listening = False
-            self._heartbeat_running = False
+            if started_heartbeat:
+                self.stop_heartbeat()
 
     def stop_listening(self):
-        """Stop listening for execution requests"""
+        """Stop listening for execution requests. Leaves any heartbeat running."""
         self._listening = False
-        self._heartbeat_running = False
         # Close session to immediately abort any ongoing requests
         self.session.close()
         # Create a new session for cleanup operations
@@ -295,9 +353,7 @@ class PerfectAPIClient:
 
     def close(self):
         """Close the API client and cleanup resources"""
-        self._heartbeat_running = False
-        if self._heartbeat_thread:
-            self._heartbeat_thread.join(timeout=1.0)
+        self.stop_heartbeat()
         self.session.close()
 
     # Report Management API

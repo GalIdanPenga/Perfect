@@ -355,6 +355,50 @@ describe('FlowEngine', () => {
       const run = engine.getRuns().find(r => r.id === runId)!;
       expect(run.state).toBe(TaskState.FAILED);
     });
+
+    it('resetHeartbeat() disarms the watchdog so a stale heartbeat cannot fail runs', () => {
+      engine.updateHeartbeat();
+      engine.resetHeartbeat();                     // e.g. a new client without heartbeats starts
+
+      const flow = engine.registerFlow(makePayload('NoHeartbeatClientFlow', 1));
+      const runId = engine.createRun(flow.id)!;
+      vi.setSystemTime(Date.now() + 11_000);
+      (engine as any).checkHeartbeat();
+
+      const run = engine.getRuns().find(r => r.id === runId)!;
+      expect(run.state).toBe(TaskState.RUNNING);
+    });
+
+    it('disarms after a timeout even when nothing was running', () => {
+      // A heartbeat client finishes and exits: its last heartbeat goes stale with no runs.
+      engine.updateHeartbeat();
+      vi.setSystemTime(Date.now() + 11_000);
+      (engine as any).checkHeartbeat();
+      expect((engine as any).lastClientHeartbeat).toBeNull();
+
+      // A later client that sends no heartbeats must not be failed by the stale timestamp.
+      const flow = engine.registerFlow(makePayload('LaterClientFlow', 1));
+      const runId = engine.createRun(flow.id)!;
+      vi.setSystemTime(Date.now() + 11_000);
+      (engine as any).checkHeartbeat();
+
+      const run = engine.getRuns().find(r => r.id === runId)!;
+      expect(run.state).toBe(TaskState.RUNNING);
+    });
+
+    it('keeps running flows alive while heartbeats keep arriving', () => {
+      const flow = engine.registerFlow(makePayload('AliveFlow', 1));
+      const runId = engine.createRun(flow.id)!;
+
+      for (let i = 0; i < 5; i++) {
+        engine.updateHeartbeat();
+        vi.setSystemTime(Date.now() + 3_000);
+        (engine as any).checkHeartbeat();
+      }
+
+      const run = engine.getRuns().find(r => r.id === runId)!;
+      expect(run.state).toBe(TaskState.RUNNING);
+    });
   });
 
   // ── failAllRunningFlows ────────────────────────────────────────────────────

@@ -279,8 +279,8 @@ app.get('/api/reports/run/:runId', (req, res) => {
 
 // Long-poll endpoint for Python client to receive execution requests
 app.get('/api/execution-requests', (req, res) => {
-  // Update heartbeat when client polls
-  flowEngine.updateHeartbeat();
+  // Polling is not a heartbeat. Only POST /api/heartbeat arms the watchdog, so a
+  // client that opted out of heartbeats is never failed for a stalled poll.
 
   // If there's a queued request, return it immediately
   if (executionQueue.length > 0) {
