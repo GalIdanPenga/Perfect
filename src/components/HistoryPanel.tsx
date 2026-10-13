@@ -122,11 +122,14 @@ export function HistoryPanel({
 
   const handleConfirmBulkDelete = async () => {
     const ids = Array.from(selectedRunIds);
+    // Keep the selection until the delete has gone through, so the dialog keeps
+    // showing the real count while the request is in flight and a failed delete
+    // doesn't throw the user's selection away.
+    await onBulkDelete(ids);
     if (selectedHistoryRunId && selectedRunIds.has(selectedHistoryRunId)) {
       setSelectedHistoryRunId(null);
     }
     setSelectedRunIds(new Set());
-    await onBulkDelete(ids);
     setShowBulkDeleteConfirmation(false);
   };
 

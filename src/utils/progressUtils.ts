@@ -12,6 +12,10 @@ export function calculateRunProgress(run: FlowRun): { progress: number; remainin
       const pct = task.estimatedTime > 0 ? Math.min(99, (elapsedMs / task.estimatedTime) * 100) : 0;
       totalWeightedProgress += task.weight * pct;
       remainingMs += Math.max(0, task.estimatedTime - elapsedMs);
+    } else if (task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) {
+      // Running but no start time yet: trust the server-reported progress
+      totalWeightedProgress += task.weight * Math.min(99, task.progress || 0);
+      remainingMs += task.estimatedTime;
     } else if (task.state === TaskState.PENDING) {
       remainingMs += task.estimatedTime;
     }
@@ -29,6 +33,10 @@ export function calculateTaskProgress(task: TaskRun): { progress: number; remain
     const progress = task.estimatedTime > 0 ? Math.min(99, (elapsedMs / task.estimatedTime) * 100) : 0;
     const remainingMs = Math.max(0, task.estimatedTime - elapsedMs);
     return { progress, remainingMs };
+  }
+  if (task.state === TaskState.RUNNING || task.state === TaskState.RETRYING) {
+    // Running but no start time yet: fall back to the server-reported progress
+    return { progress: Math.min(99, task.progress || 0), remainingMs: task.estimatedTime };
   }
   return { progress: 0, remainingMs: task.estimatedTime };
 }

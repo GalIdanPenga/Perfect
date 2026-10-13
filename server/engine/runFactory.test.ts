@@ -64,7 +64,7 @@ describe('buildRunTasks — static path (no learned structure)', () => {
 });
 
 describe('buildRunTasks — learned-structure path', () => {
-  it('derives tasks from the learned structure with learned-task ids and crucialPass=true', () => {
+  it('derives tasks from the learned structure with learned-task ids and the registered crucialPass', () => {
     const tasks = buildRunTasks(
       makeFlow(),
       makeStatsStub({
@@ -77,10 +77,18 @@ describe('buildRunTasks — learned-structure path', () => {
     expect(tasks).toHaveLength(2);
     expect(tasks[0].taskId).toBe('learned-task-0');
     expect(tasks[1].taskId).toBe('learned-task-1');
-    expect(tasks[0].crucialPass).toBe(true);
-    expect(tasks[1].crucialPass).toBe(true);
+    expect(tasks[0].crucialPass).toBe(true);    // flow registered A as crucial
+    expect(tasks[1].crucialPass).toBe(false);   // flow registered B as non-crucial
     expect(tasks[0].weight).toBeCloseTo(0.5, 5);
     expect(tasks[1].weight).toBeCloseTo(0.5, 5);
+  });
+
+  it('defaults crucialPass to true for a learned task the flow no longer registers', () => {
+    const tasks = buildRunTasks(
+      makeFlow(),
+      makeStatsStub({ structure: [{ taskName: 'Gone', estimatedTime: 1000 }] })
+    );
+    expect(tasks[0].crucialPass).toBe(true);
   });
 
   it('overrides learned estimatedTime from statistics when available', () => {

@@ -152,3 +152,33 @@ describe('calculateTaskProgress', () => {
     expect(remainingMs).toBeCloseTo(1000, 0);
   });
 });
+
+describe('running tasks without a startTime', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('calculateTaskProgress falls back to the server-reported progress', () => {
+    const task = makeTask({ state: TaskState.RETRYING, startTime: undefined, progress: 60 });
+    expect(calculateTaskProgress(task)).toEqual({ progress: 60, remainingMs: 2000 });
+  });
+
+  it('calculateTaskProgress caps the fallback at 99', () => {
+    const task = makeTask({ state: TaskState.RUNNING, startTime: undefined, progress: 100 });
+    expect(calculateTaskProgress(task).progress).toBe(99);
+  });
+
+  it('calculateRunProgress counts the server-reported progress by weight', () => {
+    const run = makeRun([
+      makeTask({ id: 'a', state: TaskState.RUNNING, startTime: undefined, progress: 50, weight: 0.5 }),
+      makeTask({ id: 'b', state: TaskState.PENDING, weight: 0.5 }),
+    ]);
+    const { progress, remainingMs } = calculateRunProgress(run);
+    expect(progress).toBeCloseTo(25, 5);
+    expect(remainingMs).toBe(4000);
+  });
+});

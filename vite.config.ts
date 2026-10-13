@@ -19,15 +19,9 @@ export default defineConfig(() => {
         globals: true,
         setupFiles: ['./src/test/setup.ts'],
         include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'server/**/*.test.ts'],
-        // Frontend suites also declare `// @vitest-environment happy-dom` inline,
-        // which wins over config. Route the same globs to happy-dom so the two
-        // agree (jsdom is no longer used); node stays the default for server tests.
-        environmentMatchGlobs: [
-          ['src/components/**/*.test.tsx', 'happy-dom'],
-          ['src/hooks/**/*.test.ts', 'happy-dom'],
-          ['src/hooks/**/*.test.tsx', 'happy-dom'],
-          ['src/App.test.tsx', 'happy-dom'],
-        ],
+        // Server tests run in node. Every frontend suite (src/components, src/hooks,
+        // src/App.test.tsx) must carry a `// @vitest-environment happy-dom` docblock;
+        // Vitest 4 dropped `environmentMatchGlobs`, so the docblock is the only switch.
         // Isolate the server DB singleton from the real flows.db during tests.
         env: {
           PERFECT_DB_PATH: ':memory:',

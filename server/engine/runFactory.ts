@@ -33,6 +33,9 @@ export function buildRunTasks(flow: FlowDefinition, statsDb: StatsDb): TaskRun[]
 
     return tasksWithEstimates.map((t, index) => {
       const weight = totalEstimatedTime > 0 ? t.estimatedTime / totalEstimatedTime : 1 / learnedStructure.length;
+      // The learned structure only records names and timings; crucialPass comes
+      // from the client's registration of the same-named task (default: crucial).
+      const registered = flow.tasks.find(ft => ft.name === t.taskName);
       return {
         id: `tr-${generateId()}`,
         taskId: `learned-task-${index}`,
@@ -42,7 +45,7 @@ export function buildRunTasks(flow: FlowDefinition, statsDb: StatsDb): TaskRun[]
         weight,
         estimatedTime: t.estimatedTime,
         progress: 0,
-        crucialPass: true
+        crucialPass: registered?.crucialPass ?? true
       };
     });
   }
